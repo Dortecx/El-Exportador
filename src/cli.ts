@@ -5,7 +5,7 @@ import chalk from "chalk";
 import * as fs from "fs";
 import * as path from "path";
 import { parseFile } from "./parser.js";
-import { matchTrack, AuthClient } from "./matcher.js";
+import { matchTrack, AuthClient, simulateOfflineMatch } from "./matcher.js";
 import { getAuthClient, validateAuth } from "./auth.js";
 import { createPlaylistWithTracks, calculateQuotaUsage } from "./playlist.js";
 import { loadConfig } from "./config.js";
@@ -29,7 +29,8 @@ export async function runCli(): Promise<void> {
     .option("-o, --output <file>", "Output JSON report to file")
     .option("-v, --verbose", "Show per-track search details")
     .option("--credentials <path>", "Path to credentials.json")
-    .option("--dry-run", "Show matches without creating playlist")
+  .option("--dry-run", "Show matches without creating playlist")
+    .option("--offline", "Simulate API responses with 0.8 confidence (no quota used)")
     .option("--token <path>", "Path to tokens.json")
     .addHelpText("after", `
 Environment Variables:
@@ -44,6 +45,9 @@ Examples:
 
   # Dry-run with OAuth2 (if no API key)
   m3u-to-ytmusic playlist.m3u --dry-run
+
+  # Offline mode (simulated, no API calls)
+  m3u-to-ytmusic playlist.m3u --dry-run --offline
 `);
 
   program.parse();
@@ -62,6 +66,7 @@ Examples:
       name: opts.name,
       interactive: opts.interactive,
       dryRun: opts.dryRun,
+      offline: opts.offline,
       threshold: opts.threshold,
       output: opts.output,
       verbose: opts.verbose,
@@ -90,7 +95,7 @@ export async function run(
     options.name ?? path.basename(filePath, path.extname(filePath));
 
   if (options.dryRun) {
-    await runDryRun(tracks, options.threshold ?? 0.6, options.verbose ?? false);
+    await runDryRun(tracks, options.threshold ?? 0.6, options.verbose ?? false, options.offline ?? false);
     return;
   }
 
@@ -243,9 +248,41 @@ export async function run(
 async function runDryRun(
   tracks: Track[],
   threshold: number,
-  verbose: boolean
+  verbose: boolean,
+  offline: boolean
 ): Promise<void> {
   console.log(chalk.yellow("DRY RUN MODE - No playlist will be created\n"));
+
+  if (offline) {
+    console.log(chalk.cyan("OFFLINE MODE - Simulating API responses with 0.8 confidence\n"));
+
+    const results: MatchResult[] = [];
+
+    for (let i = 0; i < tracks.length; i++) {
+      const track = tracks[i];
+      const result = simulateOfflineMatch(track);
+      results.push(result);
+
+      const statusIcon = "✅";
+      const confidence = " 80%";
+
+      console.log(`${statusIcon} ${track.artist ? `${track.artist} - ` : ""}${track.title}${confidence}`);
+
+      if (verbose && result.bestMatch) {
+        console.log(chalk.gray(`   → ${result.bestMatch.title} (simulated)`));
+        console.log(chalk.gray(`   → ${result.bestMatch.channelTitle}`));
+      }
+    }
+
+    const matched = results.filter((r) => r.status === "matched");
+
+    console.log(chalk.blue("\n=== Summary ===\n"));
+    console.log(chalk.green(`  ✅ Would match:   ${matched.length} (simulated)`));
+    console.log(chalk.yellow(`  ⚠️  Ambiguous:     0`));
+    console.log(chalk.red(`  ❌ Would skip:   ${tracks.length - matched.length}`));
+    console.log(chalk.gray(`\nQuota used: 0 units (offline mode)\n`));
+    return;
+  }
 
   let auth: AuthClient;
 

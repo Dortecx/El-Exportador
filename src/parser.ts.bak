@@ -18,95 +18,95 @@ function parseDuration(durationStr: string): number | undefined {
 
 function parseExtInfLine(line: string): { duration?: number; artist: string; title: string } | null {
   const prefix = EXTINF_PREFIX;
-  if (!line.startsWith(prefix)) return null;
+  if (!line.startsWith(prefix)) {
+    return null;
+  }
 
   const content = line.slice(prefix.length);
   const colonIndex = content.indexOf(",");
-  if (colonIndex === -1) return null;
+  if (colonIndex === -1) {
+    return null;
+  }
 
   const durationStr = content.slice(0, colonIndex);
   const afterComma = content.slice(colonIndex + 1).trim();
+
   const duration = parseDuration(durationStr);
 
   const dashIndex = afterComma.indexOf(" - ");
   if (dashIndex !== -1) {
-    return {
-      duration,
-      artist: afterComma.slice(0, dashIndex).trim(),
-      title: afterComma.slice(dashIndex + 3).trim(),
-    };
+    const artist = afterComma.slice(0, dashIndex).trim();
+    const title = afterComma.slice(dashIndex + 3).trim();
+    return { duration, artist, title };
   }
 
   return { duration, artist: "", title: afterComma };
 }
 
-function cleanFolderName(folder: string): string {
-  return folder
-    .replace(/\s*(FLAC|HI-RES|MP3|AAC)\b.*/i, "")
-    .replace(/\s*\[\s*(FLAC|24-\d+|HI-RES)[^\]]*\]/gi, "")
-    .replace(/\s*\[[^\]]*\]\s*$/g, "")
-    .replace(/\s*\(\s*\d+bit[^)]*\)/gi, "")
-    .replace(/\s*\d+kHz\b.*/i, "")
-    .replace(/\s*\(Single\)\s*/gi, "")
-    .trim();
-}
-
-function hasJapaneseChars(str: string): boolean {
-  return /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(str);
-}
-
 function extractFromPath(filePath: string): { artist?: string; title: string } {
-  const parts = filePath.replace(/\\/g, "/").split("/").filter((p) => p.length > 0);
-  const fileName = parts[parts.length - 1].replace(/\.[^.]+$/, "");
-  const folderName = parts.length > 1 ? parts[parts.length - 2] : "";
+  const parts = filePath.replace(/\\/g, '/').split('/').filter(p => p.length > 0);
+  const fileName = parts[parts.length - 1].replace(/\.[^.]+$/, '');
+  const folderName = parts.length > 1 ? parts[parts.length - 2] : '';
+  
+  const cleanTitle = fileName.replace(/^\d+[\s\-\.]+\s*/, '').trim();
+  
+  let artist: string | undefined;
+  
+  if (folderName) {
+    let folder = folderName
+      .replace(/\s*(FLAC|HI-RES|MP3|AAC)\b.*/i, '')
+      .replace(/\s*\[\s*(FLAC|24-\d+|HI-RES)[^\]]*\]/gi, '')
+      .replace(/\s*\(\s*\d+bit[^)]*\)/gi, '')
+      .replace(/\s*\d+kHz\b.*/i, '')
+      .trim();
 
-  const fileTitle = fileName.replace(/^\d+[\s\-\.]+\s*/, "").trim();
-
-  if (!folderName) {
-    const titleDashMatch = fileTitle.match(/^(.+?)\s+[-–—]\s+(.+)$/);
-    if (titleDashMatch) {
-      return { artist: titleDashMatch[1].trim(), title: titleDashMatch[2].trim() };
-    }
-    return { title: fileTitle || fileName };
-  }
-
-  const folder = cleanFolderName(folderName);
-
-  const japSlashMatch = folder.match(/^(.+?)\s*[／/]\s*(.+)$/);
-  if (japSlashMatch) {
-    const beforeSlash = japSlashMatch[1].trim();
-    const afterSlash = japSlashMatch[2].trim();
-
-    const bracketMatch = afterSlash.match(/^「([^」]+)」/);
-    if (bracketMatch) {
-      return { artist: beforeSlash, title: fileTitle || bracketMatch[1] };
-    }
-
-    return { artist: afterSlash, title: fileTitle };
-  }
-
-  const dashMatch = folder.match(/^(.+?)\s+[-–—]\s+(.+)$/);
-  if (dashMatch) {
-    const artist = dashMatch[1].trim();
-    let title = dashMatch[2].trim();
-
-    if (hasJapaneseChars(title)) {
-      const parenMatch = title.match(/\(([^)]+)\)$/);
-      if (parenMatch && hasJapaneseChars(parenMatch[1])) {
-        return { artist, title: parenMatch[1] };
+    const japSeparatorMatch = folder.match(/^(.+?)\s*[／/]\s*(.+)$/);
+    if (japSeparatorMatch) {
+      const afterSlash = japSeparatorMatch[2].trim();
+      const titleMatch = afterSlash.match(/^「([^」]+)」/);
+      artist = afterSlash;
+      if (titleMatch) {
+        return { artist, title: cleanTitle || titleMatch[1] };
       }
+      return { artist, title: cleanTitle };
     }
 
-    const cleanedFileTitle = fileTitle.replace(new RegExp(`^${artist.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[-–—]\\s*`, 'i'), '').trim();
-    return { artist, title: cleanedFileTitle || title };
+    const dashMatch = folder.match(/^(.+?)\s+[–—-]\s+(.+)$/);
+    if (dashMatch) {
+      artist = dashMatch[1].trim();
+      const afterDash = dashMatch[2];
+      
+      const parenJapaneseMatch = afterDash.match(/\(([^)]+)\)/);
+      if (parenJapaneseMatch) {
+        const inside = parenJapaneseMatch[1];
+        const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf\u3400-\u4dbf]/.test(inside);
+        if (hasJapanese && !/[a-zA-Z]/.test(inside)) {
+          return { artist, title: inside };
+        }
+      }
+      
+      return { artist, title: cleanTitle };
+    }
   }
 
-  const titleDashMatch = fileTitle.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+  if (!artist) {
+    const fileDashMatch = cleanTitle.match(/^(.+?)\s+[–—-]\s+(.+)$/);
+    if (fileDashMatch) {
+      artist = fileDashMatch[1].trim();
+    }
+  }
+
+  const cornerMatch = cleanTitle.match(/「([^」]+)」/);
+  if (cornerMatch) {
+    return { artist, title: cornerMatch[1] };
+  }
+
+  const titleDashMatch = cleanTitle.match(/^(.+?)\s+[–—-]\s+(.+)$/);
   if (titleDashMatch) {
-    return { artist: titleDashMatch[1].trim(), title: titleDashMatch[2].trim() };
+    return { artist: artist || titleDashMatch[1].trim(), title: titleDashMatch[2].trim() };
   }
 
-  return { title: fileTitle || folderName };
+  return { artist, title: cleanTitle || fileName };
 }
 
 function isCommentOrBlank(line: string): boolean {
@@ -123,6 +123,7 @@ export function validateFilePath(filePath: string): void {
   if (!fs.existsSync(filePath)) {
     throw new Error(`File not found: ${filePath}`);
   }
+
   if (!isValidM3UFile(filePath)) {
     throw new Error(`Expected .m3u or .m3u8 file`);
   }
@@ -134,17 +135,24 @@ export function parseM3U(content: string, isExtended: boolean): Track[] {
   let pendingExtInf: { duration?: number; artist: string; title: string } | null = null;
 
   for (const line of lines) {
-    if (isExtended && line.startsWith(EXTENDED_M3U_HEADER)) continue;
+    if (isExtended && line.startsWith(EXTENDED_M3U_HEADER)) {
+      continue;
+    }
+
     if (isExtended && line.startsWith(EXTINF_PREFIX)) {
       pendingExtInf = parseExtInfLine(line);
       continue;
     }
-    if (isCommentOrBlank(line)) continue;
+
+    if (isCommentOrBlank(line)) {
+      continue;
+    }
 
     const file = line.trim();
-    const parts = file.replace(/\\/g, "/").split("/").filter((p) => p.length > 0);
+
+    const parts = file.replace(/\\/g, '/').split('/').filter(p => p.length > 0);
     const folders = parts.slice(0, -1);
-    const filename = parts[parts.length - 1].replace(/\.[^.]+$/, "");
+    const filename = parts[parts.length - 1].replace(/\.[^.]+$/, '');
     const pathContext = { folders, filename };
 
     if (isExtended && pendingExtInf) {
@@ -169,7 +177,9 @@ export function detectFormat(content: string): "extended" | "standard" {
   const lines = content.split(/\r?\n/);
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed === "") continue;
+    if (trimmed === "") {
+      continue;
+    }
     if (trimmed.startsWith(EXTENDED_M3U_HEADER) || trimmed.startsWith(EXTINF_PREFIX)) {
       return "extended";
     }
@@ -180,6 +190,7 @@ export function detectFormat(content: string): "extended" | "standard" {
 
 export function parseFile(filePath: string): ParsedM3UResult {
   validateFilePath(filePath);
+
   const content = fs.readFileSync(filePath, "utf-8");
   const format = detectFormat(content);
   const tracks = parseM3U(content, format === "extended");

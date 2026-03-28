@@ -57,6 +57,7 @@ export interface CliOptions {
     name?: string;
     interactive: boolean;
     dryRun: boolean;
+    offline: boolean;
     threshold: number;
     output?: string;
     verbose: boolean;

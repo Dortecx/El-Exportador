@@ -12,98 +12,79 @@ function parseDuration(durationStr) {
 }
 function parseExtInfLine(line) {
     const prefix = EXTINF_PREFIX;
-    if (!line.startsWith(prefix)) {
+    if (!line.startsWith(prefix))
         return null;
-    }
     const content = line.slice(prefix.length);
     const colonIndex = content.indexOf(",");
-    if (colonIndex === -1) {
+    if (colonIndex === -1)
         return null;
-    }
     const durationStr = content.slice(0, colonIndex);
     const afterComma = content.slice(colonIndex + 1).trim();
     const duration = parseDuration(durationStr);
     const dashIndex = afterComma.indexOf(" - ");
     if (dashIndex !== -1) {
-        const artist = afterComma.slice(0, dashIndex).trim();
-        const title = afterComma.slice(dashIndex + 3).trim();
-        return { duration, artist, title };
+        return {
+            duration,
+            artist: afterComma.slice(0, dashIndex).trim(),
+            title: afterComma.slice(dashIndex + 3).trim(),
+        };
     }
     return { duration, artist: "", title: afterComma };
 }
-function cleanFolderName(folderName) {
-    const JAPANESE_REGEX = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf\u3400-\u4dbf]/;
-    let cleaned = folderName;
-    cleaned = cleaned.replace(/\[[^\]]*\]/g, " ");
-    cleaned = cleaned.replace(/(\([^)]*\))/g, (match) => {
-        if (JAPANESE_REGEX.test(match)) {
-            return match;
-        }
-        return " ";
-    });
-    cleaned = cleaned
-        .replace(/\bFLAC\b/gi, "")
-        .replace(/\bMP3\b/gi, "")
-        .replace(/\bWAV\b/gi, "")
-        .replace(/\bHI-RES?\b/gi, "")
-        .replace(/\b\d{2,4}kHz\b/gi, "")
-        .replace(/\b\d{2}bit\b/gi, "")
-        .replace(/\(\d+[.,]?\d*[-/]?\d*[kK]?Hz?\)/gi, "")
-        .replace(/\s+/g, " ")
+function cleanFolderName(folder) {
+    return folder
+        .replace(/\s*(FLAC|HI-RES|MP3|AAC)\b.*/i, "")
+        .replace(/\s*\[\s*(FLAC|24-\d+|HI-RES)[^\]]*\]/gi, "")
+        .replace(/\s*\[[^\]]*\]\s*$/g, "")
+        .replace(/\s*\(\s*\d+bit[^)]*\)/gi, "")
+        .replace(/\s*\d+kHz\b.*/i, "")
+        .replace(/\s*\(Single\)\s*/gi, "")
         .trim();
-    return cleaned;
 }
-function extractTitleFromFilename(filename) {
-    const withoutExt = filename.replace(/\.[^.]+$/, "");
-    let cleaned = withoutExt
-        .replace(LEADING_NUMBER_REGEX, "")
-        .replace(/\s+/g, " ")
-        .trim();
-    const cornerBracketsMatch = cleaned.match(/「([^」]+)」/);
-    if (cornerBracketsMatch) {
-        return { title: cornerBracketsMatch[1].trim() };
+function hasJapaneseChars(str) {
+    return /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(str);
+}
+function extractFromPath(filePath) {
+    const parts = filePath.replace(/\\/g, "/").split("/").filter((p) => p.length > 0);
+    const fileName = parts[parts.length - 1].replace(/\.[^.]+$/, "");
+    const folderName = parts.length > 1 ? parts[parts.length - 2] : "";
+    const fileTitle = fileName.replace(/^\d+[\s\-\.]+\s*/, "").trim();
+    if (!folderName) {
+        const titleDashMatch = fileTitle.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+        if (titleDashMatch) {
+            return { artist: titleDashMatch[1].trim(), title: titleDashMatch[2].trim() };
+        }
+        return { title: fileTitle || fileName };
     }
-    const dashMatch = cleaned.match(/^([^　\s].*?)\s*[-－–—]\s*(.+)$/);
+    const folder = cleanFolderName(folderName);
+    const japSlashMatch = folder.match(/^(.+?)\s*[／/]\s*(.+)$/);
+    if (japSlashMatch) {
+        const beforeSlash = japSlashMatch[1].trim();
+        const afterSlash = japSlashMatch[2].trim();
+        const bracketMatch = afterSlash.match(/^「([^」]+)」/);
+        if (bracketMatch) {
+            return { artist: beforeSlash, title: fileTitle || bracketMatch[1] };
+        }
+        return { artist: afterSlash, title: fileTitle };
+    }
+    const dashMatch = folder.match(/^(.+?)\s+[-–—]\s+(.+)$/);
     if (dashMatch) {
-        return { title: dashMatch[2].trim(), artist: dashMatch[1].trim() };
-    }
-    return { title: cleaned };
-}
-function deriveTitleFromPath(filePath) {
-    const dir = path.dirname(filePath);
-    const basename = path.basename(filePath);
-    const withoutExt = basename.replace(/\.[^.]+$/, "");
-    const folders = dir.split(/[\\/]/).filter(f => f.length > 0);
-    const folderName = folders.length > 0 ? folders[folders.length - 1] : "";
-    const { title: filenameTitle, artist: filenameArtist } = extractTitleFromFilename(withoutExt);
-    let artist = "";
-    let finalTitle = filenameTitle;
-    if (folderName) {
-        const cleanedFolder = cleanFolderName(folderName);
-        const slashMatch = cleanedFolder.match(/\s*[\/／]\s*(.+)$/);
-        if (slashMatch) {
-            artist = slashMatch[1].trim();
-        }
-        else {
-            const dashMatch = cleanedFolder.match(/^(.+?)\s*[-－–—]\s*(.+)$/);
-            if (dashMatch) {
-                artist = dashMatch[1].trim();
-                const afterDash = dashMatch[2];
-                const parenJapaneseMatch = afterDash.match(/\(([^)]+)\)/);
-                if (parenJapaneseMatch) {
-                    const inside = parenJapaneseMatch[1];
-                    const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf\u3400-\u4dbf]/.test(inside);
-                    if (hasJapanese && !/[a-zA-Z]/.test(inside)) {
-                        finalTitle = inside;
-                    }
-                }
+        const artist = dashMatch[1].trim();
+        let title = dashMatch[2].trim();
+        if (hasJapaneseChars(title)) {
+            const parenMatch = title.match(/\(([^)]+)\)$/);
+            if (parenMatch && hasJapaneseChars(parenMatch[1])) {
+                return { artist, title: parenMatch[1] };
             }
         }
+        const cleanedFileTitle = fileTitle.replace(new RegExp(`^${artist.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[-–—]\\s*`, 'i'), '').trim();
+        return { artist, title: cleanedFileTitle || title };
     }
-    if (!artist && filenameArtist) {
-        artist = filenameArtist;
+    const titleDashMatch = fileTitle.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+    if (titleDashMatch) {
+        return { artist: titleDashMatch[1].trim(), title: titleDashMatch[2].trim() };
     }
-    return { artist, title: finalTitle, pathContext: { folders, filename: withoutExt } };
+    return { title: fileTitle || folderName };
 }
 function isCommentOrBlank(line) {
     const trimmed = line.trim();
@@ -126,19 +107,20 @@ export function parseM3U(content, isExtended) {
     const tracks = [];
     let pendingExtInf = null;
     for (const line of lines) {
-        if (isExtended && line.startsWith(EXTENDED_M3U_HEADER)) {
+        if (isExtended && line.startsWith(EXTENDED_M3U_HEADER))
             continue;
-        }
         if (isExtended && line.startsWith(EXTINF_PREFIX)) {
             pendingExtInf = parseExtInfLine(line);
             continue;
         }
-        if (isCommentOrBlank(line)) {
+        if (isCommentOrBlank(line))
             continue;
-        }
         const file = line.trim();
+        const parts = file.replace(/\\/g, "/").split("/").filter((p) => p.length > 0);
+        const folders = parts.slice(0, -1);
+        const filename = parts[parts.length - 1].replace(/\.[^.]+$/, "");
+        const pathContext = { folders, filename };
         if (isExtended && pendingExtInf) {
-            const { pathContext } = deriveTitleFromPath(file);
             tracks.push({
                 artist: pendingExtInf.artist,
                 title: cleanTitle(pendingExtInf.title),
@@ -149,8 +131,8 @@ export function parseM3U(content, isExtended) {
             pendingExtInf = null;
         }
         else {
-            const { artist, title, pathContext } = deriveTitleFromPath(file);
-            tracks.push({ artist, title: cleanTitle(title), file, pathContext });
+            const { artist, title } = extractFromPath(file);
+            tracks.push({ artist: artist || "", title, file, pathContext });
         }
     }
     return tracks;
@@ -159,9 +141,8 @@ export function detectFormat(content) {
     const lines = content.split(/\r?\n/);
     for (const line of lines) {
         const trimmed = line.trim();
-        if (trimmed === "") {
+        if (trimmed === "")
             continue;
-        }
         if (trimmed.startsWith(EXTENDED_M3U_HEADER) || trimmed.startsWith(EXTINF_PREFIX)) {
             return "extended";
         }

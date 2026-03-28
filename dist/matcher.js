@@ -206,6 +206,7 @@ export async function matchTrack(track, auth, config, threshold) {
         };
     }
     catch (error) {
+        console.error(`ERROR buscando "${track.artist} - ${track.title}":`, error.message);
         return {
             track,
             bestMatch: null,
@@ -222,5 +223,22 @@ export async function matchTracks(tracks, auth, config, threshold) {
         results.push(result);
     }
     return results;
+}
+export function simulateOfflineMatch(track) {
+    const fakeVideoId = `offline_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const fakeMatch = {
+        videoId: fakeVideoId,
+        title: `${track.artist ? `${track.artist} - ` : ""}${track.title}`,
+        channelTitle: "Simulated Channel",
+        duration: undefined,
+        thumbnailUrl: "",
+    };
+    return {
+        track,
+        bestMatch: fakeMatch,
+        alternatives: [fakeMatch],
+        confidence: 0.8,
+        status: "matched",
+    };
 }
 //# sourceMappingURL=matcher.js.map

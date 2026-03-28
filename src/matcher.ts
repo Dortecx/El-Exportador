@@ -255,6 +255,7 @@ export async function matchTrack(
       status,
     };
   } catch (error) {
+    console.error(`ERROR buscando "${track.artist} - ${track.title}":`, (error as Error).message);
     return {
       track,
       bestMatch: null,
@@ -279,4 +280,23 @@ export async function matchTracks(
   }
 
   return results;
+}
+
+export function simulateOfflineMatch(track: Track): MatchResult {
+  const fakeVideoId = `offline_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const fakeMatch: YouTubeItem = {
+    videoId: fakeVideoId,
+    title: `${track.artist ? `${track.artist} - ` : ""}${track.title}`,
+    channelTitle: "Simulated Channel",
+    duration: undefined,
+    thumbnailUrl: "",
+  };
+
+  return {
+    track,
+    bestMatch: fakeMatch,
+    alternatives: [fakeMatch],
+    confidence: 0.8,
+    status: "matched",
+  };
 }

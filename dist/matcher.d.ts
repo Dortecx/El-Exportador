@@ -12,4 +12,5 @@ export declare function classifyMatch(score: number, threshold?: number): "match
 export declare function searchYouTube(query: string, auth: AuthClient, config: Pick<AppConfig, "maxResults" | "musicCategoryId">): Promise<YouTubeItem[]>;
 export declare function matchTrack(track: Track, auth: AuthClient, config: Pick<AppConfig, "maxResults" | "musicCategoryId" | "matchThreshold">, threshold: number): Promise<MatchResult>;
 export declare function matchTracks(tracks: Track[], auth: AuthClient, config: Pick<AppConfig, "maxResults" | "musicCategoryId" | "matchThreshold">, threshold: number): Promise<MatchResult[]>;
+export declare function simulateOfflineMatch(track: Track): MatchResult;
 //# sourceMappingURL=matcher.d.ts.map
