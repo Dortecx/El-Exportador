@@ -203,6 +203,30 @@ describe("Parser", () => {
       expect(tracks[0].artist).toBe("amazarashi");
       expect(tracks[0].title).toBe("Sayonaragokko");
     });
+
+    it("should remove trailing bracket from artist name", () => {
+      const content = `#EXTM3U
+#EXTINF:245,Yorushika [ - 雨と言おう
+/home/music/yorushika.flac`;
+
+      const tracks = parseM3U(content, true);
+
+      expect(tracks).toHaveLength(1);
+      expect(tracks[0].artist).toBe("Yorushika");
+      expect(tracks[0].title).toBe("雨と言おう");
+    });
+
+    it("should remove duplicate artist from title when duplicated in English and Japanese", () => {
+      const content = `#EXTM3U
+#EXTINF:200,Luck Life - ラックライフ - しるし
+/home/music/lucklife.flac`;
+
+      const tracks = parseM3U(content, true);
+
+      expect(tracks).toHaveLength(1);
+      expect(tracks[0].artist).toBe("Luck Life");
+      expect(tracks[0].title).toBe("ラックライフ - しるし");
+    });
   });
 
   describe("isValidM3UFile", () => {
