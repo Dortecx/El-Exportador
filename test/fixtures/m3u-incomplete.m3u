@@ -1,0 +1,7 @@
+#EXTM3U
+
+#EXTINF:invalid,No comma here
+/home/user/music/test.mp3
+
+#EXTINF:300,Test Track
+/not/a/real/path/test.mp3

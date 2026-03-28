@@ -1,0 +1,40 @@
+{
+  "name": "m3u-to-ytmusic",
+  "version": "1.0.0",
+  "description": "Convert M3U playlists to YouTube Music",
+  "main": "dist/index.js",
+  "type": "module",
+  "bin": {
+    "m3u-to-ytmusic": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx src/cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dry-run": "tsx src/cli.ts test/fixtures/extended.m3u --dry-run"
+  },
+  "keywords": [
+    "m3u",
+    "youtube",
+    "youtube-music",
+    "playlist",
+    "converter"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "googleapis": "^140.0.0",
+    "google-auth-library": "^9.15.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
