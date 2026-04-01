@@ -79,20 +79,33 @@ export async function run(filePath, options) {
         await runDryRun(tracks, options.threshold ?? 0.6, options.verbose ?? false, options.offline ?? false);
         return;
     }
+    if (!YOUTUBE_API_KEY) {
+        throw new Error("YOUTUBE_API_KEY environment variable is required for full mode.\n" +
+            "Set it with: export YOUTUBE_API_KEY=your_api_key");
+    }
     const config = loadConfig(options.credentials);
     config.matchThreshold = options.threshold ?? config.matchThreshold;
-    console.log(chalk.gray("Authenticating with YouTube..."));
-    const auth = await getAuthClient(options.credentials);
-    const isValid = await validateAuth(auth);
-    if (!isValid) {
-        throw new Error("Authentication failed. Please re-authenticate.");
+    let oauth2Auth;
+    console.log(chalk.gray("Attempting OAuth2 for playlist creation..."));
+    try {
+        const auth = await getAuthClient(options.credentials);
+        const isValid = await validateAuth(auth);
+        if (isValid) {
+            oauth2Auth = auth;
+            console.log(chalk.green("OAuth2 available for playlist creation.\n"));
+        }
+        else {
+            console.log(chalk.yellow("OAuth2 not available. Playlist creation will be skipped.\n"));
+        }
     }
-    console.log(chalk.green("Authenticated!\n"));
+    catch {
+        console.log(chalk.yellow("OAuth2 authentication skipped. Playlist creation will be skipped.\n"));
+    }
     console.log(chalk.gray("Matching tracks with YouTube..."));
     const matchResults = [];
     for (let i = 0; i < tracks.length; i++) {
         const track = tracks[i];
-        const result = await matchTrack(track, auth, config, config.matchThreshold);
+        const result = await matchTrack(track, YOUTUBE_API_KEY, config, config.matchThreshold, oauth2Auth);
         matchResults.push(result);
         const statusIcon = result.status === "matched" ? "✅" : result.status === "ambiguous" ? "⚠️" : "❌";
         const confidence = result.confidence > 0 ? `(${Math.round(result.confidence * 100)}%)` : "";
@@ -154,8 +167,12 @@ export async function run(filePath, options) {
     }
     const quotaEstimate = calculateQuotaUsage(tracks.length, matched.length);
     console.log(chalk.gray(`\nEstimated API quota: ${quotaEstimate} units\n`));
+    if (!oauth2Auth) {
+        console.log(chalk.red("\nOAuth2 authentication required for playlist creation.\n"));
+        process.exit(1);
+    }
     console.log(chalk.gray("Creating playlist on YouTube Music..."));
-    const result = await createPlaylistWithTracks(auth, playlistName, matchResults, (added, total) => {
+    const result = await createPlaylistWithTracks(oauth2Auth, playlistName, matchResults, (added, total) => {
         process.stdout.write(`\r${chalk.gray(`Adding tracks: ${added}/${total}`)}`);
     });
     console.log(chalk.green(`\n\n✅ Playlist created successfully!`));
@@ -224,28 +241,33 @@ async function runDryRun(tracks, threshold, verbose, offline) {
         console.log(chalk.gray(`\nQuota used: 0 units (offline mode)\n`));
         return;
     }
-    let auth;
-    if (YOUTUBE_API_KEY) {
-        console.log(chalk.green("Using YOUTUBE_API_KEY from environment\n"));
-        auth = { apiKey: YOUTUBE_API_KEY };
+    if (!YOUTUBE_API_KEY) {
+        throw new Error("YOUTUBE_API_KEY environment variable is required for full mode.\n" +
+            "Set it with: export YOUTUBE_API_KEY=your_api_key");
     }
-    else {
-        console.log(chalk.gray("No YOUTUBE_API_KEY found. Attempting OAuth2 authentication..."));
-        const oauth2Auth = await getAuthClient();
-        const isValid = await validateAuth(oauth2Auth);
-        if (!isValid) {
-            throw new Error("YOUTUBE_API_KEY environment variable required for dry-run mode without OAuth2.\n" +
-                "Set the variable or authenticate with OAuth2 first.");
+    console.log(chalk.green("Using YOUTUBE_API_KEY from environment\n"));
+    let oauth2Auth;
+    console.log(chalk.gray("Attempting OAuth2 for playlist creation..."));
+    try {
+        const tempAuth = await getAuthClient();
+        const isValid = await validateAuth(tempAuth);
+        if (isValid) {
+            oauth2Auth = tempAuth;
+            console.log(chalk.green("OAuth2 available for playlist creation.\n"));
         }
-        auth = oauth2Auth;
-        console.log(chalk.green("Authenticated via OAuth2!\n"));
+        else {
+            console.log(chalk.yellow("OAuth2 not available. Playlist creation will be skipped.\n"));
+        }
+    }
+    catch {
+        console.log(chalk.yellow("OAuth2 authentication skipped. Playlist creation will be skipped.\n"));
     }
     const config = { maxResults: 5, musicCategoryId: "10", matchThreshold: threshold };
     console.log(chalk.gray("Searching and matching tracks...\n"));
     const results = [];
     for (let i = 0; i < tracks.length; i++) {
         const track = tracks[i];
-        const result = await matchTrack(track, auth, config, threshold);
+        const result = await matchTrack(track, YOUTUBE_API_KEY, config, threshold, oauth2Auth);
         results.push(result);
         const statusIcon = result.status === "matched" ? "✅" : result.status === "ambiguous" ? "⚠️" : "❌";
         const confidence = result.confidence > 0 ? ` ${Math.round(result.confidence * 100)}%` : "";

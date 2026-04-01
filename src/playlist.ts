@@ -6,7 +6,8 @@ const YOUTUBE_BASE_URL = "https://www.youtube.com/playlist?list=";
 
 export async function createPlaylist(
   auth: OAuth2Client,
-  name: string
+  name: string,
+  onBehalfOfContentOwner?: string
 ): Promise<{ playlistId: string; playlistUrl: string }> {
   const youtube = google.youtube({ version: "v3", auth });
 
@@ -16,11 +17,13 @@ export async function createPlaylist(
       snippet: {
         title: name,
         description: `Created from M3U playlist by m3u-to-ytmusic`,
+        defaultLanguage: "en",
       },
       status: {
         privacyStatus: "private",
       },
     },
+    onBehalfOfContentOwner,
   });
 
   const playlistId = response.data.id;
@@ -38,7 +41,8 @@ export async function addTracksToPlaylist(
   auth: OAuth2Client,
   playlistId: string,
   matchedResults: MatchResult[],
-  onProgress?: (added: number, total: number) => void
+  onProgress?: (added: number, total: number) => void,
+  onBehalfOfContentOwner?: string
 ): Promise<{ added: number; failed: number; quotaUsed: number }> {
   const youtube = google.youtube({ version: "v3", auth });
 
@@ -67,6 +71,7 @@ export async function addTracksToPlaylist(
             },
           },
         },
+        onBehalfOfContentOwner,
       });
 
       added++;
@@ -111,15 +116,17 @@ export async function createPlaylistWithTracks(
   auth: OAuth2Client,
   name: string,
   matchedResults: MatchResult[],
-  onProgress?: (added: number, total: number) => void
+  onProgress?: (added: number, total: number) => void,
+  onBehalfOfContentOwner?: string
 ): Promise<PlaylistResult> {
-  const { playlistId, playlistUrl } = await createPlaylist(auth, name);
+  const { playlistId, playlistUrl } = await createPlaylist(auth, name, onBehalfOfContentOwner);
 
   const { added, quotaUsed } = await addTracksToPlaylist(
     auth,
     playlistId,
     matchedResults,
-    onProgress
+    onProgress,
+    onBehalfOfContentOwner
   );
 
   const unmatched = matchedResults.filter((r) => !r.bestMatch).length;

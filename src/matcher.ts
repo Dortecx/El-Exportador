@@ -11,6 +11,9 @@ function extractArtistFromPath(folders: string[]): string | undefined {
   return lastFolder;
 }
 
+const PENALTY_TERMS_MUSIC_VIDEO = ["official mv", "music video", "m/v", "official video", "#shorts", "short film", "live performance", "live at", "concert"];
+const BONUS_TERMS_OFFICIAL = ["official audio", "provided to youtube"];
+
 export function buildQuery(track: Track): string {
   if (track.artist) {
     return `${track.artist} - ${track.title}`;
@@ -150,7 +153,26 @@ export function calculateConfidence(
     }
   }
 
-  return Math.min(score, 1.0);
+  const itemTitleLower = item.title.toLowerCase();
+  for (const term of PENALTY_TERMS_MUSIC_VIDEO) {
+    if (itemTitleLower.includes(term)) {
+      score -= 0.20;
+      break;
+    }
+  }
+
+  for (const term of BONUS_TERMS_OFFICIAL) {
+    if (itemTitleLower.includes(term)) {
+      score += 0.15;
+      break;
+    }
+  }
+
+  if (item.channelTitle.toLowerCase().includes(" - topic")) {
+    score += 0.15;
+  }
+
+  return Math.max(Math.min(score, 1.0), 0.0);
 }
 
 export function classifyMatch(
@@ -164,13 +186,10 @@ export function classifyMatch(
 
 export async function searchYouTube(
   query: string,
-  auth: AuthClient,
+  apiKey: string,
   config: Pick<AppConfig, "maxResults" | "musicCategoryId">
 ): Promise<YouTubeItem[]> {
-  const authOptions = "apiKey" in auth
-    ? { auth: auth.apiKey }
-    : { auth };
-  const youtube = google.youtube({ version: "v3", ...authOptions });
+  const youtube = google.youtube({ version: "v3", auth: apiKey });
 
   const searchResponse = await youtube.search.list({
     q: query,
@@ -187,8 +206,16 @@ export async function searchYouTube(
 
   const detailsResponse = await youtube.videos.list({
     id: videoIds,
-    part: ["contentDetails"],
+    part: ["contentDetails", "snippet"],
   });
+
+  const musicCategoryMap = new Map<string, boolean>();
+  for (const video of detailsResponse.data.items || []) {
+    if (typeof video.id === "string") {
+      const isMusicCategory = video.snippet?.categoryId === "10";
+      musicCategoryMap.set(video.id, isMusicCategory);
+    }
+  }
 
   const detailsMap = new Map<string, string | undefined>();
   for (const video of detailsResponse.data.items || []) {
@@ -199,7 +226,10 @@ export async function searchYouTube(
   }
 
   return items
-    .filter((item): item is NonNullable<typeof item> => !!item.id?.videoId && typeof item.id.videoId === "string")
+    .filter((item): item is NonNullable<typeof item> => {
+      if (!item.id?.videoId || typeof item.id.videoId !== "string") return false;
+      return musicCategoryMap.get(item.id.videoId) === true;
+    })
     .map((item) => {
       const videoId = item.id!.videoId as string;
       const snippet = item.snippet;
@@ -217,14 +247,15 @@ export async function searchYouTube(
 
 export async function matchTrack(
   track: Track,
-  auth: AuthClient,
+  apiKey: string,
   config: Pick<AppConfig, "maxResults" | "musicCategoryId" | "matchThreshold">,
-  threshold: number
+  threshold: number,
+  _auth?: AuthClient
 ): Promise<MatchResult> {
   const query = buildQuery(track);
 
   try {
-    const results = await searchYouTube(query, auth, config);
+    const results = await searchYouTube(query, apiKey, config);
 
     if (results.length === 0) {
       return {
@@ -268,14 +299,15 @@ export async function matchTrack(
 
 export async function matchTracks(
   tracks: Track[],
-  auth: AuthClient,
+  apiKey: string,
   config: Pick<AppConfig, "maxResults" | "musicCategoryId" | "matchThreshold">,
-  threshold: number
+  threshold: number,
+  _auth?: AuthClient
 ): Promise<MatchResult[]> {
   const results: MatchResult[] = [];
 
   for (const track of tracks) {
-    const result = await matchTrack(track, auth, config, threshold);
+    const result = await matchTrack(track, apiKey, config, threshold, _auth);
     results.push(result);
   }
 

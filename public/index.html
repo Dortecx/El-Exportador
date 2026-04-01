@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M3U to YouTube Music</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { color: #ff6b6b; margin-bottom: 2rem; text-align: center; }
+    .card {
+      background: #16213e;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    label { display: block; margin-bottom: 0.5rem; color: #ccc; }
+    input[type="text"] {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #333;
+      border-radius: 6px;
+      background: #0f0f23;
+      color: #fff;
+      font-size: 1rem;
+    }
+    input[type="text"]:focus { outline: none; border-color: #ff6b6b; }
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    input[type="checkbox"] { width: 18px; height: 18px; }
+    .file-upload {
+      border: 2px dashed #333;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .file-upload:hover { border-color: #ff6b6b; }
+    .file-upload input { display: none; }
+    .file-upload .icon { font-size: 2rem; margin-bottom: 0.5rem; }
+    .file-upload .hint { color: #666; font-size: 0.875rem; }
+    .file-upload.has-file { border-color: #4ecdc4; }
+    .file-upload .filename { color: #4ecdc4; font-weight: bold; }
+    .btn {
+      width: 100%;
+      padding: 1rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary {
+      background: linear-gradient(135deg, #ff6b6b, #ff8e53);
+      color: white;
+    }
+    .btn-primary:hover:not(:disabled) { opacity: 0.9; }
+    .btn-primary:active:not(:disabled) { transform: scale(0.98); }
+    .log-container {
+      background: #0f0f23;
+      border-radius: 8px;
+      padding: 1rem;
+      max-height: 400px;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 0.875rem;
+    }
+    .log-line { padding: 0.25rem 0; border-bottom: 1px solid #222; }
+    .log-line:last-child { border-bottom: none; }
+    .log-info { color: #888; }
+    .log-success { color: #4ecdc4; }
+    .log-warning { color: #ffd93d; }
+    .log-error { color: #ff6b6b; }
+    .log-progress { color: #6c5ce7; }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .summary-item {
+      text-align: center;
+      padding: 1rem;
+      border-radius: 8px;
+    }
+    .summary-matched { background: rgba(78, 205, 196, 0.2); }
+    .summary-ambiguous { background: rgba(255, 217, 61, 0.2); }
+    .summary-unmatched { background: rgba(255, 107, 107, 0.2); }
+    .summary-value { font-size: 2rem; font-weight: bold; }
+    .summary-label { color: #888; font-size: 0.875rem; }
+    .playlist-url {
+      background: #0f0f23;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-top: 1rem;
+      word-break: break-all;
+    }
+    .playlist-url a { color: #4ecdc4; }
+    .track-count { color: #888; font-size: 0.875rem; margin-top: 0.5rem; }
+    .config-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .config-row label { margin-top: 1rem; }
+    .config-row label[for="threshold"] {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    input[type="number"] {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid #333;
+      border-radius: 6px;
+      background: #0f0f23;
+      color: #fff;
+      font-size: 1rem;
+    }
+    .help-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #333;
+      color: #888;
+      font-size: 12px;
+      font-weight: bold;
+      margin-left: 6px;
+      cursor: help;
+      position: relative;
+    }
+    .help-icon:hover .tooltip {
+      display: block;
+    }
+    .tooltip {
+      display: none;
+      position: absolute;
+      bottom: 130%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0f0f23;
+      color: #ccc;
+      padding: 0.75rem;
+      border-radius: 6px;
+      width: 280px;
+      font-size: 0.8rem;
+      font-weight: normal;
+      line-height: 1.4;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      z-index: 100;
+      text-align: left;
+    }
+    .tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-top-color: #0f0f23;
+    }
+    .manual-review-section { display: none; }
+    .manual-review-section.visible { display: block; }
+    .manual-track {
+      background: #0f0f23;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .manual-track-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    .manual-track-info {
+      font-size: 0.9rem;
+      color: #ccc;
+    }
+    .manual-track-actions {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .manual-search-input {
+      flex: 1;
+      padding: 0.5rem;
+      border: 1px solid #333;
+      border-radius: 4px;
+      background: #16213e;
+      color: #fff;
+      font-size: 0.875rem;
+    }
+    .btn-small {
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .btn-small:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-search {
+      background: #6c5ce7;
+      color: white;
+    }
+    .btn-search:hover:not(:disabled) { opacity: 0.9; }
+    .manual-results {
+      margin-top: 0.75rem;
+      border-top: 1px solid #333;
+      padding-top: 0.75rem;
+    }
+    .manual-result {
+      padding: 0.5rem;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-bottom: 0.5rem;
+      background: #16213e;
+      transition: background 0.2s;
+    }
+    .manual-result:hover { background: #1e2a4a; }
+    .manual-result.selected { background: #4ecdc4; color: #000; }
+    .manual-result-title { font-weight: bold; font-size: 0.875rem; }
+    .manual-result-artist { font-size: 0.75rem; color: #888; }
+    .btn-add-manual {
+      background: linear-gradient(135deg, #4ecdc4, #44a08d);
+      color: white;
+      margin-top: 1rem;
+    }
+    .btn-add-manual:hover:not(:disabled) { opacity: 0.9; }
+    .ytmusic-badge {
+      display: inline-block;
+      background: #ff0000;
+      color: white;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      margin-left: 0.5rem;
+    }
+    .backend-status {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: #888;
+      margin-top: 0.5rem;
+    }
+    .backend-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .backend-dot.available { background: #4ecdc4; }
+    .backend-dot.unavailable { background: #ff6b6b; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎵 Exportador de Playlists</h1>
+    <p style="text-align: center; color: #888; margin-bottom: 1.5rem;">Importa tu biblioteca musical a YouTube Music</p>
+
+    <div class="card">
+      <div class="file-upload" id="dropZone">
+        <div class="icon">📂</div>
+        <div id="uploadText">Click or drag .m3u file here</div>
+        <div class="hint">or paste M3U content below</div>
+        <input type="file" id="fileInput" accept=".m3u,.m3u8">
+      </div>
+      <div class="track-count" id="trackCount"></div>
+
+      <div style="margin-top: 1rem;">
+        <label>M3U Content (paste if not uploading)</label>
+        <textarea id="m3uContent" rows="7" style="
+          width: 100%;
+          padding: 0.75rem;
+          border: 1px solid #333;
+          border-radius: 6px;
+          background: #0f0f23;
+          color: #fff;
+          font-family: monospace;
+          font-size: 0.875rem;
+          resize: none;
+        "></textarea>
+      </div>
+
+      <div class="config-row">
+        <div>
+          <label>Playlist Name</label>
+          <input type="text" id="playlistName" placeholder="My Playlist">
+        </div>
+        <div>
+          <label for="threshold">Match Threshold (0.0 - 1.0)
+            <span class="help-icon">?
+              <span class="tooltip">Porcentaje minimo de similitud para considerar una cancion como encontrada. 60% funciona bien para la mayoria de casos. Subelo si quieres mas precision o bajalo si no encuentra canciones.</span>
+            </span>
+          </label>
+          <input type="number" id="threshold" value="0.6" min="0" max="1" step="0.05">
+        </div>
+      </div>
+
+      <div class="checkbox-group">
+        <input type="checkbox" id="dryRun" checked>
+        <label for="dryRun" style="margin: 0;">Dry Run Mode (no playlist creation)</label>
+      </div>
+
+      <div style="margin-top: 1.5rem;">
+        <button class="btn btn-primary" id="startBtn" disabled>Start Conversion</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom: 1rem;">Progress Log</h3>
+      <div class="log-container" id="logContainer">
+        <div class="log-line log-info">Waiting for file upload...</div>
+      </div>
+      <div class="backend-status" id="backendStatus">
+        <span class="backend-dot unavailable"></span>
+        <span>Checking backend...</span>
+      </div>
+    </div>
+
+    <div class="card manual-review-section" id="manualReviewSection">
+      <h3 style="margin-bottom: 1rem;">Revisión Manual</h3>
+      <p style="color: #888; font-size: 0.875rem; margin-bottom: 1rem;">
+        Los tracks sin match fueron detectados. Busca manualmente el título correcto para intentar encontrar una coincidencia.
+      </p>
+      <div id="manualTracksList"></div>
+      <button class="btn btn-add-manual" id="addManualBtn" disabled>Agregar seleccionados a playlist</button>
+    </div>
+
+    <div class="card" id="summaryCard" style="display: none;">
+      <h3 style="margin-bottom: 1rem;">Summary</h3>
+      <div class="summary" id="summaryGrid"></div>
+      <div class="playlist-url" id="playlistUrl" style="display: none;"></div>
+    </div>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const dropZone = document.getElementById('dropZone');
+    const uploadText = document.getElementById('uploadText');
+    const m3uContent = document.getElementById('m3uContent');
+    const playlistName = document.getElementById('playlistName');
+    const threshold = document.getElementById('threshold');
+    const dryRun = document.getElementById('dryRun');
+    const startBtn = document.getElementById('startBtn');
+    const logContainer = document.getElementById('logContainer');
+    const summaryCard = document.getElementById('summaryCard');
+    const summaryGrid = document.getElementById('summaryGrid');
+    const playlistUrl = document.getElementById('playlistUrl');
+    const trackCount = document.getElementById('trackCount');
+
+    let parsedTracks = [];
+    let eventSource = null;
+    let lastConversionResults = null;
+    let lastPlaylistId = null;
+    let manualSelectedTracks = [];
+
+    function addLog(type, message) {
+      const line = document.createElement('div');
+      line.className = `log-line log-${type}`;
+      line.textContent = message;
+      logContainer.appendChild(line);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    function connectSSE() {
+      if (eventSource) eventSource.close();
+      eventSource = new EventSource('/events');
+      eventSource.addEventListener('log', (e) => {
+        const event = JSON.parse(e.data);
+        addLog(event.type, event.message);
+      });
+    }
+
+    async function checkBackendStatus() {
+      try {
+        const res = await fetch('/api/ytmusic-status');
+        const data = await res.json();
+        const dot = document.querySelector('.backend-dot');
+        const statusText = document.querySelector('#backendStatus span:last-child');
+        if (data.available) {
+          dot.classList.remove('unavailable');
+          dot.classList.add('available');
+          statusText.textContent = 'ytmusicapi backend (no quota limits)';
+        } else {
+          dot.classList.remove('available');
+          dot.classList.add('unavailable');
+          statusText.textContent = 'Using YouTube Data API (quota limited)';
+        }
+      } catch {
+        console.log('Could not check backend status');
+      }
+    }
+    checkBackendStatus();
+
+    function resetUI() {
+      logContainer.innerHTML = '<div class="log-line log-info">Starting...</div>';
+      summaryCard.style.display = 'none';
+      playlistUrl.style.display = 'none';
+      document.getElementById('manualReviewSection').classList.remove('visible');
+      manualSelectedTracks = [];
+      lastConversionResults = null;
+      lastPlaylistId = null;
+    }
+
+    function showManualReview(results) {
+      const unmatched = results.filter(r => r.status === 'unmatched' || r.status === 'ambiguous');
+      if (unmatched.length === 0) return;
+
+      const section = document.getElementById('manualReviewSection');
+      const list = document.getElementById('manualTracksList');
+      list.innerHTML = '';
+
+      unmatched.forEach((track, index) => {
+        const trackDiv = document.createElement('div');
+        trackDiv.className = 'manual-track';
+        trackDiv.innerHTML = `
+          <div class="manual-track-header">
+            <div class="manual-track-info">
+              <strong>${track.artist || 'Unknown Artist'}</strong> - ${track.title}
+              ${track.status === 'ambiguous' ? '<span class="ytmusic-badge">Ambiguous</span>' : ''}
+            </div>
+            <div class="manual-track-actions">
+              <input type="text" class="manual-search-input" 
+                placeholder="Search query..." 
+                value="${track.artist || ''} ${track.title || ''}"
+                data-index="${index}">
+              <button class="btn-small btn-search" data-index="${index}">Buscar</button>
+            </div>
+          </div>
+          <div class="manual-results" id="results-${index}"></div>
+        `;
+        list.appendChild(trackDiv);
+
+        const input = trackDiv.querySelector('.manual-search-input');
+        const searchBtn = trackDiv.querySelector('.btn-search');
+
+        searchBtn.addEventListener('click', () => searchManual(index, track, input.value));
+        input.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') searchManual(index, track, input.value);
+        });
+      });
+
+      section.classList.add('visible');
+    }
+
+    async function searchManual(index, originalTrack, query) {
+      const resultsDiv = document.getElementById(`results-${index}`);
+      resultsDiv.innerHTML = '<div class="log-line log-info">Searching...</div>';
+
+      try {
+        const res = await fetch('/api/search-single', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, originalTrack })
+        });
+        const data = await res.json();
+
+        if (data.error) {
+          resultsDiv.innerHTML = `<div class="log-line log-error">${data.error}</div>`;
+          return;
+        }
+
+        if (data.results.length === 0) {
+          resultsDiv.innerHTML = '<div class="log-line log-warning">No results found</div>';
+          return;
+        }
+
+        resultsDiv.innerHTML = '';
+        data.results.forEach((result) => {
+          const resultDiv = document.createElement('div');
+          resultDiv.className = 'manual-result';
+          resultDiv.innerHTML = `
+            <div class="manual-result-title">${result.title}</div>
+            <div class="manual-result-artist">${result.artist} ${result.duration ? `(${result.duration})` : ''}</div>
+          `;
+          resultDiv.addEventListener('click', () => {
+            resultsDiv.querySelectorAll('.manual-result').forEach(el => el.classList.remove('selected'));
+            resultDiv.classList.add('selected');
+            resultDiv.dataset.videoId = result.videoId;
+            resultDiv.dataset.title = result.title;
+            resultDiv.dataset.artist = result.artist;
+          });
+          resultsDiv.appendChild(resultDiv);
+        });
+      } catch (err) {
+        resultsDiv.innerHTML = `<div class="log-line log-error">Search failed: ${err.message}</div>`;
+      }
+    }
+
+    document.getElementById('addManualBtn').addEventListener('click', async () => {
+      if (!lastPlaylistId) {
+        addLog('error', 'No playlist to add tracks to. Run a full conversion first.');
+        return;
+      }
+
+      const selectedResults = document.querySelectorAll('.manual-result.selected');
+      if (selectedResults.length === 0) {
+        addLog('warning', 'No tracks selected');
+        return;
+      }
+
+      const tracks = Array.from(selectedResults).map(el => ({
+        videoId: el.dataset.videoId,
+        title: el.dataset.title,
+        artist: el.dataset.artist
+      }));
+
+      try {
+        const res = await fetch('/api/add-to-playlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ playlistId: lastPlaylistId, tracks })
+        });
+        const data = await res.json();
+
+        if (data.error) {
+          addLog('error', `Failed to add tracks: ${data.error}`);
+        } else {
+          addLog('success', `Added ${data.added} tracks to playlist`);
+          document.querySelectorAll('.manual-result.selected').forEach(el => {
+            el.closest('.manual-track').remove();
+          });
+          updateAddManualButton();
+        }
+      } catch (err) {
+        addLog('error', `Failed to add tracks: ${err.message}`);
+      }
+    });
+
+    function updateAddManualButton() {
+      const btn = document.getElementById('addManualBtn');
+      const selected = document.querySelectorAll('.manual-result.selected');
+      btn.disabled = selected.length === 0 || !lastPlaylistId;
+    }
+
+    setInterval(updateAddManualButton, 500);
+
+    function updateStartButtonState() {
+      const hasInput = parsedTracks.length > 0 || m3uContent.value.trim().length > 0;
+      const hasPlaylistName = playlistName.value.trim().length > 0;
+      startBtn.disabled = !(hasInput && hasPlaylistName);
+    }
+
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      await handleFile(file);
+    });
+
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = '#ff6b6b';
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.style.borderColor = '#333';
+    });
+
+    dropZone.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = '#333';
+      const file = e.dataTransfer.files[0];
+      if (file) await handleFile(file);
+    });
+
+    async function handleFile(file) {
+      const content = await file.text();
+      m3uContent.value = content;
+      dropZone.classList.add('has-file');
+      uploadText.innerHTML = `<span class="filename">${file.name}</span>`;
+      await parseM3U(content, file.name);
+    }
+
+    m3uContent.addEventListener('input', async () => {
+      if (m3uContent.value.trim()) {
+        dropZone.classList.remove('has-file');
+        uploadText.innerHTML = 'Click or drag .m3u file here';
+        await parseM3U(m3uContent.value, 'clipboard');
+      } else {
+        parsedTracks = [];
+        trackCount.textContent = '';
+        updateStartButtonState();
+      }
+    });
+
+    playlistName.addEventListener('input', updateStartButtonState);
+
+    async function parseM3U(content, filename) {
+      try {
+        const res = await fetch('/api/parse-m3u', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        parsedTracks = data.tracks;
+        trackCount.textContent = `${parsedTracks.length} tracks (${data.format} format)`;
+        if (!playlistName.value) {
+          playlistName.value = filename.replace(/\.(m3u|m3u8)$/i, '');
+        }
+        updateStartButtonState();
+        addLog('success', `Loaded ${parsedTracks.length} tracks`);
+      } catch (err) {
+        addLog('error', `Parse error: ${err.message}`);
+        parsedTracks = [];
+        updateStartButtonState();
+      }
+    }
+
+    startBtn.addEventListener('click', async () => {
+      if (parsedTracks.length === 0) {
+        addLog('error', 'No tracks loaded. Please upload or paste an M3U file first.');
+        return;
+      }
+
+      startBtn.disabled = true;
+      resetUI();
+      connectSSE();
+
+      try {
+        const payload = {
+          playlistName: playlistName.value || 'Untitled Playlist',
+          dryRun: dryRun.checked,
+          threshold: parseFloat(threshold.value),
+          tracks: parsedTracks,
+        };
+
+        addLog('info', `Starting conversion: ${parsedTracks.length} tracks, dryRun=${dryRun.checked}`);
+
+        const res = await fetch('/api/convert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+          addLog('error', errorData.error || `Request failed with status ${res.status}`);
+          return;
+        }
+
+        const data = await res.json();
+
+        if (data.error) {
+          addLog('error', data.error);
+        } else {
+          const matched = data.results?.filter(r => r.status === 'matched').length || 0;
+          const ambiguous = data.results?.filter(r => r.status === 'ambiguous').length || 0;
+          const unmatched = data.results?.filter(r => r.status === 'unmatched').length || 0;
+
+          summaryGrid.innerHTML = `
+            <div class="summary-item summary-matched">
+              <div class="summary-value">${matched}</div>
+              <div class="summary-label">Matched</div>
+            </div>
+            <div class="summary-item summary-ambiguous">
+              <div class="summary-value">${ambiguous}</div>
+              <div class="summary-label">Ambiguous</div>
+            </div>
+            <div class="summary-item summary-unmatched">
+              <div class="summary-value">${unmatched}</div>
+              <div class="summary-label">Unmatched</div>
+            </div>
+          `;
+          summaryCard.style.display = 'block';
+
+          if (data.playlistUrl) {
+            playlistUrl.innerHTML = `Playlist URL: <a href="${data.playlistUrl}" target="_blank">${data.playlistUrl}</a>`;
+            playlistUrl.style.display = 'block';
+          }
+
+          lastConversionResults = data.results;
+          lastPlaylistId = data.playlistId || null;
+          showManualReview(data.results);
+        }
+      } catch (err) {
+        addLog('error', `Request failed: ${err.message}`);
+      } finally {
+        startBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -54,10 +54,14 @@ export async function getAuthClient(credentialsPath) {
     await authenticate(auth, tokenPath);
     return auth;
 }
+const SCOPES = [
+    "https://www.googleapis.com/auth/youtube",
+    "https://www.googleapis.com/auth/youtube.force-ssl",
+];
 async function authenticate(auth, tokenPath) {
     const authUrl = auth.generateAuthUrl({
         access_type: "offline",
-        scope: ["https://www.googleapis.com/auth/youtube"],
+        scope: SCOPES,
     });
     console.log("\n=== YouTube Music Authentication Required ===\n");
     console.log("Please visit this URL to authorize:");
@@ -74,8 +78,8 @@ async function authenticate(auth, tokenPath) {
             resolve(answer.trim());
         });
     });
-    const tokenResponse = await auth.getToken(code);
-    auth.setCredentials(tokenResponse);
+    const { tokens } = await auth.getToken(code);
+    auth.setCredentials(tokens);
     await saveToken(auth, tokenPath);
     console.log("\nAuthentication successful! Token saved.\n");
 }
@@ -93,8 +97,8 @@ export async function validateAuth(auth) {
         if (token.expiry_date && Date.now() >= token.expiry_date) {
             if (token.refresh_token) {
                 try {
-                    const newCredentials = await auth.refreshAccessToken();
-                    auth.setCredentials(newCredentials);
+                    const { credentials } = await auth.refreshAccessToken();
+                    auth.setCredentials(credentials);
                     const tokenPath = resolveTokenPath();
                     await saveToken(auth, tokenPath);
                     return true;

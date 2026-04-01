@@ -121,12 +121,45 @@ describe("Matcher", () => {
       const track: Track = { artist: "Beatles", title: "Hey Jude", file: "/test.mp3" };
       const item: YouTubeItem = {
         videoId: "abc123",
-        title: "The Beatles - Hey Jude (Official Video)",
+        title: "The Beatles - Hey Jude (Official Audio)",
         channelTitle: "The Beatles",
         thumbnailUrl: "",
       };
 
       const score = calculateConfidence(track, item, track.title);
+      expect(score).toBeGreaterThanOrEqual(0.60);
+    });
+
+    it("should penalize music video but not official audio", () => {
+      const track: Track = { artist: "Beatles", title: "Hey Jude", file: "/test.mp3" };
+      const musicVideoItem: YouTubeItem = {
+        videoId: "abc123",
+        title: "The Beatles - Hey Jude (Official Video)",
+        channelTitle: "The Beatles",
+        thumbnailUrl: "",
+      };
+      const officialAudioItem: YouTubeItem = {
+        videoId: "abc456",
+        title: "The Beatles - Hey Jude (Official Audio)",
+        channelTitle: "The Beatles",
+        thumbnailUrl: "",
+      };
+
+      const musicVideoScore = calculateConfidence(track, musicVideoItem, track.title);
+      const officialAudioScore = calculateConfidence(track, officialAudioItem, track.title);
+      expect(officialAudioScore).toBeGreaterThan(musicVideoScore);
+    });
+
+    it("should boost score for artist topic channels", () => {
+      const track: Track = { artist: "Beatles", title: "Hey Jude", file: "/test.mp3" };
+      const topicItem: YouTubeItem = {
+        videoId: "abc123",
+        title: "Hey Jude",
+        channelTitle: "The Beatles - Topic",
+        thumbnailUrl: "",
+      };
+
+      const score = calculateConfidence(track, topicItem, track.title);
       expect(score).toBeGreaterThanOrEqual(0.60);
     });
 

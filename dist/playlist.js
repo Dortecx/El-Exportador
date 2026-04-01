@@ -1,6 +1,6 @@
 import { google } from "googleapis";
 const YOUTUBE_BASE_URL = "https://www.youtube.com/playlist?list=";
-export async function createPlaylist(auth, name) {
+export async function createPlaylist(auth, name, onBehalfOfContentOwner) {
     const youtube = google.youtube({ version: "v3", auth });
     const response = await youtube.playlists.insert({
         part: ["snippet", "status"],
@@ -8,11 +8,13 @@ export async function createPlaylist(auth, name) {
             snippet: {
                 title: name,
                 description: `Created from M3U playlist by m3u-to-ytmusic`,
+                defaultLanguage: "en",
             },
             status: {
                 privacyStatus: "private",
             },
         },
+        onBehalfOfContentOwner,
     });
     const playlistId = response.data.id;
     if (!playlistId) {
@@ -23,7 +25,7 @@ export async function createPlaylist(auth, name) {
         playlistUrl: `${YOUTUBE_BASE_URL}${playlistId}`,
     };
 }
-export async function addTracksToPlaylist(auth, playlistId, matchedResults, onProgress) {
+export async function addTracksToPlaylist(auth, playlistId, matchedResults, onProgress, onBehalfOfContentOwner) {
     const youtube = google.youtube({ version: "v3", auth });
     let quotaUsed = 0;
     let added = 0;
@@ -47,6 +49,7 @@ export async function addTracksToPlaylist(auth, playlistId, matchedResults, onPr
                         },
                     },
                 },
+                onBehalfOfContentOwner,
             });
             added++;
             quotaUsed += 50;
@@ -79,9 +82,9 @@ export async function addTracksToPlaylist(auth, playlistId, matchedResults, onPr
 async function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
-export async function createPlaylistWithTracks(auth, name, matchedResults, onProgress) {
-    const { playlistId, playlistUrl } = await createPlaylist(auth, name);
-    const { added, quotaUsed } = await addTracksToPlaylist(auth, playlistId, matchedResults, onProgress);
+export async function createPlaylistWithTracks(auth, name, matchedResults, onProgress, onBehalfOfContentOwner) {
+    const { playlistId, playlistUrl } = await createPlaylist(auth, name, onBehalfOfContentOwner);
+    const { added, quotaUsed } = await addTracksToPlaylist(auth, playlistId, matchedResults, onProgress, onBehalfOfContentOwner);
     const unmatched = matchedResults.filter((r) => !r.bestMatch).length;
     const ambiguous = matchedResults.filter((r) => r.status === "ambiguous").length;
     return {

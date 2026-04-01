@@ -7,6 +7,8 @@ function extractArtistFromPath(folders) {
         return undefined;
     return lastFolder;
 }
+const PENALTY_TERMS_MUSIC_VIDEO = ["official mv", "music video", "m/v", "official video", "#shorts", "short film", "live performance", "live at", "concert"];
+const BONUS_TERMS_OFFICIAL = ["official audio", "provided to youtube"];
 export function buildQuery(track) {
     if (track.artist) {
         return `${track.artist} - ${track.title}`;
@@ -124,7 +126,23 @@ export function calculateConfidence(track, item, _searchTitle) {
             }
         }
     }
-    return Math.min(score, 1.0);
+    const itemTitleLower = item.title.toLowerCase();
+    for (const term of PENALTY_TERMS_MUSIC_VIDEO) {
+        if (itemTitleLower.includes(term)) {
+            score -= 0.20;
+            break;
+        }
+    }
+    for (const term of BONUS_TERMS_OFFICIAL) {
+        if (itemTitleLower.includes(term)) {
+            score += 0.15;
+            break;
+        }
+    }
+    if (item.channelTitle.toLowerCase().includes(" - topic")) {
+        score += 0.15;
+    }
+    return Math.max(Math.min(score, 1.0), 0.0);
 }
 export function classifyMatch(score, threshold = 0.6) {
     if (score >= threshold)
@@ -133,11 +151,8 @@ export function classifyMatch(score, threshold = 0.6) {
         return "ambiguous";
     return "unmatched";
 }
-export async function searchYouTube(query, auth, config) {
-    const authOptions = "apiKey" in auth
-        ? { auth: auth.apiKey }
-        : { auth };
-    const youtube = google.youtube({ version: "v3", ...authOptions });
+export async function searchYouTube(query, apiKey, config) {
+    const youtube = google.youtube({ version: "v3", auth: apiKey });
     const searchResponse = await youtube.search.list({
         q: query,
         type: ["video"],
@@ -151,8 +166,15 @@ export async function searchYouTube(query, auth, config) {
     const videoIds = items.map((item) => item.id?.videoId).filter((id) => !!id);
     const detailsResponse = await youtube.videos.list({
         id: videoIds,
-        part: ["contentDetails"],
+        part: ["contentDetails", "snippet"],
     });
+    const musicCategoryMap = new Map();
+    for (const video of detailsResponse.data.items || []) {
+        if (typeof video.id === "string") {
+            const isMusicCategory = video.snippet?.categoryId === "10";
+            musicCategoryMap.set(video.id, isMusicCategory);
+        }
+    }
     const detailsMap = new Map();
     for (const video of detailsResponse.data.items || []) {
         if (typeof video.id === "string") {
@@ -161,7 +183,11 @@ export async function searchYouTube(query, auth, config) {
         }
     }
     return items
-        .filter((item) => !!item.id?.videoId && typeof item.id.videoId === "string")
+        .filter((item) => {
+        if (!item.id?.videoId || typeof item.id.videoId !== "string")
+            return false;
+        return musicCategoryMap.get(item.id.videoId) === true;
+    })
         .map((item) => {
         const videoId = item.id.videoId;
         const snippet = item.snippet;
@@ -176,10 +202,10 @@ export async function searchYouTube(query, auth, config) {
         };
     });
 }
-export async function matchTrack(track, auth, config, threshold) {
+export async function matchTrack(track, apiKey, config, threshold, _auth) {
     const query = buildQuery(track);
     try {
-        const results = await searchYouTube(query, auth, config);
+        const results = await searchYouTube(query, apiKey, config);
         if (results.length === 0) {
             return {
                 track,
@@ -216,10 +242,10 @@ export async function matchTrack(track, auth, config, threshold) {
         };
     }
 }
-export async function matchTracks(tracks, auth, config, threshold) {
+export async function matchTracks(tracks, apiKey, config, threshold, _auth) {
     const results = [];
     for (const track of tracks) {
-        const result = await matchTrack(track, auth, config, threshold);
+        const result = await matchTrack(track, apiKey, config, threshold, _auth);
         results.push(result);
     }
     return results;
