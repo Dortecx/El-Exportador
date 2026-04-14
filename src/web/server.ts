@@ -31,6 +31,9 @@ app.get("/events", (req, res) => {
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders();
 
+  // Send initial connection confirmation
+  res.write(`event: log\ndata: ${JSON.stringify({ type: "info", message: "__SSE_CONNECTED__" })}\n\n`);
+
   const sendEvent = (event: LogEvent) => {
     res.write(`event: log\ndata: ${JSON.stringify(event)}\n\n`);
   };

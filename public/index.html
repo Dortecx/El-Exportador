@@ -4,166 +4,607 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>M3U to YouTube Music</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323:wght@400&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    @keyframes glitch-title {
+      0%, 100% {
+        text-shadow: none;
+        transform: translate(0);
+        clip-path: none;
+      }
+      92% {
+        text-shadow: none;
+        transform: translate(0);
+        clip-path: none;
+      }
+      93% {
+        text-shadow: -3px 0 #FF0066, 3px 0 #00FFFF;
+        transform: translate(2px, 0);
+        clip-path: polygon(0 20%, 100% 20%, 100% 40%, 0 40%);
+      }
+      94% {
+        text-shadow: 3px 0 #FF0066, -3px 0 #00FFFF;
+        transform: translate(-2px, 0);
+        clip-path: polygon(0 60%, 100% 60%, 100% 80%, 0 80%);
+      }
+      95% {
+        text-shadow: -2px 0 #00FFFF, 2px 0 #FF0066;
+        transform: translate(1px, 0);
+        clip-path: polygon(0 10%, 100% 10%, 100% 30%, 0 30%);
+      }
+      96% {
+        text-shadow: 2px 0 #FF0066, -2px 0 #00FFFF;
+        transform: translate(-1px, 0);
+        clip-path: none;
+      }
+      97% {
+        text-shadow: none;
+        transform: translate(0);
+        clip-path: none;
+      }
+    }
+    
+    @keyframes card-border-glitch {
+      0%, 100% {
+        border-color: #00AAFF;
+        box-shadow: 0 0 0 transparent;
+      }
+      96% {
+        border-color: #00AAFF;
+        box-shadow: 0 0 0 transparent;
+      }
+      97% {
+        border-color: #FFFFFF;
+        box-shadow: 0 0 15px #00AAFF, 0 0 30px rgba(0, 170, 255, 0.3);
+      }
+      98% {
+        border-color: #00AAFF;
+        box-shadow: 0 0 0 transparent;
+      }
+    }
+    
+    @keyframes dash {
+      to { stroke-dashoffset: -20; }
+    }
+    
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0; }
+    }
+    
+    @keyframes scanline1 {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(100vh); }
+    }
+    
+    @keyframes scanline2 {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(100vh); }
+    }
+    
+    @keyframes scanline3 {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(100vh); }
+    }
+    
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #1a1a2e;
-      color: #eee;
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      background: #020818;
+      color: #B8D4FF;
       min-height: 100vh;
       padding: 2rem;
+      position: relative;
     }
+    
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 102, 204, 0.05) 0px,
+        rgba(0, 102, 204, 0.05) 1px,
+        transparent 1px,
+        transparent 2px
+      );
+      pointer-events: none;
+      z-index: 1000;
+    }
+    
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(to bottom, rgba(0, 170, 255, 0.15), transparent);
+      animation: scanline1 8s linear infinite;
+      pointer-events: none;
+      z-index: 1001;
+    }
+    
+    .scanline-2 {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(to bottom, rgba(0, 170, 255, 0.10), transparent);
+      animation: scanline2 4.8s linear infinite;
+      animation-delay: 2.7s;
+      pointer-events: none;
+      z-index: 1001;
+    }
+    
+    .scanline-3 {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(to bottom, rgba(0, 170, 255, 0.08), transparent);
+      animation: scanline3 13.6s linear infinite;
+      animation-delay: 5.1s;
+      pointer-events: none;
+      z-index: 1001;
+    }
+    
+    #matrix-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      pointer-events: none;
+    }
+    
     .container { max-width: 800px; margin: 0 auto; }
-    h1 { color: #ff6b6b; margin-bottom: 2rem; text-align: center; }
+    
+    h1 { 
+      color: #00AAFF; 
+      margin-bottom: 2rem; 
+      text-align: center;
+      font-family: 'VT323', monospace;
+      font-size: 3rem;
+      letter-spacing: 8px;
+      text-transform: uppercase;
+      position: relative;
+      animation: glitch-title 4s infinite;
+    }
+    
+    h1::before,
+    h1::after {
+      content: 'M3U > YTM';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      overflow: hidden;
+      background: transparent;
+    }
+    
+    h1::before {
+      color: #FF0066;
+      animation: glitch-title 4s infinite;
+      animation-delay: 0.1s;
+      clip-path: polygon(0 0, 100% 0, 100% 45%, 0 45%);
+    }
+    
+    h1::after {
+      color: #00FFFF;
+      animation: glitch-title 4s infinite;
+      animation-delay: 0.15s;
+      clip-path: polygon(0 55%, 100% 55%, 100% 100%, 0 100%);
+    }
+    
+    h3 {
+      color: #5588BB;
+      margin-bottom: 1rem;
+      font-family: 'VT323', monospace;
+      font-size: 1.5rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      border-bottom: 1px solid #0066CC;
+      padding-bottom: 0.5rem;
+    }
+    
     .card {
-      background: #16213e;
-      border-radius: 12px;
+      background: #050f2e;
+      border: 1px solid #00AAFF;
       padding: 1.5rem;
       margin-bottom: 1.5rem;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+      animation: card-border-glitch 6s infinite;
     }
-    label { display: block; margin-bottom: 0.5rem; color: #ccc; }
-    input[type="text"] {
+    
+    label { 
+      display: block; 
+      margin-bottom: 0.5rem; 
+      color: #5588BB;
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
+    input[type="text"],
+    input[type="number"],
+    textarea {
       width: 100%;
       padding: 0.75rem;
-      border: 1px solid #333;
-      border-radius: 6px;
-      background: #0f0f23;
-      color: #fff;
-      font-size: 1rem;
+      border: 1px solid #00AAFF;
+      background: #050f2e;
+      color: #B8D4FF;
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      font-size: 0.875rem;
+      outline: none;
+      caret-color: #00AAFF;
+      scrollbar-width: thin;
+      scrollbar-color: #00AAFF #020818;
     }
-    input[type="text"]:focus { outline: none; border-color: #ff6b6b; }
+
+    textarea {
+      resize: vertical;
+      min-height: 180px;
+    }
+
+    textarea::-webkit-scrollbar {
+      width: 12px;
+    }
+
+    textarea::-webkit-scrollbar-track {
+      background: linear-gradient(180deg, #020818 0%, #050f2e 100%);
+      border-left: 1px solid #0066CC;
+      box-shadow: inset 0 0 8px rgba(0, 170, 255, 0.12);
+    }
+
+    textarea::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, #0066CC 0%, #00AAFF 100%);
+      border: 2px solid #020818;
+      border-radius: 999px;
+      box-shadow: 0 0 10px rgba(0, 170, 255, 0.35);
+    }
+
+    textarea::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #00AAFF 0%, #6BE8FF 100%);
+      box-shadow: 0 0 12px rgba(107, 232, 255, 0.45);
+    }
+
+    textarea::-webkit-scrollbar-corner {
+      background: #020818;
+    }
+    
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    textarea:focus { 
+      box-shadow: 0 0 0 1px #0066CC, 0 0 10px rgba(0, 170, 255, 0.2); 
+    }
+    
+    input[type="text"]::placeholder,
+    textarea::placeholder {
+      color: #336699;
+    }
+    
     .checkbox-group {
       display: flex;
       align-items: center;
       gap: 0.5rem;
       margin-top: 1rem;
     }
-    input[type="checkbox"] { width: 18px; height: 18px; }
+    
+    input[type="checkbox"] { 
+      width: 18px; 
+      height: 18px;
+      accent-color: #00AAFF;
+      cursor: pointer;
+    }
+    
+    .checkbox-group label {
+      margin: 0;
+      cursor: pointer;
+      color: #B8D4FF;
+    }
+    
     .file-upload {
-      border: 2px dashed #333;
-      border-radius: 8px;
+      border: 2px dashed #00AAFF;
       padding: 2rem;
       text-align: center;
       cursor: pointer;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+      background: #050f2e;
     }
-    .file-upload:hover { border-color: #ff6b6b; }
+    
+    .file-upload::before {
+      content: '';
+      position: absolute;
+      top: -2px;
+      left: -2px;
+      right: -2px;
+      bottom: -2px;
+      border: 2px dashed #00AAFF;
+      animation: dash 1s linear infinite;
+      pointer-events: none;
+    }
+    
+    .file-upload:hover { 
+      background: #0a1a40;
+    }
+    
     .file-upload input { display: none; }
-    .file-upload .icon { font-size: 2rem; margin-bottom: 0.5rem; }
-    .file-upload .hint { color: #666; font-size: 0.875rem; }
-    .file-upload.has-file { border-color: #4ecdc4; }
-    .file-upload .filename { color: #4ecdc4; font-weight: bold; }
+    
+    .file-upload .icon { 
+      font-size: 2rem; 
+      margin-bottom: 0.5rem;
+      color: #0066CC;
+      font-family: 'VT323', monospace;
+      font-size: 2.5rem;
+    }
+    
+    .file-upload .hint { 
+      color: #336699; 
+      font-size: 0.875rem;
+    }
+    
+    .file-upload.has-file { 
+      border-color: #00FF88;
+      color: #00FF88;
+    }
+    
+    .file-upload.has-file::before {
+      border-color: #00FF88;
+    }
+    
+    .file-upload .filename { 
+      color: #00FF88; 
+      font-weight: bold;
+    }
+    
     .btn {
       width: 100%;
       padding: 1rem;
-      border: none;
-      border-radius: 8px;
+      border: 1px solid #00AAFF;
+      background: #050f2e;
+      color: #00AAFF;
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
       font-size: 1rem;
       font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 3px;
       cursor: pointer;
-      transition: opacity 0.2s, transform 0.1s;
+      transition: all 0.1s;
     }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-primary {
-      background: linear-gradient(135deg, #ff6b6b, #ff8e53);
-      color: white;
+    
+    .btn:hover:not(:disabled) { 
+      background: #00AAFF;
+      color: #020818;
+      box-shadow: 0 0 20px rgba(0, 170, 255, 0.4);
     }
-    .btn-primary:hover:not(:disabled) { opacity: 0.9; }
-    .btn-primary:active:not(:disabled) { transform: scale(0.98); }
+    
+    .btn:disabled { 
+      opacity: 0.3; 
+      cursor: not-allowed; 
+    }
+    
     .log-container {
-      background: #0f0f23;
-      border-radius: 8px;
+      background: #020818;
+      border: 1px solid #0066CC;
       padding: 1rem;
       max-height: 400px;
       overflow-y: auto;
-      font-family: 'Monaco', 'Menlo', monospace;
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
       font-size: 0.875rem;
     }
-    .log-line { padding: 0.25rem 0; border-bottom: 1px solid #222; }
-    .log-line:last-child { border-bottom: none; }
-    .log-info { color: #888; }
-    .log-success { color: #4ecdc4; }
-    .log-warning { color: #ffd93d; }
-    .log-error { color: #ff6b6b; }
-    .log-progress { color: #6c5ce7; }
+    
+    .log-container::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    .log-container::-webkit-scrollbar-track {
+      background: #020818;
+      border-left: 1px solid #0066CC;
+    }
+    
+    .log-container::-webkit-scrollbar-thumb {
+      background: #0066CC;
+    }
+    
+    .log-container::-webkit-scrollbar-thumb:hover {
+      background: #00AAFF;
+    }
+    
+    .log-line { 
+      padding: 0.25rem 0; 
+      border-bottom: 1px solid #050f2e;
+    }
+    
+    .log-line:last-child { 
+      border-bottom: none; 
+    }
+    
+    .log-prefix {
+      color: #336699;
+      margin-right: 0.75rem;
+    }
+    
+    .log-info { color: #5588BB; }
+    .log-success { color: #00FF88; }
+    .log-warning { color: #FFAA00; }
+    .log-error { color: #FF3366; }
+    .log-progress { color: #00AAFF; }
+
+    .progress-shell {
+      margin: 0 0 1rem;
+      padding: 0.85rem 1rem;
+      border: 1px solid #0066CC;
+      background: linear-gradient(180deg, rgba(2, 8, 24, 0.95) 0%, rgba(5, 15, 46, 0.9) 100%);
+      box-shadow: inset 0 0 12px rgba(0, 170, 255, 0.06);
+    }
+
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 0.6rem;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: #7FB7FF;
+    }
+
+    .progress-label {
+      color: #5588BB;
+    }
+
+    .progress-percent {
+      color: #00E1FF;
+      font-weight: bold;
+      min-width: 56px;
+      text-align: right;
+    }
+
+    .progress-track {
+      position: relative;
+      height: 14px;
+      overflow: hidden;
+      border: 1px solid #0066CC;
+      background:
+        linear-gradient(90deg, rgba(0, 170, 255, 0.08) 0%, rgba(0, 170, 255, 0.02) 100%),
+        #020818;
+    }
+
+    .progress-bar {
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 0%;
+      background: linear-gradient(90deg, #0066CC 0%, #00AAFF 55%, #00FF88 100%);
+      box-shadow: 0 0 12px rgba(0, 170, 255, 0.35);
+      transition: width 0.2s ease;
+    }
+
+    .progress-scan {
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        90deg,
+        rgba(255,255,255,0.0) 0,
+        rgba(255,255,255,0.0) 10px,
+        rgba(255,255,255,0.08) 10px,
+        rgba(255,255,255,0.08) 12px
+      );
+      mix-blend-mode: screen;
+      pointer-events: none;
+    }
+    
     .summary {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 1rem;
       margin-top: 1rem;
     }
+    
     .summary-item {
       text-align: center;
       padding: 1rem;
-      border-radius: 8px;
+      border: 1px solid #0066CC;
+      background: #020818;
     }
-    .summary-matched { background: rgba(78, 205, 196, 0.2); }
-    .summary-ambiguous { background: rgba(255, 217, 61, 0.2); }
-    .summary-unmatched { background: rgba(255, 107, 107, 0.2); }
-    .summary-value { font-size: 2rem; font-weight: bold; }
-    .summary-label { color: #888; font-size: 0.875rem; }
+    
+    .summary-matched { border-color: #00FF88; }
+    .summary-ambiguous { border-color: #FFAA00; }
+    .summary-unmatched { border-color: #FF3366; }
+    
+    .summary-value { 
+      font-size: 2rem; 
+      font-weight: bold;
+      font-family: 'VT323', monospace;
+    }
+    
+    .summary-matched .summary-value { color: #00FF88; }
+    .summary-ambiguous .summary-value { color: #FFAA00; }
+    .summary-unmatched .summary-value { color: #FF3366; }
+    
+    .summary-label { 
+      color: #336699; 
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    
     .playlist-url {
-      background: #0f0f23;
+      background: #020818;
       padding: 1rem;
-      border-radius: 8px;
+      border: 1px solid #00FF88;
       margin-top: 1rem;
       word-break: break-all;
+      font-size: 0.875rem;
+      color: #00FF88;
     }
-    .playlist-url a { color: #4ecdc4; }
-    .track-count { color: #888; font-size: 0.875rem; margin-top: 0.5rem; }
-    .config-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    
+    .playlist-url a { color: #00FF88; }
+    
+    .track-count { 
+      color: #336699; 
+      font-size: 0.875rem; 
+      margin-top: 0.5rem;
+    }
+    
+    .config-row { 
+      display: grid; 
+      grid-template-columns: 1fr 1fr; 
+      gap: 1rem; 
+    }
+    
     .config-row label { margin-top: 1rem; }
-    .config-row label[for="threshold"] {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    input[type="number"] {
-      width: 100%;
-      padding: 0.75rem;
-      border: 1px solid #333;
-      border-radius: 6px;
-      background: #0f0f23;
-      color: #fff;
-      font-size: 1rem;
-    }
+    
     .help-icon {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       width: 18px;
       height: 18px;
-      border-radius: 50%;
-      background: #333;
-      color: #888;
-      font-size: 12px;
-      font-weight: bold;
+      border: 1px solid #00AAFF;
+      color: #00AAFF;
+      font-family: 'VT323', monospace;
+      font-size: 14px;
       margin-left: 6px;
       cursor: help;
       position: relative;
     }
+    
     .help-icon:hover .tooltip {
       display: block;
     }
+    
     .tooltip {
       display: none;
       position: absolute;
       bottom: 130%;
       left: 50%;
       transform: translateX(-50%);
-      background: #0f0f23;
-      color: #ccc;
+      background: #050f2e;
+      color: #B8D4FF;
       padding: 0.75rem;
-      border-radius: 6px;
+      border: 1px solid #00AAFF;
       width: 280px;
       font-size: 0.8rem;
+      font-family: 'Share Tech Mono', monospace;
       font-weight: normal;
       line-height: 1.4;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
       z-index: 100;
       text-align: left;
+      text-transform: none;
+      letter-spacing: 0;
     }
+    
     .tooltip::after {
       content: '';
       position: absolute;
@@ -171,137 +612,214 @@
       left: 50%;
       transform: translateX(-50%);
       border: 6px solid transparent;
-      border-top-color: #0f0f23;
+      border-top-color: #00AAFF;
     }
+    
     .manual-review-section { display: none; }
     .manual-review-section.visible { display: block; }
+    
     .manual-track {
-      background: #0f0f23;
-      border-radius: 8px;
+      background: #020818;
+      border: 1px solid #0066CC;
       padding: 1rem;
       margin-bottom: 0.75rem;
     }
+    
     .manual-track-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 0.75rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
     }
+    
     .manual-track-info {
       font-size: 0.9rem;
-      color: #ccc;
+      color: #B8D4FF;
     }
+    
     .manual-track-actions {
       display: flex;
       gap: 0.5rem;
       align-items: center;
     }
+    
     .manual-search-input {
       flex: 1;
+      min-width: 150px;
       padding: 0.5rem;
-      border: 1px solid #333;
-      border-radius: 4px;
-      background: #16213e;
-      color: #fff;
+      border: 1px solid #00AAFF;
+      background: #050f2e;
+      color: #B8D4FF;
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
       font-size: 0.875rem;
     }
+    
     .btn-small {
       padding: 0.5rem 1rem;
-      border: none;
-      border-radius: 4px;
+      border: 1px solid #00AAFF;
+      background: #050f2e;
+      color: #00AAFF;
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
       font-size: 0.875rem;
       cursor: pointer;
-      transition: opacity 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 1px;
     }
-    .btn-small:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-search {
-      background: #6c5ce7;
-      color: white;
+    
+    .btn-small:hover:not(:disabled) {
+      background: #00AAFF;
+      color: #020818;
     }
-    .btn-search:hover:not(:disabled) { opacity: 0.9; }
+    
+    .btn-small:disabled { 
+      opacity: 0.4; 
+      cursor: not-allowed; 
+    }
+    
     .manual-results {
       margin-top: 0.75rem;
-      border-top: 1px solid #333;
+      border-top: 1px solid #0066CC;
       padding-top: 0.75rem;
     }
+    
     .manual-result {
       padding: 0.5rem;
-      border-radius: 4px;
+      border: 1px solid #0066CC;
       cursor: pointer;
       margin-bottom: 0.5rem;
-      background: #16213e;
-      transition: background 0.2s;
+      background: #050f2e;
+      transition: all 0.1s;
     }
-    .manual-result:hover { background: #1e2a4a; }
-    .manual-result.selected { background: #4ecdc4; color: #000; }
-    .manual-result-title { font-weight: bold; font-size: 0.875rem; }
-    .manual-result-artist { font-size: 0.75rem; color: #888; }
+    
+    .manual-result:hover { 
+      border-color: #00AAFF;
+      box-shadow: 0 0 10px rgba(0, 170, 255, 0.2);
+    }
+    
+    .manual-result.selected { 
+      background: #00AAFF;
+      color: #020818;
+      border-color: #00AAFF;
+    }
+    
+    .manual-result-title { 
+      font-weight: bold; 
+      font-size: 0.875rem;
+    }
+    
+    .manual-result-artist { 
+      font-size: 0.75rem;
+      color: #5588BB;
+    }
+    
+    .manual-result.selected .manual-result-artist {
+      color: #020818;
+    }
+    
     .btn-add-manual {
-      background: linear-gradient(135deg, #4ecdc4, #44a08d);
-      color: white;
+      background: #050f2e;
+      border: 1px solid #00AAFF;
+      color: #00AAFF;
       margin-top: 1rem;
     }
-    .btn-add-manual:hover:not(:disabled) { opacity: 0.9; }
+    
+    .btn-add-manual:hover:not(:disabled) { 
+      background: #00AAFF;
+      color: #020818;
+    }
+    
     .ytmusic-badge {
       display: inline-block;
-      background: #ff0000;
-      color: white;
+      background: #020818;
+      color: #FFAA00;
       padding: 0.2rem 0.5rem;
-      border-radius: 4px;
+      border: 1px solid #FFAA00;
       font-size: 0.7rem;
       margin-left: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
     }
+    
     .backend-status {
       display: flex;
       align-items: center;
       gap: 0.5rem;
       font-size: 0.8rem;
-      color: #888;
+      color: #336699;
       margin-top: 0.5rem;
     }
-    .backend-dot { width: 8px; height: 8px; border-radius: 50%; }
-    .backend-dot.available { background: #4ecdc4; }
-    .backend-dot.unavailable { background: #ff6b6b; }
+    
+    .backend-dot { 
+      width: 8px; 
+      height: 8px;
+      border: 1px solid #00AAFF;
+    }
+    
+    .backend-dot.available { 
+      background: #00FF88;
+      border-color: #00FF88;
+      box-shadow: 0 0 6px #00FF88;
+    }
+    
+    .backend-dot.unavailable { 
+      background: #FF3366;
+      border-color: #FF3366;
+      box-shadow: 0 0 6px #FF3366;
+    }
+    
+    .subtitle {
+      text-align: center;
+      color: #336699;
+      margin-bottom: 1.5rem;
+      font-size: 0.875rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+    
+    @media (max-width: 600px) {
+      .config-row {
+        grid-template-columns: 1fr;
+      }
+      
+      .summary {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
+  <canvas id="matrix-canvas"></canvas>
+  <div class="scanline-2"></div>
+  <div class="scanline-3"></div>
   <div class="container">
-    <h1>🎵 Exportador de Playlists</h1>
-    <p style="text-align: center; color: #888; margin-bottom: 1.5rem;">Importa tu biblioteca musical a YouTube Music</p>
+    <h1>M3U &gt; YTM</h1>
+    <p class="subtitle">Import your music library to YouTube Music</p>
 
     <div class="card">
       <div class="file-upload" id="dropZone">
-        <div class="icon">📂</div>
-        <div id="uploadText">Click or drag .m3u file here</div>
+        <div class="icon">[FILE]</div>
+        <div id="uploadText">Drop .m3u file here</div>
         <div class="hint">or paste M3U content below</div>
         <input type="file" id="fileInput" accept=".m3u,.m3u8">
       </div>
       <div class="track-count" id="trackCount"></div>
 
       <div style="margin-top: 1rem;">
-        <label>M3U Content (paste if not uploading)</label>
-        <textarea id="m3uContent" rows="7" style="
-          width: 100%;
-          padding: 0.75rem;
-          border: 1px solid #333;
-          border-radius: 6px;
-          background: #0f0f23;
-          color: #fff;
-          font-family: monospace;
-          font-size: 0.875rem;
-          resize: none;
-        "></textarea>
+        <label>M3U Content</label>
+        <textarea id="m3uContent" rows="7"></textarea>
       </div>
 
       <div class="config-row">
         <div>
           <label>Playlist Name</label>
-          <input type="text" id="playlistName" placeholder="My Playlist">
+          <input type="text" id="playlistName" placeholder="MY_PLAYLIST">
         </div>
         <div>
-          <label for="threshold">Match Threshold (0.0 - 1.0)
+          <label for="threshold">Match Threshold
             <span class="help-icon">?
-              <span class="tooltip">Porcentaje minimo de similitud para considerar una cancion como encontrada. 60% funciona bien para la mayoria de casos. Subelo si quieres mas precision o bajalo si no encuentra canciones.</span>
+              <span class="tooltip">Minimum similarity percentage to consider a song as found. 60% works well for most cases.</span>
             </span>
           </label>
           <input type="number" id="threshold" value="0.6" min="0" max="1" step="0.05">
@@ -310,18 +828,28 @@
 
       <div class="checkbox-group">
         <input type="checkbox" id="dryRun" checked>
-        <label for="dryRun" style="margin: 0;">Dry Run Mode (no playlist creation)</label>
+        <label for="dryRun">Dry Run Mode (no playlist creation)</label>
       </div>
 
       <div style="margin-top: 1.5rem;">
-        <button class="btn btn-primary" id="startBtn" disabled>Start Conversion</button>
+        <button class="btn" id="startBtn" disabled>[ EXECUTE ]</button>
       </div>
     </div>
 
     <div class="card">
-      <h3 style="margin-bottom: 1rem;">Progress Log</h3>
+      <h3>Progress Log</h3>
+      <div class="progress-shell">
+        <div class="progress-meta">
+          <span class="progress-label" id="progressLabel">Idle</span>
+          <span class="progress-percent" id="progressPercent">0%</span>
+        </div>
+        <div class="progress-track" aria-label="Conversion progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" role="progressbar">
+          <div class="progress-bar" id="progressBar"></div>
+          <div class="progress-scan"></div>
+        </div>
+      </div>
       <div class="log-container" id="logContainer">
-        <div class="log-line log-info">Waiting for file upload...</div>
+        <div class="log-line log-info"><span class="log-prefix">&gt;</span>Awaiting input...</div>
       </div>
       <div class="backend-status" id="backendStatus">
         <span class="backend-dot unavailable"></span>
@@ -330,16 +858,16 @@
     </div>
 
     <div class="card manual-review-section" id="manualReviewSection">
-      <h3 style="margin-bottom: 1rem;">Revisión Manual</h3>
-      <p style="color: #888; font-size: 0.875rem; margin-bottom: 1rem;">
-        Los tracks sin match fueron detectados. Busca manualmente el título correcto para intentar encontrar una coincidencia.
+      <h3>Manual Review</h3>
+      <p style="color: #336699; font-size: 0.875rem; margin-bottom: 1rem;">
+        Unmatched tracks detected. Search manually to find matches.
       </p>
       <div id="manualTracksList"></div>
-      <button class="btn btn-add-manual" id="addManualBtn" disabled>Agregar seleccionados a playlist</button>
+      <button class="btn btn-add-manual" id="addManualBtn" disabled>[ ADD SELECTED ]</button>
     </div>
 
     <div class="card" id="summaryCard" style="display: none;">
-      <h3 style="margin-bottom: 1rem;">Summary</h3>
+      <h3>Summary</h3>
       <div class="summary" id="summaryGrid"></div>
       <div class="playlist-url" id="playlistUrl" style="display: none;"></div>
     </div>
@@ -359,27 +887,66 @@
     const summaryGrid = document.getElementById('summaryGrid');
     const playlistUrl = document.getElementById('playlistUrl');
     const trackCount = document.getElementById('trackCount');
+    const progressBar = document.getElementById('progressBar');
+    const progressPercent = document.getElementById('progressPercent');
+    const progressLabel = document.getElementById('progressLabel');
+    const progressTrack = document.querySelector('.progress-track');
 
     let parsedTracks = [];
     let eventSource = null;
     let lastConversionResults = null;
     let lastPlaylistId = null;
     let manualSelectedTracks = [];
+    let logLineCount = 0;
 
     function addLog(type, message) {
       const line = document.createElement('div');
       line.className = `log-line log-${type}`;
-      line.textContent = message;
+      const prefix = type === 'progress' ? '>' : type === 'info' ? '>' : type === 'success' ? '+' : type === 'warning' ? '!' : type === 'error' ? 'X' : '>';
+      line.innerHTML = `<span class="log-prefix">${prefix}</span>${message}`;
       logContainer.appendChild(line);
       logContainer.scrollTop = logContainer.scrollHeight;
+      logLineCount++;
+      if (logLineCount > 100) {
+        const firstLine = logContainer.querySelector('.log-line');
+        if (firstLine) firstLine.remove();
+      }
     }
 
+    function setProgress(current = 0, total = 0, label = 'Idle') {
+      const safeTotal = total > 0 ? total : 0;
+      const percent = safeTotal > 0 ? Math.max(0, Math.min(100, Math.round((current / safeTotal) * 100))) : 0;
+      progressBar.style.width = `${percent}%`;
+      progressPercent.textContent = `${percent}%`;
+      progressLabel.textContent = label;
+      progressTrack.setAttribute('aria-valuenow', String(percent));
+    }
+
+    let sseConnected = false;
     function connectSSE() {
-      if (eventSource) eventSource.close();
-      eventSource = new EventSource('/events');
-      eventSource.addEventListener('log', (e) => {
-        const event = JSON.parse(e.data);
-        addLog(event.type, event.message);
+      return new Promise((resolve) => {
+        if (eventSource) eventSource.close();
+        eventSource = new EventSource('/events');
+        eventSource.addEventListener('log', (e) => {
+          const event = JSON.parse(e.data);
+          // Wait for connection confirmation before starting conversion
+          if (event.message === '__SSE_CONNECTED__') {
+            sseConnected = true;
+            resolve();
+            return;
+          }
+          if (event.type === 'progress' && event.data) {
+            setProgress(event.data.current, event.data.total, event.message || 'Processing tracks');
+          }
+          if (event.type === 'summary') {
+            const total = (event.data?.matched || 0) + (event.data?.ambiguous || 0) + (event.data?.unmatched || 0);
+            setProgress(total, total || 1, 'Conversion complete');
+          }
+          // Skip __SSE_CONNECTED__ from log display
+          if (event.message !== '__SSE_CONNECTED__') {
+            addLog(event.type, event.message);
+          }
+        });
       });
     }
 
@@ -392,11 +959,11 @@
         if (data.available) {
           dot.classList.remove('unavailable');
           dot.classList.add('available');
-          statusText.textContent = 'ytmusicapi backend (no quota limits)';
+          statusText.textContent = 'ytmusicapi backend [NO QUOTA LIMITS]';
         } else {
           dot.classList.remove('available');
           dot.classList.add('unavailable');
-          statusText.textContent = 'Using YouTube Data API (quota limited)';
+          statusText.textContent = 'ytmusicapi backend';
         }
       } catch {
         console.log('Could not check backend status');
@@ -405,13 +972,15 @@
     checkBackendStatus();
 
     function resetUI() {
-      logContainer.innerHTML = '<div class="log-line log-info">Starting...</div>';
+      logContainer.innerHTML = '<div class="log-line log-info"><span class="log-prefix">&gt;</span>Initializing...</div>';
       summaryCard.style.display = 'none';
       playlistUrl.style.display = 'none';
       document.getElementById('manualReviewSection').classList.remove('visible');
       manualSelectedTracks = [];
       lastConversionResults = null;
       lastPlaylistId = null;
+      logLineCount = 1;
+      setProgress(0, 0, 'Preparing conversion');
     }
 
     function showManualReview(results) {
@@ -425,10 +994,13 @@
       unmatched.forEach((track, index) => {
         const trackDiv = document.createElement('div');
         trackDiv.className = 'manual-track';
+        const statusClass = track.status === 'matched' ? 'log-success' : track.status === 'ambiguous' ? 'log-warning' : 'log-error';
+        const statusLabel = track.status === 'ambiguous' ? '[AMB]' : '[NO MATCH]';
         trackDiv.innerHTML = `
           <div class="manual-track-header">
             <div class="manual-track-info">
-              <strong>${track.artist || 'Unknown Artist'}</strong> - ${track.title}
+              <span class="${statusClass}">${statusLabel}</span>
+              ${track.artist || 'UNKNOWN'} - ${track.title}
               ${track.status === 'ambiguous' ? '<span class="ytmusic-badge">Ambiguous</span>' : ''}
             </div>
             <div class="manual-track-actions">
@@ -436,7 +1008,7 @@
                 placeholder="Search query..." 
                 value="${track.artist || ''} ${track.title || ''}"
                 data-index="${index}">
-              <button class="btn-small btn-search" data-index="${index}">Buscar</button>
+              <button class="btn-small" data-index="${index}">[SEARCH]</button>
             </div>
           </div>
           <div class="manual-results" id="results-${index}"></div>
@@ -444,7 +1016,7 @@
         list.appendChild(trackDiv);
 
         const input = trackDiv.querySelector('.manual-search-input');
-        const searchBtn = trackDiv.querySelector('.btn-search');
+        const searchBtn = trackDiv.querySelector('.btn-small');
 
         searchBtn.addEventListener('click', () => searchManual(index, track, input.value));
         input.addEventListener('keypress', (e) => {
@@ -457,7 +1029,7 @@
 
     async function searchManual(index, originalTrack, query) {
       const resultsDiv = document.getElementById(`results-${index}`);
-      resultsDiv.innerHTML = '<div class="log-line log-info">Searching...</div>';
+      resultsDiv.innerHTML = '<div class="log-line log-info"><span class="log-prefix">&gt;</span>Searching...</div>';
 
       try {
         const res = await fetch('/api/search-single', {
@@ -468,12 +1040,12 @@
         const data = await res.json();
 
         if (data.error) {
-          resultsDiv.innerHTML = `<div class="log-line log-error">${data.error}</div>`;
+          resultsDiv.innerHTML = `<div class="log-line log-error"><span class="log-prefix">X</span>${data.error}</div>`;
           return;
         }
 
         if (data.results.length === 0) {
-          resultsDiv.innerHTML = '<div class="log-line log-warning">No results found</div>';
+          resultsDiv.innerHTML = '<div class="log-line log-warning"><span class="log-prefix">!</span>No results found</div>';
           return;
         }
 
@@ -495,7 +1067,7 @@
           resultsDiv.appendChild(resultDiv);
         });
       } catch (err) {
-        resultsDiv.innerHTML = `<div class="log-line log-error">Search failed: ${err.message}</div>`;
+        resultsDiv.innerHTML = `<div class="log-line log-error"><span class="log-prefix">X</span>Search failed: ${err.message}</div>`;
       }
     }
 
@@ -563,16 +1135,16 @@
 
     dropZone.addEventListener('dragover', (e) => {
       e.preventDefault();
-      dropZone.style.borderColor = '#ff6b6b';
+      dropZone.style.borderColor = '#5588BB';
     });
 
     dropZone.addEventListener('dragleave', () => {
-      dropZone.style.borderColor = '#333';
+      dropZone.style.borderColor = '#00AAFF';
     });
 
     dropZone.addEventListener('drop', async (e) => {
       e.preventDefault();
-      dropZone.style.borderColor = '#333';
+      dropZone.style.borderColor = '#00AAFF';
       const file = e.dataTransfer.files[0];
       if (file) await handleFile(file);
     });
@@ -581,14 +1153,14 @@
       const content = await file.text();
       m3uContent.value = content;
       dropZone.classList.add('has-file');
-      uploadText.innerHTML = `<span class="filename">${file.name}</span>`;
+      uploadText.innerHTML = `<span class="filename">[OK] ${file.name}</span>`;
       await parseM3U(content, file.name);
     }
 
     m3uContent.addEventListener('input', async () => {
       if (m3uContent.value.trim()) {
         dropZone.classList.remove('has-file');
-        uploadText.innerHTML = 'Click or drag .m3u file here';
+        uploadText.innerHTML = 'Drop .m3u file here';
         await parseM3U(m3uContent.value, 'clipboard');
       } else {
         parsedTracks = [];
@@ -609,12 +1181,12 @@
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         parsedTracks = data.tracks;
-        trackCount.textContent = `${parsedTracks.length} tracks (${data.format} format)`;
+        trackCount.textContent = `[${parsedTracks.length}] tracks loaded (${data.format} format)`;
         if (!playlistName.value) {
-          playlistName.value = filename.replace(/\.(m3u|m3u8)$/i, '');
+          playlistName.value = filename.replace(/\.(m3u|m3u8)$/i, '').replace(/[^\w\s-]/g, '_').toUpperCase();
         }
         updateStartButtonState();
-        addLog('success', `Loaded ${parsedTracks.length} tracks`);
+        addLog('success', `Loaded ${parsedTracks.length} tracks from ${filename}`);
       } catch (err) {
         addLog('error', `Parse error: ${err.message}`);
         parsedTracks = [];
@@ -624,23 +1196,27 @@
 
     startBtn.addEventListener('click', async () => {
       if (parsedTracks.length === 0) {
-        addLog('error', 'No tracks loaded. Please upload or paste an M3U file first.');
+        addLog('error', 'No tracks loaded. Upload or paste an M3U file first.');
         return;
       }
 
       startBtn.disabled = true;
       resetUI();
-      connectSSE();
+      
+      // Wait for SSE connection to be established before starting conversion
+      addLog('info', 'Connecting to event stream...');
+      await connectSSE();
 
       try {
         const payload = {
-          playlistName: playlistName.value || 'Untitled Playlist',
+          playlistName: playlistName.value || 'UNTITLED_PLAYLIST',
           dryRun: dryRun.checked,
           threshold: parseFloat(threshold.value),
           tracks: parsedTracks,
         };
 
-        addLog('info', `Starting conversion: ${parsedTracks.length} tracks, dryRun=${dryRun.checked}`);
+        addLog('info', `Starting conversion: ${parsedTracks.length} tracks | dryRun=${dryRun.checked}`);
+        setProgress(0, parsedTracks.length || 1, 'Searching on YouTube Music...');
 
         const res = await fetch('/api/convert', {
           method: 'POST',
@@ -651,6 +1227,7 @@
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
           addLog('error', errorData.error || `Request failed with status ${res.status}`);
+          setProgress(0, parsedTracks.length || 1, 'Conversion failed');
           return;
         }
 
@@ -658,10 +1235,13 @@
 
         if (data.error) {
           addLog('error', data.error);
+          setProgress(0, parsedTracks.length || 1, 'Conversion failed');
         } else {
           const matched = data.results?.filter(r => r.status === 'matched').length || 0;
           const ambiguous = data.results?.filter(r => r.status === 'ambiguous').length || 0;
           const unmatched = data.results?.filter(r => r.status === 'unmatched').length || 0;
+          const totalProcessed = matched + ambiguous + unmatched;
+          setProgress(totalProcessed, totalProcessed || parsedTracks.length || 1, data.dryRun ? 'Dry run complete' : 'Playlist ready');
 
           summaryGrid.innerHTML = `
             <div class="summary-item summary-matched">
@@ -680,7 +1260,7 @@
           summaryCard.style.display = 'block';
 
           if (data.playlistUrl) {
-            playlistUrl.innerHTML = `Playlist URL: <a href="${data.playlistUrl}" target="_blank">${data.playlistUrl}</a>`;
+            playlistUrl.innerHTML = `PLAYLIST: <a href="${data.playlistUrl}" target="_blank">${data.playlistUrl}</a>`;
             playlistUrl.style.display = 'block';
           }
 
@@ -690,10 +1270,93 @@
         }
       } catch (err) {
         addLog('error', `Request failed: ${err.message}`);
+        setProgress(0, parsedTracks.length || 1, 'Request failed');
       } finally {
         startBtn.disabled = false;
       }
     });
+  </script>
+  
+  <script>
+    (function() {
+      const canvas = document.getElementById('matrix-canvas');
+      const ctx = canvas.getContext('2d');
+      
+      const CHARS = '0アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン1';
+      const FONT_SIZE = 14;
+      const CHAR_COLOR = '#003366';
+      const HEAD_COLOR = '#0066AA';
+      
+      let columns = [];
+      let width, height;
+      
+      function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+        
+        const colCount = Math.floor(width / FONT_SIZE);
+        columns = [];
+        for (let i = 0; i < colCount; i++) {
+          columns.push({
+            x: i * FONT_SIZE,
+            y: Math.random() * height,
+            speed: 1 + Math.random() * 2,
+            chars: []
+          });
+        }
+      }
+      
+      function getRandomChar() {
+        return CHARS[Math.floor(Math.random() * CHARS.length)];
+      }
+      
+      function draw() {
+        ctx.fillStyle = 'rgba(2, 8, 24, 0.05)';
+        ctx.fillRect(0, 0, width, height);
+        
+        ctx.font = `${FONT_SIZE}px 'Share Tech Mono', monospace`;
+        
+        columns.forEach(col => {
+          for (let i = 0; i < col.chars.length; i++) {
+            const charY = col.y - i * FONT_SIZE;
+            if (charY < 0 || charY > height) continue;
+            
+            if (i === 0) {
+              ctx.fillStyle = HEAD_COLOR;
+            } else {
+              const alpha = 0.3 + (1 - i / col.chars.length) * 0.5;
+              ctx.fillStyle = CHAR_COLOR;
+              ctx.globalAlpha = alpha;
+            }
+            ctx.fillText(col.chars[i], col.x, charY);
+          }
+          ctx.globalAlpha = 1;
+          
+          col.y += col.speed;
+          
+          if (Math.random() < 0.08) {
+            if (col.chars.length === 0 || col.chars[0] !== getRandomChar()) {
+              col.chars.unshift(getRandomChar());
+            }
+          }
+          
+          if (Math.random() < 0.04) {
+            col.chars.pop();
+          }
+          
+          if (col.y - col.chars.length * FONT_SIZE > height + FONT_SIZE * 10) {
+            col.y = -FONT_SIZE * (5 + Math.floor(Math.random() * 20));
+            col.chars = [];
+          }
+        });
+        
+        requestAnimationFrame(draw);
+      }
+      
+      resize();
+      window.addEventListener('resize', resize);
+      draw();
+    })();
   </script>
 </body>
 </html>
