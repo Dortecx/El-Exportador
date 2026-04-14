@@ -15,8 +15,10 @@ class WebLogger extends EventEmitter {
   }
 
   private broadcast(event: LogEvent): void {
+    console.log(`[PROGRESS-DEBUG] logger.ts: broadcast called with type=${event.type}, message=${event.message}, clientCount=${this.clients.size}`);
     for (const client of this.clients) {
       try {
+        console.log(`[PROGRESS-DEBUG] logger.ts: sending event to client`);
         client(event);
       } catch {
         this.clients.delete(client);
