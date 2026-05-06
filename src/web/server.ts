@@ -53,7 +53,7 @@ interface ConversionRequest {
 }
 
 app.post("/api/convert", async (req, res): Promise<void> => {
-  const { playlistName, dryRun, threshold, tracks } = req.body as ConversionRequest;
+  const { playlistName, dryRun, threshold: _threshold, tracks } = req.body as ConversionRequest;
 
   try {
     webLogger.info(`=== M3U to YouTube Music ===`);
@@ -90,7 +90,7 @@ app.post("/api/convert", async (req, res): Promise<void> => {
 
     if (dryRun) {
       webLogger.success(`Matched: ${matched.length}, Ambiguous: ${ambiguous.length}, Unmatched: ${unmatched.length}`);
-      webLogger.summary(matched.length, unmatched.length);
+      webLogger.summary(matched.length, ambiguous.length, unmatched.length);
       res.json({ success: true, dryRun: true, results, usingYtMusic: true });
       return;
     }

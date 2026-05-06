@@ -72,13 +72,20 @@ function extractFromPath(filePath) {
     if (japSlashMatch) {
         const beforeSlash = japSlashMatch[1].trim();
         const afterSlash = japSlashMatch[2].trim();
-        // "Info／「Title」..." — artist is beforeSlash
+        // "「Title」TVアニメ／Artist" — extract title from brackets
         const bracketMatch = afterSlash.match(CORNER_BRACKET_REGEX);
         if (bracketMatch) {
             return { artist: cleanTrailingBracket(beforeSlash), title: fileTitle || bracketMatch[1] };
         }
-        // "Info／Artist" — artist is afterSlash
-        return { artist: cleanTrailingBracket(afterSlash), title: fileTitle };
+        // "Artist - Title／Series Info" — afterSlash is metadata, beforeSlash has "Artist - Title"
+        // OR "Artist／Series Info" — artist is beforeSlash
+        const beforeDashMatch = beforeSlash.match(DASH_REGEX);
+        if (beforeDashMatch) {
+            // beforeSlash is "Artist - Title", use fileTitle for cleaner result
+            return { artist: cleanTrailingBracket(beforeDashMatch[1].trim()), title: fileTitle || beforeDashMatch[2].trim() };
+        }
+        // beforeSlash has no dash, it's just the artist
+        return { artist: cleanTrailingBracket(beforeSlash), title: fileTitle };
     }
     // Pattern: "Artist - FolderTitle" with any dash variant
     const dashMatch = folder.match(DASH_REGEX);

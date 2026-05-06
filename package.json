@@ -10,10 +10,11 @@
   "scripts": {
     "build": "tsc",
     "start": "tsx src/cli.ts",
+    "web": "tsx src/web/server.ts",
+    "web:dist": "node dist/web/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "dry-run": "tsx src/cli.ts test/fixtures/extended.m3u --dry-run",
-    "web": "tsx src/web/server.ts"
+    "dry-run": "tsx src/cli.ts test/fixtures/extended.m3u --dry-run"
   },
   "keywords": [
     "m3u",
@@ -27,10 +28,11 @@
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
     "express": "^4.21.0",
-    "googleapis": "^140.0.0",
-    "google-auth-library": "^9.15.0"
+    "google-auth-library": "^10.6.2",
+    "googleapis": "^171.4.0"
   },
   "devDependencies": {
+    "@esbuild/linux-x64": "^0.28.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",

@@ -3,54 +3,13 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { fileURLToPath } from "url";
-import { spawn } from "child_process";
 import { parseFile } from "../parser.js";
-import { matchTrack } from "../matcher.js";
-import { createPlaylistWithTracks } from "../playlist.js";
-import { getAuthClient, validateAuth } from "../auth.js";
 import { webLogger } from "./logger.js";
+import { addToPlaylistOnYtMusic, checkYtMusicAvailable, convertWithYtMusic, searchSingleOnYtMusic, YTMusicAuthFile, } from "../ytmusic/client.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
-const YTMusicAuthFile = path.join(os.homedir(), ".config", "m3u-to-ytmusic", "ytmusic_auth.json");
-const SEARCHER_SCRIPT = path.join(__dirname, "../ytmusic/searcher.py");
-function checkYtMusicAvailable() {
-    try {
-        if (!fs.existsSync(YTMusicAuthFile))
-            return false;
-        const content = fs.readFileSync(YTMusicAuthFile, "utf8");
-        const parsed = JSON.parse(content);
-        const keys = Object.keys(parsed).map(k => k.toLowerCase());
-        return keys.includes("cookie") || keys.includes("authorization");
-    }
-    catch {
-        return false;
-    }
-}
-function runYtMusicScript(input) {
-    return new Promise((resolve, reject) => {
-        const proc = spawn("py", ["-3.11", SEARCHER_SCRIPT]);
-        let stdout = "";
-        let stderr = "";
-        proc.stdout.on("data", (data) => { stdout += data.toString(); });
-        proc.stderr.on("data", (data) => { stderr += data.toString(); });
-        proc.on("close", (code) => {
-            if (code !== 0) {
-                reject(new Error(stderr || `Script exited with code ${code}`));
-                return;
-            }
-            try {
-                resolve(JSON.parse(stdout));
-            }
-            catch {
-                reject(new Error("Invalid JSON from script"));
-            }
-        });
-        proc.stdin.write(JSON.stringify(input));
-        proc.stdin.end();
-    });
-}
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, "../../public")));
@@ -59,6 +18,8 @@ app.get("/events", (req, res) => {
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
+    // Send initial connection confirmation
+    res.write(`event: log\ndata: ${JSON.stringify({ type: "info", message: "__SSE_CONNECTED__" })}\n\n`);
     const sendEvent = (event) => {
         res.write(`event: log\ndata: ${JSON.stringify(event)}\n\n`);
     };
@@ -68,117 +29,56 @@ app.get("/events", (req, res) => {
     });
 });
 app.post("/api/convert", async (req, res) => {
-    const { playlistName, dryRun, threshold, tracks } = req.body;
+    const { playlistName, dryRun, threshold: _threshold, tracks } = req.body;
     try {
         webLogger.info(`=== M3U to YouTube Music ===`);
         webLogger.info(`Playlist: "${playlistName}"`);
         webLogger.info(`Mode: ${dryRun ? "DRY RUN" : "FULL"}`);
         webLogger.info(`Tracks: ${tracks.length}`);
-        if (checkYtMusicAvailable()) {
-            webLogger.info("Using ytmusicapi backend (no quota limits)");
-            const scriptInput = {
-                action: "search",
-                tracks: tracks.map((t) => ({ artist: t.artist, title: t.title })),
-                playlistName
-            };
-            const result = await runYtMusicScript(scriptInput);
-            const matchResults = result.results.map((r) => ({
-                status: r.status,
-                artist: r.artist,
-                title: r.title,
-                videoId: r.videoId,
-                bestMatch: r.bestMatch
-            }));
-            const matched = matchResults.filter((r) => r.status === "matched");
-            const ambiguous = matchResults.filter((r) => r.status === "ambiguous");
-            const unmatched = matchResults.filter((r) => r.status === "unmatched");
-            if (dryRun) {
-                webLogger.success(`Matched: ${matched.length}, Ambiguous: ${ambiguous.length}, Unmatched: ${unmatched.length}`);
-                webLogger.summary(matched.length, ambiguous.length, unmatched.length);
-                res.json({ success: true, dryRun: true, results: matchResults, usingYtMusic: true });
-                return;
-            }
-            webLogger.success("Playlist created!");
-            if (result.playlistUrl) {
-                webLogger.info(`URL: ${result.playlistUrl}`);
-            }
-            webLogger.summary(matched.length, ambiguous.length, unmatched.length, {
-                playlistUrl: result.playlistUrl,
-                playlistId: result.playlistId
-            });
-            res.json({
-                success: true,
-                dryRun: false,
-                results: matchResults,
-                playlistUrl: result.playlistUrl,
-                playlistId: result.playlistId,
-                matched: result.matched,
-                usingYtMusic: true
-            });
+        if (!checkYtMusicAvailable()) {
+            webLogger.error("ytmusicapi backend not configured");
+            res.status(400).json({ error: "ytmusicapi backend not configured" });
             return;
         }
-        const apiKey = process.env.YOUTUBE_API_KEY;
-        if (!apiKey) {
-            webLogger.error("YOUTUBE_API_KEY environment variable not set");
-            res.status(400).json({ error: "YOUTUBE_API_KEY not configured" });
-            return;
-        }
-        const config = { maxResults: 5, musicCategoryId: "10", matchThreshold: threshold };
-        webLogger.info("Matching tracks with YouTube Data API...");
-        const matchResults = [];
-        for (let i = 0; i < tracks.length; i++) {
-            const track = tracks[i];
-            webLogger.progress(i + 1, tracks.length, `${track.artist ? `${track.artist} - ` : ""}${track.title}`);
-            const result = await matchTrack(track, apiKey, config, threshold);
-            matchResults.push(result);
-        }
-        const matched = matchResults.filter((r) => r.status === "matched");
-        const ambiguous = matchResults.filter((r) => r.status === "ambiguous");
-        const unmatched = matchResults.filter((r) => r.status === "unmatched");
+        webLogger.info("Using ytmusicapi backend (no quota limits)");
+        // Show initial progress immediately  
+        webLogger.progress(0, tracks.length, 'Searching tracks on YouTube Music...');
+        // Progress callback to update UI in real-time
+        const progressCallback = (current, total, artist, title, status) => {
+            console.log(`[PROGRESS-DEBUG] server.ts: progressCallback invoked with current=${current}, total=${total}, artist=${artist}, title=${title}, status=${status}`);
+            webLogger.progress(current, total, `${artist} - ${title} [${status}]`);
+        };
+        const result = await convertWithYtMusic(tracks, playlistName, { dryRun }, progressCallback);
+        // Show completed progress after results
+        const results = result?.results ?? [];
+        const matchedCount = results.filter((r) => r.status === "matched").length;
+        webLogger.progress(tracks.length, tracks.length, `Completed ${matchedCount}/${tracks.length} matched`);
+        const matched = results.filter((r) => r.status === "matched");
+        const ambiguous = results.filter((r) => r.status === "ambiguous");
+        const unmatched = results.filter((r) => r.status === "unmatched");
         if (dryRun) {
             webLogger.success(`Matched: ${matched.length}, Ambiguous: ${ambiguous.length}, Unmatched: ${unmatched.length}`);
             webLogger.summary(matched.length, ambiguous.length, unmatched.length);
-            res.json({ success: true, dryRun: true, results: matchResults });
+            res.json({ success: true, dryRun: true, results, usingYtMusic: true });
             return;
         }
-        let oauth2Auth;
-        webLogger.info("Authenticating with YouTube...");
-        try {
-            const auth = await getAuthClient();
-            const isValid = await validateAuth(auth);
-            if (isValid) {
-                oauth2Auth = auth;
-                webLogger.success("OAuth2 authenticated!");
-            }
-            else {
-                webLogger.error("OAuth2 authentication failed");
-                res.status(401).json({ error: "OAuth2 authentication required for playlist creation" });
-                return;
-            }
-        }
-        catch (err) {
-            webLogger.error(`OAuth2 error: ${err.message}`);
-            res.status(401).json({ error: "OAuth2 authentication required" });
-            return;
-        }
-        webLogger.info("Creating playlist on YouTube Music...");
-        const result = await createPlaylistWithTracks(oauth2Auth, playlistName, matchResults, (added, total) => {
-            webLogger.progress(added, total, `Adding tracks: ${added}/${total}`);
-        });
         webLogger.success("Playlist created!");
-        webLogger.info(`URL: ${result.playlistUrl}`);
-        webLogger.info(`Added: ${result.matched} tracks`);
+        if (result?.playlistUrl) {
+            webLogger.info(`URL: ${result.playlistUrl}`);
+        }
+        webLogger.info(`Added: ${matched.length} tracks`);
         webLogger.summary(matched.length, ambiguous.length, unmatched.length, {
-            playlistUrl: result.playlistUrl,
-            quotaUsed: result.quotaUsed,
+            playlistUrl: result?.playlistUrl,
+            playlistId: result?.playlistId,
         });
         res.json({
             success: true,
             dryRun: false,
-            results: matchResults,
-            playlistUrl: result.playlistUrl,
-            matched: result.matched,
-            quotaUsed: result.quotaUsed,
+            results,
+            playlistUrl: result?.playlistUrl,
+            playlistId: result?.playlistId,
+            matched: matched.length,
+            usingYtMusic: true,
         });
         return;
     }
@@ -241,7 +141,7 @@ app.post("/api/search-single", async (req, res) => {
         return;
     }
     try {
-        const result = await runYtMusicScript({ action: "search-single", query });
+        const result = await searchSingleOnYtMusic(query);
         if (result.error) {
             res.status(500).json({ error: result.error });
             return;
@@ -260,11 +160,7 @@ app.post("/api/add-to-playlist", async (req, res) => {
     }
     try {
         const videoIds = tracks.map((t) => t.videoId).filter(Boolean);
-        const result = await runYtMusicScript({
-            action: "add-to-playlist",
-            playlistId,
-            videoIds
-        });
+        const result = await addToPlaylistOnYtMusic(playlistId, videoIds);
         if (result.error) {
             res.status(500).json({ error: result.error });
             return;
@@ -290,6 +186,20 @@ app.get("/api/ytmusic-status", (_req, res) => {
         console.log('DEBUG ERROR:', e);
     }
     res.json({ available, authFile: YTMusicAuthFile });
+});
+// SSE endpoint for real-time progress
+app.get("/api/progress", (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+    const removeClient = webLogger.addClient((event) => {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+    });
+    req.on("close", () => {
+        removeClient();
+        res.end();
+    });
 });
 app.listen(PORT, () => {
     console.log(`🌐 Web interface: http://localhost:${PORT}`);

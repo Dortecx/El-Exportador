@@ -209,13 +209,18 @@ def artist_allows_videos(artist):
     return False
 
 
-def search_with_fallback(ytmusic, artist, title, min_similarity=0.3):
+def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alternatives=True):
+    """
+    Search with fallback logic. Returns (result, query, similarity, status).
+    Status: 'matched' (>=0.6), 'ambiguous' (>=0.3 and <0.6), 'unmatched' (<0.3)
+    If collect_alternatives=True, yields all candidates sorted by similarity.
+    """
     primary_title = extract_series_name(title).strip()
     is_japanese = contains_japanese(primary_title)
     
     override_result = check_manual_override(ytmusic, artist, primary_title)
     if override_result:
-        yield override_result, 'MANUAL_OVERRIDE', 1.0
+        yield override_result, 'MANUAL_OVERRIDE', 1.0, 'matched'
         return
     
     target_channel_id = None
@@ -235,6 +240,7 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.3):
         queries.append(primary_title)
     
     seen_video_ids = set()
+    all_candidates = []  # Collect all candidates for alternatives
     
     for query in queries:
         if not query.strip():
@@ -279,10 +285,15 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.3):
                 duration = get_duration_seconds(result)
                 print(f'DEBUG: {primary_title} vs {result_title} (by {result_artist}, {duration}s) = {similarity:.2f}', file=sys.stderr)
                 
-                if similarity >= min_similarity:
-                    print(f'DEBUG: ACCEPTED: {result_title} by {result_artist}', file=sys.stderr)
-                    yield result, query, similarity
-                    return
+                # Determine status based on similarity
+                if similarity >= 0.6:
+                    status = 'matched'
+                elif similarity >= 0.3:
+                    status = 'ambiguous'
+                else:
+                    status = 'unmatched'
+                
+                all_candidates.append((result, query, similarity, status))
         except Exception as e:
             print(f'DEBUG: Search error: {e}', file=sys.stderr)
             continue
@@ -317,14 +328,35 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.3):
                 
                 similarity = title_similarity(primary_title, result_title)
                 
-                if similarity >= min_similarity:
-                    print(f'DEBUG: ARTIST-ONLY ACCEPTED: {result_title} by {result_artist}', file=sys.stderr)
-                    yield result, artist, similarity
-                    return
+                if similarity >= 0.6:
+                    status = 'matched'
+                elif similarity >= 0.3:
+                    status = 'ambiguous'
+                else:
+                    status = 'unmatched'
+                
+                all_candidates.append((result, artist, similarity, status))
         except Exception as e:
             print(f'DEBUG: Artist-only search failed: {e}', file=sys.stderr)
     
-    print(f'DEBUG: No match found for {artist} - {title}, marking as unmatched', file=sys.stderr)
+    # Sort by similarity descending and yield
+    all_candidates.sort(key=lambda x: x[2], reverse=True)
+    
+    if not all_candidates:
+        print(f'DEBUG: No match found for {artist} - {title}, marking as unmatched', file=sys.stderr)
+        yield None, '', 0.0, 'unmatched'
+        return
+    
+    # Always yield best match first
+    best = all_candidates[0]
+    print(f'DEBUG: BEST: {best[3]} - {best[2]:.2f} for {artist} - {title}', file=sys.stderr)
+    yield best[0], best[1], best[2], best[3]
+    
+    # If collecting alternatives and we have more, yield top 2 more
+    if collect_alternatives:
+        for i, candidate in enumerate(all_candidates[1:3], start=1):
+            print(f'DEBUG: ALTERNATIVE {i}: {candidate[3]} - {candidate[2]:.2f}', file=sys.stderr)
+            yield candidate[0], candidate[1], candidate[2], candidate[3]
 
 
 def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15):
@@ -338,18 +370,34 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15):
         artist = track.get('artist', '')
         title = track.get('title', '')
         
-        matched_result = None
+        best_result = None
+        best_status = 'unmatched'
+        best_similarity = 0.0
+        alternatives = []
         
-        for result, query_used, similarity in search_with_fallback(ytmusic, artist, title):
-            matched_result = result
-            break
+        # Collect best match and alternatives
+        for result, query_used, similarity, status in search_with_fallback(ytmusic, artist, title, collect_alternatives=True):
+            if best_result is None:
+                best_result = result
+                best_status = status
+                best_similarity = similarity
+            elif result is not None and len(alternatives) < 2:
+                alternatives.append({
+                    'title': result.get('title', ''),
+                    'artist': get_artists(result),
+                    'videoId': result.get('videoId'),
+                    'similarity': similarity,
+                })
         
         return {
             'idx': idx,
             'artist': artist,
             'title': title,
-            'matched': matched_result,
-            'result': matched_result
+            'matched': best_result,
+            'status': best_status,
+            'similarity': best_similarity,
+            'alternatives': alternatives,
+            'result': best_result
         }
     
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -364,7 +412,7 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15):
                 result_map[result['idx']] = result
                 completed += 1
                 
-                progress_status = 'matched' if result['matched'] else 'unmatched'
+                progress_status = result.get('status', 'unmatched')
                 progress_line = json.dumps({
                     'progress': {
                         'current': completed,
@@ -381,20 +429,12 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15):
     for idx in range(total):
         result = result_map[idx]
         matched_result = result['result']
+        status = result.get('status', 'unmatched')
+        similarity = result.get('similarity', 0.0)
+        alternatives = result.get('alternatives', [])
         
-        if matched_result:
-            results.append({
-                'status': 'matched',
-                'artist': result['artist'],
-                'title': result['title'],
-                'videoId': matched_result.get('videoId'),
-                'bestMatch': {
-                    'title': matched_result.get('title', ''),
-                    'artist': get_artists(matched_result),
-                    'videoId': matched_result.get('videoId'),
-                }
-            })
-        else:
+        # Use status from result (matched/ambiguous/unmatched)
+        if status == 'unmatched' or matched_result is None:
             artist_name = result.get('artist', 'UNKNOWN')
             title_name = result['title']
             print(f'DEBUG: No match found for {artist_name} - {title_name}', file=sys.stderr)
@@ -403,7 +443,23 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15):
                 'artist': result['artist'],
                 'title': result['title'],
                 'videoId': None,
-                'bestMatch': None
+                'bestMatch': None,
+                'alternatives': [],
+                'similarity': 0.0,
+            })
+        else:
+            results.append({
+                'status': status,
+                'artist': result['artist'],
+                'title': result['title'],
+                'videoId': matched_result.get('videoId'),
+                'bestMatch': {
+                    'title': matched_result.get('title', ''),
+                    'artist': get_artists(matched_result),
+                    'videoId': matched_result.get('videoId'),
+                },
+                'alternatives': alternatives,
+                'similarity': similarity,
             })
     
     ytmusic = get_ytmusic()

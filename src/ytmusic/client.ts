@@ -1,4 +1,3 @@
-import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { spawn } from 'child_process';
@@ -9,7 +8,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const YTMusicAuthFile = path.join(os.homedir(), '.config', 'm3u-to-ytmusic', 'ytmusic_auth.json');
-const SEARCHER_SCRIPT = path.join(__dirname, 'searcher.py');
+// Use fixed path - works both in dev (tsx) and production
+const SEARCHER_SCRIPT = 'C:/Users/Dom/Documents/Projects/El Exportador/m3u-to-ytmusic/src/ytmusic/searcher.py';
 
 export interface YTMusicBestMatch {
   title: string;
@@ -36,24 +36,15 @@ export type ProgressCallback = (current: number, total: number, artist: string, 
 
 function getPythonCandidates(): string[] {
   const projectVenv = path.resolve(__dirname, '../../.venv/Scripts/python.exe');
+  // Windows paths work better with spawn in WSL
+  const eDiskPython = '/mnt/e/School/Python/Python311/python.exe';
   return [
     process.env.YTMUSIC_PYTHON_PATH,
+    eDiskPython,
     projectVenv,
     'python',
     'py',
   ].filter((value): value is string => Boolean(value));
-}
-
-function canUseAuthFile(): boolean {
-  try {
-    if (!fs.existsSync(YTMusicAuthFile)) return false;
-    const content = fs.readFileSync(YTMusicAuthFile, 'utf8');
-    const parsed = JSON.parse(content);
-    const keys = Object.keys(parsed).map((key) => key.toLowerCase());
-    return keys.includes('cookie') || keys.includes('authorization');
-  } catch {
-    return false;
-  }
 }
 
 async function spawnJson(
@@ -69,7 +60,6 @@ async function spawnJson(
 
     let stdout = '';
     let stderr = '';
-    let finalResult = '';
 
     proc.stdout.on('data', (data) => {
       const chunk = data.toString();
@@ -77,7 +67,7 @@ async function spawnJson(
       
       console.log(`[PROGRESS-DEBUG] client.ts: stdout chunk received: ${chunk.substring(0, 200)}`);
       
-      const lines = chunk.split('\n').filter((l) => l.trim());
+      const lines = chunk.split('\n').filter((l: string) => l.trim());
       for (const line of lines) {
         try {
           const parsed = JSON.parse(line);
@@ -87,9 +77,6 @@ async function spawnJson(
             const p = parsed.progress;
             console.log(`[PROGRESS-DEBUG] client.ts: calling onProgress callback with current=${p.current}, total=${p.total}, artist=${p.artist}, title=${p.title}, status=${p.status}`);
             onProgress(p.current, p.total, p.artist, p.title, p.status);
-          } else if (parsed.results || parsed.playlistId !== undefined) {
-            console.log(`[PROGRESS-DEBUG] client.ts: final result detected`);
-            finalResult = line;
           }
         } catch {
           console.log(`[PROGRESS-DEBUG] client.ts: chunk is not valid JSON`);

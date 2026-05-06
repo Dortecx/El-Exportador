@@ -2,6 +2,34 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <title>M3U to YouTube Music</title>
+  <script>
+    // File input handler
+    window.handleFileFromInput = function(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        document.getElementById('m3uContent').value = e.target.result;
+        const res = await fetch('/api/parse-m3u', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: e.target.result })
+        });
+        const data = await res.json();
+        window.parsedTracks = data.tracks || [];
+        document.getElementById('trackCount').textContent = '[' + window.parsedTracks.length + '] tracks loaded';
+        // Set playlist name
+        const playlistInput = document.getElementById('playlistName');
+        if (!playlistInput.value) {
+          playlistInput.value = file.name.replace(/\.(m3u|m3u8)$/i, '').replace(/[^\w\s-]/g, '_').toUpperCase();
+        }
+        // Enable button
+        document.getElementById('startBtn').disabled = false;
+      };
+      reader.readAsText(file);
+    };
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>M3U to YouTube Music</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -798,11 +826,11 @@
     <p class="subtitle">Import your music library to YouTube Music</p>
 
     <div class="card">
-      <div class="file-upload" id="dropZone">
+      <div class="file-upload" id="dropZone" onclick="document.getElementById('fileInput').click()">
         <div class="icon">[FILE]</div>
         <div id="uploadText">Drop .m3u file here</div>
         <div class="hint">or paste M3U content below</div>
-        <input type="file" id="fileInput" accept=".m3u,.m3u8">
+        <input type="file" id="fileInput" accept=".m3u,.m3u8" onchange="handleFileFromInput(this)">
       </div>
       <div class="track-count" id="trackCount"></div>
 
