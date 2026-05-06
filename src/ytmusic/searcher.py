@@ -58,7 +58,7 @@ def extract_japanese_chars(text):
     return re.findall(r'[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff]', text)
 
 
-def title_similarity(title1, title2):
+def title_similarity(title1, title2, artist1=None, artist2=None):
     t1_lower = title1.lower()
     t2_lower = title2.lower()
     
@@ -66,18 +66,30 @@ def title_similarity(title1, title2):
     if t1_lower in t2_lower or t2_lower in t1_lower:
         return 1.0
     
-    # Handle Japanese titles in format "[Kanji] - [Romaji]"
+    # Handle international artists with Japanese titles
+    if artist1 and artist2 and not contains_japanese(artist1) and contains_japanese(title1):
+        # Artist is international but title is Japanese - prioritize title match
+        title_sim = difflib.SequenceMatcher(None, t1_lower, t2_lower).ratio()
+        artist_sim = 0.8 if artist1.lower() in (artist2 or "").lower() else 0.0
+        return max(title_sim, artist_sim)
+    
+    # Handle Japanese titles with multiple formats
     if contains_japanese(title1) or contains_japanese(title2):
-        # Extract kanji and romaji from both titles
-        kanji1, romaji1 = extract_japanese_title(title1)
-        kanji2, romaji2 = extract_japanese_title(title2)
+        # Extract all variants from both titles
+        kanji1, romaji1, english1 = extract_japanese_title(title1)
+        kanji2, romaji2, english2 = extract_japanese_title(title2)
         
         # Compare all combinations
         combinations = [
             (kanji1, kanji2),      # Kanji vs Kanji
             (kanji1, romaji2),     # Kanji vs Romaji
+            (kanji1, english2),    # Kanji vs English
             (romaji1, kanji2),     # Romaji vs Kanji
             (romaji1, romaji2),    # Romaji vs Romaji
+            (romaji1, english2),   # Romaji vs English
+            (english1, kanji2),    # English vs Kanji
+            (english1, romaji2),   # English vs Romaji
+            (english1, english2),  # English vs English
             (title1, title2)       # Original vs Original
         ]
         
@@ -107,12 +119,14 @@ def title_similarity(title1, title2):
 
 EXCLUDED_KEYWORDS = [
     'cover', 'covered by', 'acoustic', 'piano version', 'instrumental', 'remix', 'live', 'nightcore',
-    'karaoke', 'fan performance', 'backing track', 'short ver',
-    'preview', 'teaser', 'mashup', 'medley', 'tribute', 'homage', 'parody',
-    'tv size', 'tv ver', 'short ver', 'short version', 'tv edit', 'anime edit', 'anime ver', 'anime version',
+    'karaoke', 'fan performance', 'backing track', 'short ver', 'tv size', 'op version', 'ed version',
+    'preview', 'teaser', 'mashup', 'medley', 'tribute', 'homage', 'parody', 'vocaloid', 'utau',
+    'tv ver', 'short version', 'tv edit', 'anime edit', 'anime ver', 'anime version', 'anime size',
     'vocal only', 'with ensemble', 'short mix', 'radio edit', 'long ver', 'full version',
     'minus bass', 'minus drums', 'minus guitar', 'minus vocal', 'off bass', 'off drums', 'off guitar',
-    'off vocal', 'minus one', 'no vocals', 'no vocal'
+    'off vocal', 'minus one', 'no vocals', 'no vocal', 'fanmade', 'cover by', 'op ver', 'ed ver',
+    'opening version', 'ending version', 'tv opening', 'tv ending', 'anime op', 'anime ed',
+    'ost version', 'soundtrack version', 'game size', 'short size', 'extended mix'
 ]
 
 
@@ -308,7 +322,7 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
                     print(f'DEBUG: Artist mismatch {result_artist} vs {artist}, skipping', file=sys.stderr)
                     continue
                 
-                similarity = title_similarity(primary_title, result_title)
+                similarity = title_similarity(primary_title, result_title, artist, result_artist)
                 
                 excluded_penalty = penalize_excluded(result_title, primary_title)
                 if excluded_penalty is not None:
@@ -319,47 +333,7 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
                 print(f'DEBUG: {primary_title} vs {result_title} (by {result_artist}, {duration}s) = {similarity:.2f}', file=sys.stderr)
                 
                 # Determine status based on similarity
-                if similarity >= 0.6:
-                    status = 'matched'
-                elif similarity >= 0.3:
-                    status = 'ambiguous'
-                else:
-                    status = 'unmatched'
-                
-                all_candidates.append((result, query, similarity, status))
-        except Exception as e:
-            print(f'DEBUG: Search error: {e}', file=sys.stderr)
-            continue
-    
-    if artist and is_japanese and not target_channel_id:
-        print(f'DEBUG: Trying artist channel search for {artist}...', file=sys.stderr)
-        channel_id, _ = find_artist_channel_id(ytmusic, artist)
-        if channel_id:
-            target_channel_id = channel_id
-    
-    if artist:
-        print(f'DEBUG: Trying artist-only search: {artist}...', file=sys.stderr)
-        try:
-            search_results = ytmusic.search(artist, filter='songs', limit=10)
-            for result in search_results:
-                video_id = result.get('videoId')
-                if not video_id or video_id in seen_video_ids:
-                    continue
-                
-                if not validate_video_id(ytmusic, video_id, result):
-                    seen_video_ids.add(video_id)
-                    continue
-                
-                seen_video_ids.add(video_id)
-                
-                result_title = result.get('title', '')
-                result_artists = get_all_artists(result)
-                result_artist = result_artists[0] if result_artists else ''
-                
-                if not artist_has_correct_match(result_artists, artist, is_japanese):
-                    continue
-                
-                similarity = title_similarity(primary_title, result_title)
+                similarity = title_similarity(primary_title, result_title, artist, result_artist)
                 
                 if similarity >= 0.6:
                     status = 'matched'
@@ -445,13 +419,37 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
 
 
 def extract_japanese_title(title):
-    """Extract kanji and romaji from Japanese titles in format '[Kanji] - [Romaji]'"""
+    """Extract kanji, romaji and english translation from Japanese titles"""
     import re
     title = title.strip()
-    match = re.match(r"^(.+?)\s*[-–]\s*(.+)$", title)
-    if match:
-        return match.groups()  # (kanji, romaji)
-    return [title, ""]  # If no hyphen, return just the title
+    
+    # Split by hyphen/dash, handling multiple formats:
+    # 1. "Kanji - Romaji - English"
+    # 2. "Kanji - Romaji"
+    # 3. "Kanji"
+    parts = [p.strip() for p in re.split(r'\s*[-–]\s*', title) if p.strip()]
+    
+    if len(parts) >= 3:
+        # Format: Kanji - Romaji - English
+        return parts[:3]
+    elif len(parts) == 2:
+        # Format: Kanji - Romaji (or Kanji - English)
+        # Try to detect which is which
+        if contains_japanese(parts[0]) and not contains_japanese(parts[1]):
+            # parts[0] = kanji, parts[1] = romaji/english
+            return [parts[0], parts[1], ""]
+        elif contains_japanese(parts[1]) and not contains_japanese(parts[0]):
+            # parts[0] = english, parts[1] = kanji
+            return [parts[1], "", parts[0]]
+        else:
+            # Can't determine, assume kanji - romaji
+            return [parts[0], parts[1], ""]
+    else:
+        # Single part - could be kanji, romaji, or english
+        if contains_japanese(title):
+            return [title, "", ""]  # Kanji only
+        else:
+            return ["", title, ""]  # Romaji/English only
 
 
 def normalize_text(text):
