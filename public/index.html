@@ -5,8 +5,13 @@
   <title>M3U to YouTube Music</title>
   <script>
     // File input handler
+    let fileDialogOpen = false;
+    
     window.openFileDialog = function() {
+        if (fileDialogOpen) return;
+        fileDialogOpen = true;
         document.getElementById('fileInput').click();
+        setTimeout(() => { fileDialogOpen = false; }, 1000);
     };
     
     window.handleFileFromInput = function(input) {
