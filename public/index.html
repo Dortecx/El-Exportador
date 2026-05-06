@@ -5,6 +5,10 @@
   <title>M3U to YouTube Music</title>
   <script>
     // File input handler
+    window.openFileDialog = function() {
+        document.getElementById('fileInput').click();
+    };
+    
     window.handleFileFromInput = function(input) {
       const file = input.files[0];
       if (!file) return;
@@ -826,11 +830,11 @@
     <p class="subtitle">Import your music library to YouTube Music</p>
 
     <div class="card">
-      <div class="file-upload" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <div class="file-upload" id="dropZone" onclick="openFileDialog()">
         <div class="icon">[FILE]</div>
         <div id="uploadText">Drop .m3u file here</div>
         <div class="hint">or paste M3U content below</div>
-        <input type="file" id="fileInput" accept=".m3u,.m3u8" onchange="handleFileFromInput(this)">
+        <input type="file" id="fileInput" accept=".m3u,.m3u8" onchange="handleFileFromInput(this)" style="display: none;">
       </div>
       <div class="track-count" id="trackCount"></div>
 

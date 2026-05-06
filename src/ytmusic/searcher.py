@@ -51,16 +51,7 @@ def get_artists(result):
 
 
 def contains_japanese(text):
-    return bool(re.search(r'[\[\]\^_`{|}~\t\n\x0b\x0c\r\x0e-\x1f\x7f]', text))
-
-
-def is_latin_artist(artist):
-    """Check if artist is likely Latin (has Latin letters + Japanese)"""
-    if not artist:
-        return False
-    has_latin = any(c.isalpha() and c.lower() in 'abcdefghijklmnopqrstuvwxyz' for c in artist)
-    has_japanese = contains_japanese(artist)
-    return has_latin and has_japanese
+    return bool(re.search(r'[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff]', text))
 
 
 def extract_japanese_chars(text):
@@ -74,12 +65,6 @@ def title_similarity(title1, title2, artist1=None, artist2=None):
     # Check for exact substring match first
     if t1_lower in t2_lower or t2_lower in t1_lower:
         return 1.0
-    
-    # Handle Latin artists (e.g., プランB, CNCO)
-    if artist1 and is_latin_artist(artist1):
-        # For Latin artists, use exact matching
-        if (artist1.lower() in (artist2 or "").lower()) and (t1_lower in t2_lower or t2_lower in t1_lower):
-            return 1.0
     
     # Handle international artists with Japanese titles
     if artist1 and artist2 and not contains_japanese(artist1) and contains_japanese(title1):
@@ -437,10 +422,6 @@ def extract_japanese_title(title):
     """Extract kanji, romaji and english translation from Japanese titles"""
     import re
     title = title.strip()
-    
-    # Remove content in parentheses (feat., live, etc.)
-    title = re.sub(r'\s*\([^)]*\)', '', title)  # Remove (feat. ...)
-    title = re.sub(r'\s*\[[^\]]*\]', '', title)  # Remove [Official Video]
     
     # Split by hyphen/dash, handling multiple formats:
     # 1. "Kanji - Romaji - English"
