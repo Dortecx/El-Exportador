@@ -61,17 +61,47 @@ def extract_japanese_chars(text):
 def title_similarity(title1, title2):
     t1_lower = title1.lower()
     t2_lower = title2.lower()
+    
+    # Check for exact substring match first
     if t1_lower in t2_lower or t2_lower in t1_lower:
         return 1.0
-    if contains_japanese(title1) and contains_japanese(title2):
-        chars1 = set(extract_japanese_chars(title1))
-        chars2 = set(extract_japanese_chars(title2))
-        if not chars1 or not chars2:
-            return 0.0
-        common = len(chars1 & chars2)
-        total = len(chars1 | chars2)
-        return common / total if total > 0 else 0.0
+    
+    # Handle Japanese titles in format "[Kanji] - [Romaji]"
+    if contains_japanese(title1) or contains_japanese(title2):
+        # Extract kanji and romaji from both titles
+        kanji1, romaji1 = extract_japanese_title(title1)
+        kanji2, romaji2 = extract_japanese_title(title2)
+        
+        # Compare all combinations
+        combinations = [
+            (kanji1, kanji2),      # Kanji vs Kanji
+            (kanji1, romaji2),     # Kanji vs Romaji
+            (romaji1, kanji2),     # Romaji vs Kanji
+            (romaji1, romaji2),    # Romaji vs Romaji
+            (title1, title2)       # Original vs Original
+        ]
+        
+        max_similarity = 0.0
+        for t1, t2 in combinations:
+            if not t1 or not t2:
+                continue
+            
+            # Use character-based similarity for Japanese
+            chars1 = set(extract_japanese_chars(t1))
+            chars2 = set(extract_japanese_chars(t2))
+            if chars1 and chars2:
+                common = len(chars1 & chars2)
+                total = len(chars1 | chars2)
+                similarity = common / total if total > 0 else 0.0
+                max_similarity = max(max_similarity, similarity)
+            else:
+                # Fall back to difflib for non-Japanese comparisons
+                similarity = difflib.SequenceMatcher(None, t1.lower(), t2.lower()).ratio()
+                max_similarity = max(max_similarity, similarity)
+        
+        return max_similarity
     else:
+        # For non-Japanese titles, use difflib
         return difflib.SequenceMatcher(None, t1_lower, t2_lower).ratio()
 
 
@@ -412,6 +442,16 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
         for i, candidate in enumerate(all_candidates[1:3], start=1):
             print(f'DEBUG: ALTERNATIVE {i}: {candidate[3]} - {candidate[2]:.2f}', file=sys.stderr)
             yield candidate[0], candidate[1], candidate[2], candidate[3]
+
+
+def extract_japanese_title(title):
+    """Extract kanji and romaji from Japanese titles in format '[Kanji] - [Romaji]'"""
+    import re
+    title = title.strip()
+    match = re.match(r"^(.+?)\s*[-–]\s*(.+)$", title)
+    if match:
+        return match.groups()  # (kanji, romaji)
+    return [title, ""]  # If no hyphen, return just the title
 
 
 def normalize_text(text):
