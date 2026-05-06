@@ -238,6 +238,9 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
         if artist and primary_title:
             queries.append(f'{artist} {primary_title}')
         queries.append(primary_title)
+        
+    # Store original queries for fallback
+    original_queries = queries.copy()
     
     seen_video_ids = set()
     all_candidates = []  # Collect all candidates for alternatives
@@ -343,9 +346,61 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
     all_candidates.sort(key=lambda x: x[2], reverse=True)
     
     if not all_candidates:
-        print(f'DEBUG: No match found for {artist} - {title}, marking as unmatched', file=sys.stderr)
-        yield None, '', 0.0, 'unmatched'
-        return
+        print(f'DEBUG: No match found for {artist} - {title}, trying normalized search', file=sys.stderr)
+        
+        # Try with normalized text
+        normalized_artist = normalize_text(artist)
+        normalized_title = normalize_text(primary_title)
+        
+        if normalized_artist != artist or normalized_title != primary_title:
+            print(f'DEBUG: Normalized: {artist}->{normalized_artist}, {title}->{normalized_title}', file=sys.stderr)
+            
+            # Search with normalized queries
+            normalized_queries = []
+            if is_japanese:
+                if normalized_artist:
+                    normalized_queries.append(f'{normalized_artist} {normalized_title}')
+                normalized_queries.append(normalized_title)
+            else:
+                if normalized_artist and normalized_title:
+                    normalized_queries.append(f'{normalized_artist} {normalized_title}')
+                normalized_queries.append(normalized_title)
+            
+            for query in normalized_queries:
+                if not query.strip():
+                    continue
+                
+                try:
+                    print(f'DEBUG: Searching normalized query: {query}', file=sys.stderr)
+                    search_results = ytmusic.search(query, filter='songs', limit=15)
+                    
+                    for result in search_results:
+                        video_id = result.get('videoId')
+                        if not video_id or video_id in seen_video_ids:
+                            continue
+                        
+                        if not validate_video_id(ytmusic, video_id, result):
+                            seen_video_ids.add(video_id)
+                            continue
+                        
+                        seen_video_ids.add(video_id)
+                        
+                        result_title = result.get('title', '')
+                        result_artists = get_all_artists(result)
+                        result_artist = result_artists[0] if result_artists else ''
+                        
+                        similarity = calculate_similarity(result, artist, primary_title, target_channel_id)
+                        status = 'matched' if similarity >= min_similarity else 'ambiguous' if similarity >= 0.3 else 'unmatched'
+                        
+                        if status in ['matched', 'ambiguous']:
+                            all_candidates.append((result, query, similarity, status))
+                except Exception as e:
+                    print(f'Error searching for normalized "{query}": {e}', file=sys.stderr)
+        
+        if not all_candidates:
+            print(f'DEBUG: No match found even after normalization for {artist} - {title}', file=sys.stderr)
+            yield None, '', 0.0, 'unmatched'
+            return
     
     # Always yield best match first
     best = all_candidates[0]
@@ -359,7 +414,24 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
             yield candidate[0], candidate[1], candidate[2], candidate[3]
 
 
-def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15):
+def normalize_text(text):
+    """Remove accents and special characters from text"""
+    if not text:
+        return ""
+    # Common accent/diacritic replacements
+    replacements = {
+        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+        'à': 'a', 'è': 'e', 'ì': 'i', 'ò': 'o', 'ù': 'u',
+        'ä': 'a', 'ë': 'e', 'ï': 'i', 'ö': 'o', 'ü': 'u',
+        'â': 'a', 'ê': 'e', 'î': 'i', 'ô': 'o', 'û': 'u',
+        'ñ': 'n', 'ç': 'c', '^': '', '¨': '', '~': '',
+        '´': '', '`': '', '"': '', "'": '', '^': '',
+    }
+    result = "".join(replacements.get(c, c) for c in text)
+    return result
+
+
+def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=25):  # Increased from 15 to 25
     results = []
     total = len(tracks)
     completed = 0
