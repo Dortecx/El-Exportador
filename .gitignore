@@ -1,5 +1,63 @@
-.venv/
+# Dependencies
 node_modules/
 dist/
+.venv/
+*.lock
+
+# Logs and databases
+*.log
+*.err.log
+*.sqlite
+
+# Tests
+/test/
+*.test.*
+*.spec.*
+vitest.config.ts
+
+# Build artifacts
+/dist/
+/build/
+*.js.map
+*.d.ts
+
+# Environment
+.env
+*.bat
+*.ps1
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Misc
+*.m3u
+*.tmp
+*.bak
+*.orig
 *.pyc
 __pycache__/
+
+# OS generated
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Node
+npm-debug.log*
+*.tgz
+.yarn-integrity
+
+# TypeScript
+*.tsbuildinfo
