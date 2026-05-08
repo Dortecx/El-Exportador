@@ -149,6 +149,10 @@ def get_all_artists(result):
 
 
 def extract_series_name(title):
+    # Caso especial para "My Nonfiction"
+    if "My Nonfiction" in title:
+        return "My Nonfiction"
+    
     series_patterns = [
         r'^(.+?)\u3010.+?\u3011',
         r'^(.+?)\u3001.+?\u3001',
