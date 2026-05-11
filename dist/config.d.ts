@@ -1,4 +1,4 @@
-import { AppConfig } from "./types.js";
+import { AppConfig } from "./types";
 export declare const DEFAULT_CONFIG: Omit<AppConfig, "tokenPath" | "credentialsPath">;
 export declare function resolveConfigDir(): string;
 export declare function resolveTokenPath(customPath?: string): string;

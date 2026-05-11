@@ -1,8 +1,46 @@
-import { google } from "googleapis";
-import * as fs from "fs";
-import { ensureConfigDir, resolveTokenPath, resolveCredentialsPath } from "./config.js";
-export async function loadCredentials() {
-    const credPath = resolveCredentialsPath();
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.loadCredentials = loadCredentials;
+exports.getAuthClient = getAuthClient;
+exports.validateAuth = validateAuth;
+const googleapis_1 = require("googleapis");
+const fs = __importStar(require("fs"));
+const config_1 = require("./config");
+async function loadCredentials() {
+    const credPath = (0, config_1.resolveCredentialsPath)();
     if (!fs.existsSync(credPath)) {
         throw new Error(`Credentials file not found: ${credPath}\n` +
             `Please create a Google Cloud OAuth2 client:\n` +
@@ -19,15 +57,15 @@ export async function loadCredentials() {
         throw new Error(`Failed to parse credentials file: ${credPath}`);
     }
 }
-export async function getAuthClient(credentialsPath) {
+async function getAuthClient(credentialsPath) {
     const credentials = await loadCredentials();
     const clientConfig = credentials.installed ||
         credentials.web;
     if (!clientConfig) {
         throw new Error("Invalid credentials: missing 'installed' or 'web' configuration");
     }
-    const auth = new google.auth.OAuth2(clientConfig.client_id, clientConfig.client_secret, "http://localhost:8080");
-    const tokenPath = resolveTokenPath(credentialsPath);
+    const auth = new googleapis_1.google.auth.OAuth2(clientConfig.client_id, clientConfig.client_secret, "http://localhost:3000/auth/callback");
+    const tokenPath = (0, config_1.resolveTokenPath)(credentialsPath);
     if (fs.existsSync(tokenPath)) {
         try {
             const tokenData = JSON.parse(fs.readFileSync(tokenPath, "utf-8"));
@@ -67,7 +105,7 @@ async function authenticate(auth, tokenPath) {
     console.log("Please visit this URL to authorize:");
     console.log(`\n${authUrl}\n`);
     console.log("After authorizing, the code will be received automatically.\n");
-    const readline = await import("readline");
+    const readline = await Promise.resolve().then(() => __importStar(require("readline")));
     const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout,
@@ -84,11 +122,11 @@ async function authenticate(auth, tokenPath) {
     console.log("\nAuthentication successful! Token saved.\n");
 }
 async function saveToken(auth, tokenPath) {
-    ensureConfigDir();
+    (0, config_1.ensureConfigDir)();
     const token = auth.credentials;
     fs.writeFileSync(tokenPath, JSON.stringify(token, null, 2));
 }
-export async function validateAuth(auth) {
+async function validateAuth(auth) {
     try {
         const token = auth.credentials;
         if (!token.access_token) {
@@ -99,7 +137,7 @@ export async function validateAuth(auth) {
                 try {
                     const { credentials } = await auth.refreshAccessToken();
                     auth.setCredentials(credentials);
-                    const tokenPath = resolveTokenPath();
+                    const tokenPath = (0, config_1.resolveTokenPath)();
                     await saveToken(auth, tokenPath);
                     return true;
                 }

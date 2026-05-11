@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
 import * as fs from "fs";
-import { ensureConfigDir, resolveTokenPath, resolveCredentialsPath } from "./config.js";
+import { ensureConfigDir, resolveTokenPath, resolveCredentialsPath } from "./config";
 
 export async function loadCredentials(): Promise<{ installed?: object; web?: object }> {
   const credPath = resolveCredentialsPath();
@@ -38,7 +38,7 @@ export async function getAuthClient(credentialsPath?: string): Promise<OAuth2Cli
   const auth = new google.auth.OAuth2(
     (clientConfig as { client_id: string }).client_id,
     (clientConfig as { client_secret: string }).client_secret,
-    "http://localhost:8080"
+    "http://localhost:3000/auth/callback"
   );
 
   const tokenPath = resolveTokenPath(credentialsPath);

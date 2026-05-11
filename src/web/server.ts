@@ -2,28 +2,111 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { fileURLToPath } from "url";
-import { parseFile } from "../parser.js";
-import { webLogger, LogEvent } from "./logger.js";
-import type { Track } from "../types.js";
-import {
-  addToPlaylistOnYtMusic,
-  checkYtMusicAvailable,
-  convertWithYtMusic,
-  searchSingleOnYtMusic,
-  YTMusicAuthFile,
-  ProgressCallback,
-} from "../ytmusic/client.js";
+// @ts-ignore: __dirname is available in CommonJS
+const __dirname = path.resolve();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// SSE setup
+const clients = new Set();
+
+function addClient(clientId: string, res: express.Response) {
+  clients.add({ id: clientId, res });
+}
+
+function removeClient(clientId: string) {
+  clients.forEach(client => {
+    if (client.id === clientId) {
+      clients.delete(client);
+    }
+  });
+}
+
+function broadcastToAllClients(event: { type: string; data?: any }) {
+  clients.forEach(client => {
+    try {
+      client.res.write(`data: ${JSON.stringify(event)}\n\n`);
+    } catch (err) {
+      console.error('Error broadcasting to client:', err);
+    }
+  });
+}
 
 const app = express();
+const YTMusicAuthFile = path.join(os.homedir(), '.config', 'm3u-to-ytmusic', 'ytmusic_auth.json');
 const PORT = 3000;
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(express.static(path.join(__dirname, "../../public")));
+const publicDir = "/mnt/c/Users/Dom/Documents/Projects/El Exportador/m3u-to-ytmusic/public";
+app.use(express.static(publicDir));
+
+// Redirigir todas las solicitudes a index.html para manejar rutas del frontend
+app.get('*', (req, res) => {
+  res.sendFile(path.join(publicDir, "index.html"));
+});
+
+// Endpoint para autenticación
+import { handleAuthRequest } from "./authHandler";
+app.get("/auth", handleAuthRequest);
+
+// Endpoint para manejar el callback de OAuth
+app.get("/auth/callback", async (req, res) => {
+  const { code } = req.query;
+  if (!code) {
+    return res.status(400).send("Error: No se recibió el código de autorización");
+  }
+  
+  try {
+    // Cargar credenciales de Google OAuth
+    const credentials = await loadCredentials();
+    const clientConfig = (credentials as { installed?: object; web?: object }).installed ||
+                         (credentials as { installed?: object; web?: object }).web;
+    if (!clientConfig) {
+      throw new Error("Invalid credentials: missing 'installed' or 'web' configuration");
+    }
+    
+    const auth = new google.auth.OAuth2(
+      (clientConfig as { client_id: string }).client_id,
+      (clientConfig as { client_secret: string }).client_secret,
+      "http://localhost:3000/auth/callback"
+    );
+    
+    // Intercambiar el código por un token
+    const { tokens } = await auth.getToken(code as string);
+    auth.setCredentials(tokens);
+    
+    // Guardar el token completo
+    const authFilePath = path.join(os.homedir(), '.config', 'm3u-to-ytmusic', 'ytmusic_auth.json');
+    const authDir = path.dirname(authFilePath);
+    if (!fs.existsSync(authDir)) {
+      fs.mkdirSync(authDir, { recursive: true });
+    }
+    fs.writeFileSync(authFilePath, JSON.stringify(tokens));
+    webLogger.success("✅ Autenticación exitosa con YouTube Music");
+    
+    // Notificar a todos los clientes que la autenticación fue exitosa
+    broadcastToAllClients({ type: 'auth_success' });
+    
+    // Cerrar el popup después de guardar el token
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Autenticación exitosa</title>
+          <script>
+            window.opener?.postMessage('auth_success', '*');
+            window.close();
+          </script>
+        </head>
+        <body>
+          <p>Autenticación exitosa. Cerrando...</p>
+        </body>
+      </html>
+    `);
+  } catch (err) {
+    webLogger.error("❌ Error al procesar la autenticación:", err);
+    res.status(500).send("Error al procesar la autenticación");
+  }
+});
 
 app.get("/events", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
@@ -31,17 +114,20 @@ app.get("/events", (req, res) => {
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders();
 
-  // Send initial connection confirmation
-  res.write(`event: log\ndata: ${JSON.stringify({ type: "info", message: "__SSE_CONNECTED__" })}\n\n`);
+  const clientId = addClient(res);
+  webLogger.info("==== M3U to YouTube Music ====");
+  webLogger.info(`Playlist: "${playlistName}"`);
+  webLogger.info(`Mode: ${dryRun ? "DRY RUN" : "LIVE"}`);
+  webLogger.info(`Tracks: ${tracks.length}`);
 
-  const sendEvent = (event: LogEvent) => {
-    res.write(`event: log\ndata: ${JSON.stringify(event)}\n\n`);
-  };
-
-  const removeListener = webLogger.addClient(sendEvent);
+  // Verificar si hay autenticación
+  if (!checkYtMusicAvailable()) {
+    webLogger.error("❌ YouTube Music no está configurado. Ve a http://localhost:3000/auth para autenticarte.");
+  }
 
   req.on("close", () => {
-    removeListener();
+    removeClient(clientId);
+    res.end();
   });
 });
 
@@ -175,23 +261,19 @@ app.get("/api/setup-ytmusic", async (_req, res): Promise<void> => {
   });
 });
 
+// Endpoint para verificar estado de autenticación
+app.get("/api/auth-status", (req, res): void => {
+  res.json({ authenticated: checkYtMusicAvailable() });
+});
+
 app.post("/api/search-single", async (req, res): Promise<void> => {
-  const { query, originalTrack } = req.body as { query: string; originalTrack: { artist: string; title: string } };
-
-  if (!query) {
-    res.status(400).json({ error: "Query is required" });
-    return;
-  }
-
   try {
+    const { query } = req.body;
     const result = await searchSingleOnYtMusic(query);
-    if (result.error) {
-      res.status(500).json({ error: result.error });
-      return;
-    }
-    res.json({ results: result.results, originalTrack });
-  } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
+    res.json(result);
+  } catch (error) {
+    console.error("Error in search-single:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -254,8 +336,23 @@ app.get("/api/progress", (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🌐 Web interface: http://localhost:${PORT}`);
+  console.log(`🌐 También accesible desde: http://<TU_IP_LOCAL>:${PORT}`);
   console.log(`Auth file path: ${YTMusicAuthFile}`);
-  console.log(`🎵 ytmusicapi backend: ${checkYtMusicAvailable() ? "Available" : "Not configured"}`);
+  console.log(`🎵 ytmusicapi backend: Estado no verificado (ve a http://localhost:${PORT} para configurarlo)`);
+}).on('error', (err) => {
+  console.error('❌ Error al iniciar el servidor:', err);
 });
+
+// Evitar que el servidor se cierre automáticamente
+process.on('SIGINT', () => {
+  console.log('\n🛑 Servidor detenido manualmente');
+  server.close();
+  process.exit(0);
+});
+
+// Mantener el servidor corriendo
+setInterval(() => {
+  console.log('⏳ Servidor en ejecución...');
+}, 60000);

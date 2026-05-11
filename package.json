@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Convert M3U playlists to YouTube Music",
   "main": "dist/index.js",
-  "type": "module",
+  "type": "commonjs",
   "bin": {
     "m3u-to-ytmusic": "./dist/cli.js"
   },
@@ -35,7 +35,9 @@
     "@esbuild/linux-x64": "^0.28.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
-    "tsx": "^4.19.0",
+    "esbuild": "^0.28.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.6.0",
     "vitest": "^2.0.0"
   },

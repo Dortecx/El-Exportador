@@ -1,5 +1,8 @@
-import { EventEmitter } from "events";
-class WebLogger extends EventEmitter {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.webLogger = void 0;
+const events_1 = require("events");
+class WebLogger extends events_1.EventEmitter {
     clients = new Set();
     addClient(callback) {
         this.clients.add(callback);
@@ -40,5 +43,5 @@ class WebLogger extends EventEmitter {
         });
     }
 }
-export const webLogger = new WebLogger();
+exports.webLogger = new WebLogger();
 //# sourceMappingURL=logger.js.map

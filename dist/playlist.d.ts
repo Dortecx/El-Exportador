@@ -1,5 +1,5 @@
 import { OAuth2Client } from "google-auth-library";
-import { PlaylistResult, MatchResult } from "./types.js";
+import { PlaylistResult, MatchResult } from "./types";
 export declare function createPlaylist(auth: OAuth2Client, name: string, onBehalfOfContentOwner?: string): Promise<{
     playlistId: string;
     playlistUrl: string;

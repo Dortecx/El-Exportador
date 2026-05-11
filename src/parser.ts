@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { Track, ParsedM3UResult } from "./types.js";
+import { Track, ParsedM3UResult } from "./types";
 
 const EXTENDED_M3U_HEADER = "#EXTM3U";
 const EXTINF_PREFIX = "#EXTINF:";

@@ -1,5 +1,5 @@
 import { OAuth2Client } from "google-auth-library";
-import { Track, YouTubeItem, MatchResult, AppConfig } from "./types.js";
+import { Track, YouTubeItem, MatchResult, AppConfig } from "./types";
 export type AuthClient = OAuth2Client | {
     apiKey: string;
 };

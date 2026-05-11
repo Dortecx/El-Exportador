@@ -4,9 +4,9 @@ export {
   detectFormat,
   isValidM3UFile,
   validateFilePath,
-} from "./parser.js";
+} from "./parser";
 
-export { cleanTitle } from "./parser.js";
+export { cleanTitle } from "./parser";
 
 export {
   buildQuery,
@@ -17,24 +17,24 @@ export {
   levenshteinRatio,
   normalizeTitle,
   parseDuration,
-} from "./matcher.js";
+} from "./matcher";
 
-export type { AuthClient } from "./matcher.js";
+export type { AuthClient } from "./matcher";
 
 export {
   createPlaylist,
   createPlaylistWithTracks,
   addTracksToPlaylist,
   calculateQuotaUsage,
-} from "./playlist.js";
+} from "./playlist";
 
 export {
   getAuthClient,
   loadCredentials,
   validateAuth,
-} from "./auth.js";
+} from "./auth";
 
-export { loadConfig, DEFAULT_CONFIG, resolveConfigDir, ensureConfigDir } from "./config.js";
+export { loadConfig, DEFAULT_CONFIG, resolveConfigDir, ensureConfigDir } from "./config";
 
 export type {
   Track,
@@ -45,4 +45,4 @@ export type {
   AppConfig,
   CliOptions,
   ParsedM3UResult,
-} from "./types.js";
+} from "./types";

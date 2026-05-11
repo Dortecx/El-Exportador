@@ -2,36 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>M3U to YouTube Music</title>
-  <script>
-    // File input handler
-    window.handleFileFromInput = function(input) {
-      const file = input.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = async function(e) {
-        document.getElementById('m3uContent').value = e.target.result;
-        const res = await fetch('/api/parse-m3u', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: e.target.result })
-        });
-        const data = await res.json();
-        window.parsedTracks = data.tracks || [];
-        document.getElementById('trackCount').textContent = '[' + window.parsedTracks.length + '] tracks loaded';
-        // Set playlist name
-        const playlistInput = document.getElementById('playlistName');
-        if (!playlistInput.value) {
-          playlistInput.value = file.name.replace(/\.(m3u|m3u8)$/i, '').replace(/[^\w\s-]/g, '_').toUpperCase();
-        }
-        // Enable button
-        document.getElementById('startBtn').disabled = false;
-      };
-      reader.readAsText(file);
-    };
-  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>M3U to YouTube Music</title>
+  <title>El Exportador</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323:wght@400&display=swap" rel="stylesheet">
@@ -39,60 +11,20 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     
     @keyframes glitch-title {
-      0%, 100% {
-        text-shadow: none;
-        transform: translate(0);
-        clip-path: none;
-      }
-      92% {
-        text-shadow: none;
-        transform: translate(0);
-        clip-path: none;
-      }
-      93% {
-        text-shadow: -3px 0 #FF0066, 3px 0 #00FFFF;
-        transform: translate(2px, 0);
-        clip-path: polygon(0 20%, 100% 20%, 100% 40%, 0 40%);
-      }
-      94% {
-        text-shadow: 3px 0 #FF0066, -3px 0 #00FFFF;
-        transform: translate(-2px, 0);
-        clip-path: polygon(0 60%, 100% 60%, 100% 80%, 0 80%);
-      }
-      95% {
-        text-shadow: -2px 0 #00FFFF, 2px 0 #FF0066;
-        transform: translate(1px, 0);
-        clip-path: polygon(0 10%, 100% 10%, 100% 30%, 0 30%);
-      }
-      96% {
-        text-shadow: 2px 0 #FF0066, -2px 0 #00FFFF;
-        transform: translate(-1px, 0);
-        clip-path: none;
-      }
-      97% {
-        text-shadow: none;
-        transform: translate(0);
-        clip-path: none;
-      }
+      0%, 100% { text-shadow: none; transform: translate(0); clip-path: none; }
+      92% { text-shadow: none; transform: translate(0); clip-path: none; }
+      93% { text-shadow: -3px 0 #FF0066, 3px 0 #00FFFF; transform: translate(2px, 0); clip-path: polygon(0 20%, 100% 20%, 100% 40%, 0 40%); }
+      94% { text-shadow: 3px 0 #FF0066, -3px 0 #00FFFF; transform: translate(-2px, 0); clip-path: polygon(0 60%, 100% 60%, 100% 80%, 0 80%); }
+      95% { text-shadow: -2px 0 #00FFFF, 2px 0 #FF0066; transform: translate(1px, 0); clip-path: polygon(0 10%, 100% 10%, 100% 30%, 0 30%); }
+      96% { text-shadow: 2px 0 #FF0066, -2px 0 #00FFFF; transform: translate(-1px, 0); clip-path: none; }
+      97% { text-shadow: none; transform: translate(0); clip-path: none; }
     }
     
     @keyframes card-border-glitch {
-      0%, 100% {
-        border-color: #00AAFF;
-        box-shadow: 0 0 0 transparent;
-      }
-      96% {
-        border-color: #00AAFF;
-        box-shadow: 0 0 0 transparent;
-      }
-      97% {
-        border-color: #FFFFFF;
-        box-shadow: 0 0 15px #00AAFF, 0 0 30px rgba(0, 170, 255, 0.3);
-      }
-      98% {
-        border-color: #00AAFF;
-        box-shadow: 0 0 0 transparent;
-      }
+      0%, 100% { border-color: #00AAFF; box-shadow: 0 0 0 transparent; }
+      96% { border-color: #00AAFF; box-shadow: 0 0 0 transparent; }
+      97% { border-color: #FFFFFF; box-shadow: 0 0 15px #00AAFF, 0 0 30px rgba(0, 170, 255, 0.3); }
+      98% { border-color: #00AAFF; box-shadow: 0 0 0 transparent; }
     }
     
     @keyframes dash {
@@ -102,21 +34,6 @@
     @keyframes blink {
       0%, 50% { opacity: 1; }
       51%, 100% { opacity: 0; }
-    }
-    
-    @keyframes scanline1 {
-      0% { transform: translateY(-100%); }
-      100% { transform: translateY(100vh); }
-    }
-    
-    @keyframes scanline2 {
-      0% { transform: translateY(-100%); }
-      100% { transform: translateY(100vh); }
-    }
-    
-    @keyframes scanline3 {
-      0% { transform: translateY(-100%); }
-      100% { transform: translateY(100vh); }
     }
     
     body {
@@ -197,9 +114,9 @@
     
     .container { max-width: 800px; margin: 0 auto; }
     
-    h1 { 
-      color: #00AAFF; 
-      margin-bottom: 2rem; 
+    h1 {
+      color: #00AAFF;
+      margin-bottom: 2rem;
       text-align: center;
       font-family: 'VT323', monospace;
       font-size: 3rem;
@@ -211,7 +128,7 @@
     
     h1::before,
     h1::after {
-      content: 'M3U > YTM';
+      content: 'El Exportador';
       position: absolute;
       top: 0;
       left: 0;
@@ -253,9 +170,9 @@
       animation: card-border-glitch 6s infinite;
     }
     
-    label { 
-      display: block; 
-      margin-bottom: 0.5rem; 
+    label {
+      display: block;
+      margin-bottom: 0.5rem;
       color: #5588BB;
       font-size: 0.875rem;
       text-transform: uppercase;
@@ -277,42 +194,42 @@
       scrollbar-width: thin;
       scrollbar-color: #00AAFF #020818;
     }
-
+    
     textarea {
-      resize: vertical;
+      resize: none;
       min-height: 180px;
     }
-
+    
     textarea::-webkit-scrollbar {
       width: 12px;
     }
-
+    
     textarea::-webkit-scrollbar-track {
       background: linear-gradient(180deg, #020818 0%, #050f2e 100%);
       border-left: 1px solid #0066CC;
       box-shadow: inset 0 0 8px rgba(0, 170, 255, 0.12);
     }
-
+    
     textarea::-webkit-scrollbar-thumb {
       background: linear-gradient(180deg, #0066CC 0%, #00AAFF 100%);
       border: 2px solid #020818;
       border-radius: 999px;
       box-shadow: 0 0 10px rgba(0, 170, 255, 0.35);
     }
-
+    
     textarea::-webkit-scrollbar-thumb:hover {
       background: linear-gradient(180deg, #00AAFF 0%, #6BE8FF 100%);
       box-shadow: 0 0 12px rgba(107, 232, 255, 0.45);
     }
-
+    
     textarea::-webkit-scrollbar-corner {
       background: #020818;
     }
     
     input[type="text"]:focus,
     input[type="number"]:focus,
-    textarea:focus { 
-      box-shadow: 0 0 0 1px #0066CC, 0 0 10px rgba(0, 170, 255, 0.2); 
+    textarea:focus {
+      box-shadow: 0 0 0 1px #0066CC, 0 0 10px rgba(0, 170, 255, 0.2);
     }
     
     input[type="text"]::placeholder,
@@ -327,8 +244,8 @@
       margin-top: 1rem;
     }
     
-    input[type="checkbox"] { 
-      width: 18px; 
+    input[type="checkbox"] {
+      width: 18px;
       height: 18px;
       accent-color: #00AAFF;
       cursor: pointer;
@@ -362,26 +279,26 @@
       pointer-events: none;
     }
     
-    .file-upload:hover { 
+    .file-upload:hover {
       background: #0a1a40;
     }
     
     .file-upload input { display: none; }
     
-    .file-upload .icon { 
-      font-size: 2rem; 
+    .file-upload .icon {
+      font-size: 2rem;
       margin-bottom: 0.5rem;
       color: #0066CC;
       font-family: 'VT323', monospace;
       font-size: 2.5rem;
     }
     
-    .file-upload .hint { 
-      color: #336699; 
+    .file-upload .hint {
+      color: #336699;
       font-size: 0.875rem;
     }
     
-    .file-upload.has-file { 
+    .file-upload.has-file {
       border-color: #00FF88;
       color: #00FF88;
     }
@@ -390,8 +307,16 @@
       border-color: #00FF88;
     }
     
-    .file-upload .filename { 
-      color: #00FF88; 
+    .file-upload .filename {
+      color: #00FF88;
+    }
+    
+    .file-upload.has-file::before {
+      border-color: #00FF88;
+    }
+    
+    .file-upload .filename {
+      color: #00FF88;
       font-weight: bold;
     }
     
@@ -410,15 +335,15 @@
       transition: all 0.1s;
     }
     
-    .btn:hover:not(:disabled) { 
+    .btn:hover:not(:disabled) {
       background: #00AAFF;
       color: #020818;
       box-shadow: 0 0 20px rgba(0, 170, 255, 0.4);
     }
     
-    .btn:disabled { 
-      opacity: 0.3; 
-      cursor: not-allowed; 
+    .btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
     }
     
     .log-container {
@@ -448,13 +373,13 @@
       background: #00AAFF;
     }
     
-    .log-line { 
-      padding: 0.25rem 0; 
+    .log-line {
+      padding: 0.25rem 0;
       border-bottom: 1px solid #050f2e;
     }
     
-    .log-line:last-child { 
-      border-bottom: none; 
+    .log-line:last-child {
+      border-bottom: none;
     }
     
     .log-prefix {
@@ -467,7 +392,7 @@
     .log-warning { color: #FFAA00; }
     .log-error { color: #FF3366; }
     .log-progress { color: #00AAFF; }
-
+    
     .progress-shell {
       margin: 0 0 1rem;
       padding: 0.85rem 1rem;
@@ -475,7 +400,7 @@
       background: linear-gradient(180deg, rgba(2, 8, 24, 0.95) 0%, rgba(5, 15, 46, 0.9) 100%);
       box-shadow: inset 0 0 12px rgba(0, 170, 255, 0.06);
     }
-
+    
     .progress-meta {
       display: flex;
       justify-content: space-between;
@@ -487,18 +412,18 @@
       letter-spacing: 1.5px;
       color: #7FB7FF;
     }
-
+    
     .progress-label {
       color: #5588BB;
     }
-
+    
     .progress-percent {
       color: #00E1FF;
       font-weight: bold;
       min-width: 56px;
       text-align: right;
     }
-
+    
     .progress-track {
       position: relative;
       height: 14px;
@@ -508,7 +433,7 @@
         linear-gradient(90deg, rgba(0, 170, 255, 0.08) 0%, rgba(0, 170, 255, 0.02) 100%),
         #020818;
     }
-
+    
     .progress-bar {
       position: absolute;
       inset: 0 auto 0 0;
@@ -517,7 +442,7 @@
       box-shadow: 0 0 12px rgba(0, 170, 255, 0.35);
       transition: width 0.2s ease;
     }
-
+    
     .progress-scan {
       position: absolute;
       inset: 0;
@@ -550,8 +475,8 @@
     .summary-ambiguous { border-color: #FFAA00; }
     .summary-unmatched { border-color: #FF3366; }
     
-    .summary-value { 
-      font-size: 2rem; 
+    .summary-value {
+      font-size: 2rem;
       font-weight: bold;
       font-family: 'VT323', monospace;
     }
@@ -560,8 +485,8 @@
     .summary-ambiguous .summary-value { color: #FFAA00; }
     .summary-unmatched .summary-value { color: #FF3366; }
     
-    .summary-label { 
-      color: #336699; 
+    .summary-label {
+      color: #336699;
       font-size: 0.875rem;
       text-transform: uppercase;
       letter-spacing: 1px;
@@ -579,16 +504,16 @@
     
     .playlist-url a { color: #00FF88; }
     
-    .track-count { 
-      color: #336699; 
-      font-size: 0.875rem; 
+    .track-count {
+      color: #336699;
+      font-size: 0.875rem;
       margin-top: 0.5rem;
     }
     
-    .config-row { 
-      display: grid; 
-      grid-template-columns: 1fr 1fr; 
-      gap: 1rem; 
+    .config-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
     }
     
     .config-row label { margin-top: 1rem; }
@@ -701,9 +626,9 @@
       color: #020818;
     }
     
-    .btn-small:disabled { 
-      opacity: 0.4; 
-      cursor: not-allowed; 
+    .btn-small:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
     }
     
     .manual-results {
@@ -721,23 +646,23 @@
       transition: all 0.1s;
     }
     
-    .manual-result:hover { 
+    .manual-result:hover {
       border-color: #00AAFF;
       box-shadow: 0 0 10px rgba(0, 170, 255, 0.2);
     }
     
-    .manual-result.selected { 
+    .manual-result.selected {
       background: #00AAFF;
       color: #020818;
       border-color: #00AAFF;
     }
     
-    .manual-result-title { 
-      font-weight: bold; 
+    .manual-result-title {
+      font-weight: bold;
       font-size: 0.875rem;
     }
     
-    .manual-result-artist { 
+    .manual-result-artist {
       font-size: 0.75rem;
       color: #5588BB;
     }
@@ -753,7 +678,7 @@
       margin-top: 1rem;
     }
     
-    .btn-add-manual:hover:not(:disabled) { 
+    .btn-add-manual:hover:not(:disabled) {
       background: #00AAFF;
       color: #020818;
     }
@@ -779,19 +704,19 @@
       margin-top: 0.5rem;
     }
     
-    .backend-dot { 
-      width: 8px; 
+    .backend-dot {
+      width: 8px;
       height: 8px;
       border: 1px solid #00AAFF;
     }
     
-    .backend-dot.available { 
+    .backend-dot.available {
       background: #00FF88;
       border-color: #00FF88;
       box-shadow: 0 0 6px #00FF88;
     }
     
-    .backend-dot.unavailable { 
+    .backend-dot.unavailable {
       background: #FF3366;
       border-color: #FF3366;
       box-shadow: 0 0 6px #FF3366;
@@ -822,8 +747,8 @@
   <div class="scanline-2"></div>
   <div class="scanline-3"></div>
   <div class="container">
-    <h1>M3U &gt; YTM</h1>
-    <p class="subtitle">Import your music library to YouTube Music</p>
+    <h1>El Exportador</h1>
+    <p class="subtitle">Importa tu biblioteca musical a YouTube Music</p>
 
     <div class="card">
       <div class="file-upload" id="dropZone" onclick="document.getElementById('fileInput').click()">
@@ -857,6 +782,31 @@
       <div class="checkbox-group">
         <input type="checkbox" id="dryRun" checked>
         <label for="dryRun">Dry Run Mode (no playlist creation)</label>
+      </div>
+
+      <!-- Botón de autenticación -->
+      <div style="margin: 1rem 0;">
+        <button id="authBtn" style="
+          background: #050f2e;
+          color: #00AAFF;
+          border: 1px solid #00AAFF;
+          padding: 0.75rem 1.5rem;
+          border-radius: 4px;
+          cursor: pointer;
+          font-family: 'Share Tech Mono', monospace;
+          font-size: 0.875rem;
+          transition: all 0.2s;
+        ">
+          🔗 AUTENTICARSE CON YOUTUBE MUSIC
+        </button>
+        <div id="authStatus" style="
+          margin-top: 0.5rem;
+          color: #FF4444;
+          font-family: 'Share Tech Mono', monospace;
+          font-size: 0.875rem;
+        ">
+          ESTADO: ❌ NO AUTENTICADO
+        </div>
       </div>
 
       <div style="margin-top: 1.5rem;">
@@ -902,6 +852,39 @@
   </div>
 
   <script>
+    // File input handler
+    window.handleFileFromInput = function(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        document.getElementById('m3uContent').value = e.target.result;
+        const res = await fetch('/api/parse-m3u', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: e.target.result })
+        });
+        const data = await res.json();
+        window.parsedTracks = data.tracks || [];
+        document.getElementById('trackCount').textContent = '[' + window.parsedTracks.length + '] tracks loaded';
+        // Set playlist name
+        const playlistInput = document.getElementById('playlistName');
+        playlistInput.value = file.name.replace(/\.(m3u|m3u8)$/i, '').replace(/[^\w\s-]/g, '_').toUpperCase();
+        // El botón [EXECUTE] se activará solo en parseM3U si hay tracks y un nombre de playlist
+        // Aplicar estilo verde al cuadro [FILE]
+        dropZone.classList.add('has-file');
+        uploadText.innerHTML = `<span class="filename">[OK] ${file.name}</span>`;
+        // Forzar estilo verde
+        dropZone.style.borderColor = '#00FF88';
+        dropZone.style.color = '#00FF88';
+        dropZone.style.backgroundColor = 'rgba(0, 255, 136, 0.1)';
+      };
+      reader.readAsText(file);
+    };
+  </script>
+
+  <script>
+    // Variables globales
     const fileInput = document.getElementById('fileInput');
     const dropZone = document.getElementById('dropZone');
     const uploadText = document.getElementById('uploadText');
@@ -919,409 +902,136 @@
     const progressPercent = document.getElementById('progressPercent');
     const progressLabel = document.getElementById('progressLabel');
     const progressTrack = document.querySelector('.progress-track');
-
+    const authStatus = document.getElementById('authStatus');
     let parsedTracks = [];
-    let eventSource = null;
-    let lastConversionResults = null;
     let lastPlaylistId = null;
-    let manualSelectedTracks = [];
-    let logLineCount = 0;
+    let lastConversionResults = [];
+    let eventSource = null;
 
-    function addLog(type, message) {
-      const line = document.createElement('div');
-      line.className = `log-line log-${type}`;
-      const prefix = type === 'progress' ? '>' : type === 'info' ? '>' : type === 'success' ? '+' : type === 'warning' ? '!' : type === 'error' ? 'X' : '>';
-      line.innerHTML = `<span class="log-prefix">${prefix}</span>${message}`;
-      logContainer.appendChild(line);
-      logContainer.scrollTop = logContainer.scrollHeight;
-      logLineCount++;
-      if (logLineCount > 100) {
-        const firstLine = logContainer.querySelector('.log-line');
-        if (firstLine) firstLine.remove();
-      }
-    }
-
-    function setProgress(current = 0, total = 0, label = 'Idle') {
-      const safeTotal = total > 0 ? total : 0;
-      const percent = safeTotal > 0 ? Math.max(0, Math.min(100, Math.round((current / safeTotal) * 100))) : 0;
-      progressBar.style.width = `${percent}%`;
-      progressPercent.textContent = `${percent}%`;
-      progressLabel.textContent = label;
-      progressTrack.setAttribute('aria-valuenow', String(percent));
-    }
-
-    let sseConnected = false;
-    function connectSSE() {
-      return new Promise((resolve) => {
-        if (eventSource) eventSource.close();
-        eventSource = new EventSource('/events');
-        eventSource.addEventListener('log', (e) => {
-          const event = JSON.parse(e.data);
-          // Wait for connection confirmation before starting conversion
-          if (event.message === '__SSE_CONNECTED__') {
-            sseConnected = true;
-            resolve();
-            return;
-          }
-          if (event.type === 'progress' && event.data) {
-            setProgress(event.data.current, event.data.total, event.message || 'Processing tracks');
-          }
-          if (event.type === 'summary') {
-            const total = (event.data?.matched || 0) + (event.data?.ambiguous || 0) + (event.data?.unmatched || 0);
-            setProgress(total, total || 1, 'Conversion complete');
-          }
-          // Skip __SSE_CONNECTED__ from log display
-          if (event.message !== '__SSE_CONNECTED__') {
-            addLog(event.type, event.message);
-          }
-        });
-      });
-    }
-
-    async function checkBackendStatus() {
+    // Función para verificar el estado de autenticación
+    async function checkAuthStatus() {
       try {
-        const res = await fetch('/api/ytmusic-status');
-        const data = await res.json();
-        const dot = document.querySelector('.backend-dot');
-        const statusText = document.querySelector('#backendStatus span:last-child');
-        if (data.available) {
-          dot.classList.remove('unavailable');
-          dot.classList.add('available');
-          statusText.textContent = 'ytmusicapi backend [NO QUOTA LIMITS]';
+        const response = await fetch('/api/auth-status');
+        const data = await response.json();
+        if (data.authenticated) {
+          authStatus.textContent = "ESTADO: ✅ AUTENTICADO";
+          authStatus.style.color = "#00FF88";
+          return true;
         } else {
-          dot.classList.remove('available');
-          dot.classList.add('unavailable');
-          statusText.textContent = 'ytmusicapi backend';
+          authStatus.textContent = "ESTADO: ❌ NO AUTENTICADO";
+          authStatus.style.color = "#FF4444";
+          return false;
         }
-      } catch {
-        console.log('Could not check backend status');
-      }
-    }
-    checkBackendStatus();
-
-    function resetUI() {
-      logContainer.innerHTML = '<div class="log-line log-info"><span class="log-prefix">&gt;</span>Initializing...</div>';
-      summaryCard.style.display = 'none';
-      playlistUrl.style.display = 'none';
-      document.getElementById('manualReviewSection').classList.remove('visible');
-      manualSelectedTracks = [];
-      lastConversionResults = null;
-      lastPlaylistId = null;
-      logLineCount = 1;
-      setProgress(0, 0, 'Preparing conversion');
-    }
-
-    function showManualReview(results) {
-      const unmatched = results.filter(r => r.status === 'unmatched' || r.status === 'ambiguous');
-      if (unmatched.length === 0) return;
-
-      const section = document.getElementById('manualReviewSection');
-      const list = document.getElementById('manualTracksList');
-      list.innerHTML = '';
-
-      unmatched.forEach((track, index) => {
-        const trackDiv = document.createElement('div');
-        trackDiv.className = 'manual-track';
-        const statusClass = track.status === 'matched' ? 'log-success' : track.status === 'ambiguous' ? 'log-warning' : 'log-error';
-        const statusLabel = track.status === 'ambiguous' ? '[AMB]' : '[NO MATCH]';
-        trackDiv.innerHTML = `
-          <div class="manual-track-header">
-            <div class="manual-track-info">
-              <span class="${statusClass}">${statusLabel}</span>
-              ${track.artist || 'UNKNOWN'} - ${track.title}
-              ${track.status === 'ambiguous' ? '<span class="ytmusic-badge">Ambiguous</span>' : ''}
-            </div>
-            <div class="manual-track-actions">
-              <input type="text" class="manual-search-input" 
-                placeholder="Search query..." 
-                value="${track.artist || ''} ${track.title || ''}"
-                data-index="${index}">
-              <button class="btn-small" data-index="${index}">[SEARCH]</button>
-            </div>
-          </div>
-          <div class="manual-results" id="results-${index}"></div>
-        `;
-        list.appendChild(trackDiv);
-
-        const input = trackDiv.querySelector('.manual-search-input');
-        const searchBtn = trackDiv.querySelector('.btn-small');
-
-        searchBtn.addEventListener('click', () => searchManual(index, track, input.value));
-        input.addEventListener('keypress', (e) => {
-          if (e.key === 'Enter') searchManual(index, track, input.value);
-        });
-      });
-
-      section.classList.add('visible');
-    }
-
-    async function searchManual(index, originalTrack, query) {
-      const resultsDiv = document.getElementById(`results-${index}`);
-      resultsDiv.innerHTML = '<div class="log-line log-info"><span class="log-prefix">&gt;</span>Searching...</div>';
-
-      try {
-        const res = await fetch('/api/search-single', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query, originalTrack })
-        });
-        const data = await res.json();
-
-        if (data.error) {
-          resultsDiv.innerHTML = `<div class="log-line log-error"><span class="log-prefix">X</span>${data.error}</div>`;
-          return;
-        }
-
-        if (data.results.length === 0) {
-          resultsDiv.innerHTML = '<div class="log-line log-warning"><span class="log-prefix">!</span>No results found</div>';
-          return;
-        }
-
-        resultsDiv.innerHTML = '';
-        data.results.forEach((result) => {
-          const resultDiv = document.createElement('div');
-          resultDiv.className = 'manual-result';
-          resultDiv.innerHTML = `
-            <div class="manual-result-title">${result.title}</div>
-            <div class="manual-result-artist">${result.artist} ${result.duration ? `(${result.duration})` : ''}</div>
-          `;
-          resultDiv.addEventListener('click', () => {
-            resultsDiv.querySelectorAll('.manual-result').forEach(el => el.classList.remove('selected'));
-            resultDiv.classList.add('selected');
-            resultDiv.dataset.videoId = result.videoId;
-            resultDiv.dataset.title = result.title;
-            resultDiv.dataset.artist = result.artist;
-          });
-          resultsDiv.appendChild(resultDiv);
-        });
       } catch (err) {
-        resultsDiv.innerHTML = `<div class="log-line log-error"><span class="log-prefix">X</span>Search failed: ${err.message}</div>`;
+        console.error("Error al verificar estado de autenticación:", err);
+        return false;
       }
     }
 
-    document.getElementById('addManualBtn').addEventListener('click', async () => {
-      if (!lastPlaylistId) {
-        addLog('error', 'No playlist to add tracks to. Run a full conversion first.');
+    // Función para guardar el estado en localStorage antes de redirigir a la autenticación
+    const saveAuthState = () => {
+      const fileName = dropZone.classList.contains('has-file') ? uploadText.textContent.replace('[OK] ', '') : '';
+      const state = {
+        timestamp: new Date().toISOString(),
+        file: fileName,
+        m3uContent: m3uContent.value,
+        playlistName: playlistName.value
+      };
+      localStorage.setItem('m3uState', JSON.stringify(state));
+      console.log('Estado guardado en localStorage:', state);
+    };
+
+    // Función para abrir el popup de autenticación
+    const openAuthPopup = () => {
+      console.log('Botón de autenticación clickeado.');
+      saveAuthState();
+      const authUrl = `/auth`;
+      console.log('Abriendo popup con URL:', authUrl);
+      const popup = window.open(authUrl, 'AuthPopup', 'width=600,height=600');
+      if (!popup) {
+        alert('Por favor, desactiva el bloqueador de popups para esta página.');
         return;
       }
+      const checkPopupClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkPopupClosed);
+          console.log('Popup cerrado. Verificando estado de autenticación.');
+          checkAuthStatus();
+        }
+      }, 500);
+    };
 
-      const selectedResults = document.querySelectorAll('.manual-result.selected');
-      if (selectedResults.length === 0) {
-        addLog('warning', 'No tracks selected');
+    // Asignar el manejador de eventos al botón
+    const authBtn = document.getElementById('authBtn');
+    if (authBtn) {
+      authBtn.onclick = openAuthPopup;
+    }
+
+    // Restaurar estado desde localStorage al cargar la página
+    const restoreState = () => {
+      console.log('Iniciando restauración de estado...');
+      const savedState = localStorage.getItem('m3uState');
+      if (!savedState) {
+        console.log('No hay estado guardado en localStorage.');
         return;
       }
-
-      const tracks = Array.from(selectedResults).map(el => ({
-        videoId: el.dataset.videoId,
-        title: el.dataset.title,
-        artist: el.dataset.artist
-      }));
-
-      try {
-        const res = await fetch('/api/add-to-playlist', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ playlistId: lastPlaylistId, tracks })
-        });
-        const data = await res.json();
-
-        if (data.error) {
-          addLog('error', `Failed to add tracks: ${data.error}`);
-        } else {
-          addLog('success', `Added ${data.added} tracks to playlist`);
-          document.querySelectorAll('.manual-result.selected').forEach(el => {
-            el.closest('.manual-track').remove();
-          });
-          updateAddManualButton();
-        }
-      } catch (err) {
-        addLog('error', `Failed to add tracks: ${err.message}`);
-      }
-    });
-
-    function updateAddManualButton() {
-      const btn = document.getElementById('addManualBtn');
-      const selected = document.querySelectorAll('.manual-result.selected');
-      btn.disabled = selected.length === 0 || !lastPlaylistId;
-    }
-
-    setInterval(updateAddManualButton, 500);
-
-    function updateStartButtonState() {
-      const hasInput = parsedTracks.length > 0 || m3uContent.value.trim().length > 0;
-      const hasPlaylistName = playlistName.value.trim().length > 0;
-      startBtn.disabled = !(hasInput && hasPlaylistName);
-    }
-
-    fileInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      await handleFile(file);
-    });
-
-    dropZone.addEventListener('click', () => fileInput.click());
-
-    dropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropZone.style.borderColor = '#5588BB';
-    });
-
-    dropZone.addEventListener('dragleave', () => {
-      dropZone.style.borderColor = '#00AAFF';
-    });
-
-    dropZone.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      dropZone.style.borderColor = '#00AAFF';
-      const file = e.dataTransfer.files[0];
-      if (file) await handleFile(file);
-    });
-
-    async function handleFile(file) {
-      const content = await file.text();
-      m3uContent.value = content;
-      dropZone.classList.add('has-file');
-      uploadText.innerHTML = `<span class="filename">[OK] ${file.name}</span>`;
-      await parseM3U(content, file.name);
-    }
-
-    m3uContent.addEventListener('input', async () => {
-      if (m3uContent.value.trim()) {
-        dropZone.classList.remove('has-file');
-        uploadText.innerHTML = 'Drop .m3u file here';
-        await parseM3U(m3uContent.value, 'clipboard');
-      } else {
-        parsedTracks = [];
-        trackCount.textContent = '';
-        updateStartButtonState();
-      }
-    });
-
-    playlistName.addEventListener('input', updateStartButtonState);
-
-    async function parseM3U(content, filename) {
-      try {
-        const res = await fetch('/api/parse-m3u', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content }),
-        });
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        parsedTracks = data.tracks;
-        trackCount.textContent = `[${parsedTracks.length}] tracks loaded (${data.format} format)`;
-        if (!playlistName.value) {
-          playlistName.value = filename.replace(/\.(m3u|m3u8)$/i, '').replace(/[^\w\s-]/g, '_').toUpperCase();
-        }
-        updateStartButtonState();
-        addLog('success', `Loaded ${parsedTracks.length} tracks from ${filename}`);
-      } catch (err) {
-        addLog('error', `Parse error: ${err.message}`);
-        parsedTracks = [];
-        updateStartButtonState();
-      }
-    }
-
-    startBtn.addEventListener('click', async () => {
-      if (parsedTracks.length === 0) {
-        addLog('error', 'No tracks loaded. Upload or paste an M3U file first.');
+      console.log('Estado guardado en localStorage:', savedState);
+      const state = JSON.parse(savedState);
+      const now = new Date();
+      const stateTime = new Date(state.timestamp);
+      const oneHour = 60 * 60 * 1000;
+      if (now - stateTime > oneHour) {
+        console.log('Estado caducado. Limpiando localStorage.');
+        localStorage.removeItem('m3uState');
         return;
       }
-
-      startBtn.disabled = true;
-      resetUI();
-      
-      // Wait for SSE connection to be established before starting conversion
-      addLog('info', 'Connecting to event stream...');
-      await connectSSE();
-
-      try {
-        const payload = {
-          playlistName: playlistName.value || 'UNTITLED_PLAYLIST',
-          dryRun: dryRun.checked,
-          threshold: parseFloat(threshold.value),
-          tracks: parsedTracks,
-        };
-
-        addLog('info', `Starting conversion: ${parsedTracks.length} tracks | dryRun=${dryRun.checked}`);
-        setProgress(0, parsedTracks.length || 1, 'Searching on YouTube Music...');
-
-        const res = await fetch('/api/convert', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-          addLog('error', errorData.error || `Request failed with status ${res.status}`);
-          setProgress(0, parsedTracks.length || 1, 'Conversion failed');
-          return;
-        }
-
-        const data = await res.json();
-
-        if (data.error) {
-          addLog('error', data.error);
-          setProgress(0, parsedTracks.length || 1, 'Conversion failed');
-        } else {
-          const matched = data.results?.filter(r => r.status === 'matched').length || 0;
-          const ambiguous = data.results?.filter(r => r.status === 'ambiguous').length || 0;
-          const unmatched = data.results?.filter(r => r.status === 'unmatched').length || 0;
-          const totalProcessed = matched + ambiguous + unmatched;
-          setProgress(totalProcessed, totalProcessed || parsedTracks.length || 1, data.dryRun ? 'Dry run complete' : 'Playlist ready');
-
-          summaryGrid.innerHTML = `
-            <div class="summary-item summary-matched">
-              <div class="summary-value">${matched}</div>
-              <div class="summary-label">Matched</div>
-            </div>
-            <div class="summary-item summary-ambiguous">
-              <div class="summary-value">${ambiguous}</div>
-              <div class="summary-label">Ambiguous</div>
-            </div>
-            <div class="summary-item summary-unmatched">
-              <div class="summary-value">${unmatched}</div>
-              <div class="summary-label">Unmatched</div>
-            </div>
-          `;
-          summaryCard.style.display = 'block';
-
-          if (data.playlistUrl) {
-            playlistUrl.innerHTML = `PLAYLIST: <a href="${data.playlistUrl}" target="_blank">${data.playlistUrl}</a>`;
-            playlistUrl.style.display = 'block';
-          }
-
-          lastConversionResults = data.results;
-          lastPlaylistId = data.playlistId || null;
-          showManualReview(data.results);
-        }
-      } catch (err) {
-        addLog('error', `Request failed: ${err.message}`);
-        setProgress(0, parsedTracks.length || 1, 'Request failed');
-      } finally {
-        startBtn.disabled = false;
+      if (state.file) {
+        console.log('Restaurando [File]:', state.file);
+        dropZone.classList.add('has-file');
+        uploadText.innerHTML = `[OK] ${state.file}`;
+        dropZone.style.borderColor = '#00FF88';
+        dropZone.style.color = '#00FF88';
+        dropZone.style.backgroundColor = 'rgba(0, 255, 136, 0.1)';
       }
+      if (state.m3uContent) {
+        console.log('Restaurando m3uContent.');
+        m3uContent.value = state.m3uContent;
+      }
+      if (state.playlistName) {
+        console.log('Restaurando playlistName:', state.playlistName);
+        playlistName.value = state.playlistName;
+      }
+    };
+
+    // Llamar a restoreState al cargar la página
+    document.addEventListener('DOMContentLoaded', () => {
+      restoreState();
+      checkAuthStatus();
     });
+
+    // Verificar si la autenticación fue cancelada
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('cancelled')) {
+      localStorage.removeItem('m3uState');
+      window.location.search = '';
+    }
   </script>
-  
+
   <script>
+    // Matrix animation
     (function() {
       const canvas = document.getElementById('matrix-canvas');
       const ctx = canvas.getContext('2d');
-      
       const CHARS = '0アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン1';
       const FONT_SIZE = 14;
       const CHAR_COLOR = '#003366';
       const HEAD_COLOR = '#0066AA';
-      
       let columns = [];
       let width, height;
       
       function resize() {
         width = canvas.width = window.innerWidth;
         height = canvas.height = window.innerHeight;
-        
         const colCount = Math.floor(width / FONT_SIZE);
         columns = [];
         for (let i = 0; i < colCount; i++) {
@@ -1341,14 +1051,11 @@
       function draw() {
         ctx.fillStyle = 'rgba(2, 8, 24, 0.05)';
         ctx.fillRect(0, 0, width, height);
-        
         ctx.font = `${FONT_SIZE}px 'Share Tech Mono', monospace`;
-        
         columns.forEach(col => {
           for (let i = 0; i < col.chars.length; i++) {
             const charY = col.y - i * FONT_SIZE;
             if (charY < 0 || charY > height) continue;
-            
             if (i === 0) {
               ctx.fillStyle = HEAD_COLOR;
             } else {
@@ -1359,25 +1066,20 @@
             ctx.fillText(col.chars[i], col.x, charY);
           }
           ctx.globalAlpha = 1;
-          
           col.y += col.speed;
-          
           if (Math.random() < 0.08) {
             if (col.chars.length === 0 || col.chars[0] !== getRandomChar()) {
               col.chars.unshift(getRandomChar());
             }
           }
-          
           if (Math.random() < 0.04) {
             col.chars.pop();
           }
-          
           if (col.y - col.chars.length * FONT_SIZE > height + FONT_SIZE * 10) {
             col.y = -FONT_SIZE * (5 + Math.floor(Math.random() * 20));
             col.chars = [];
           }
         });
-        
         requestAnimationFrame(draw);
       }
       

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { CliOptions } from "./types.js";
+import { CliOptions } from "./types";
 export declare function runCli(): Promise<void>;
 export declare function run(filePath: string, options: Partial<CliOptions> & {
     file: string;

@@ -1,6 +1,6 @@
 import { google } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
-import { PlaylistResult, MatchResult } from "./types.js";
+import { PlaylistResult, MatchResult } from "./types";
 
 const YOUTUBE_BASE_URL = "https://www.youtube.com/playlist?list=";
 

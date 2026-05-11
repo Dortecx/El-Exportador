@@ -1,7 +1,13 @@
-import { google } from "googleapis";
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createPlaylist = createPlaylist;
+exports.addTracksToPlaylist = addTracksToPlaylist;
+exports.createPlaylistWithTracks = createPlaylistWithTracks;
+exports.calculateQuotaUsage = calculateQuotaUsage;
+const googleapis_1 = require("googleapis");
 const YOUTUBE_BASE_URL = "https://www.youtube.com/playlist?list=";
-export async function createPlaylist(auth, name, onBehalfOfContentOwner) {
-    const youtube = google.youtube({ version: "v3", auth });
+async function createPlaylist(auth, name, onBehalfOfContentOwner) {
+    const youtube = googleapis_1.google.youtube({ version: "v3", auth });
     const response = await youtube.playlists.insert({
         part: ["snippet", "status"],
         requestBody: {
@@ -25,8 +31,8 @@ export async function createPlaylist(auth, name, onBehalfOfContentOwner) {
         playlistUrl: `${YOUTUBE_BASE_URL}${playlistId}`,
     };
 }
-export async function addTracksToPlaylist(auth, playlistId, matchedResults, onProgress, onBehalfOfContentOwner) {
-    const youtube = google.youtube({ version: "v3", auth });
+async function addTracksToPlaylist(auth, playlistId, matchedResults, onProgress, onBehalfOfContentOwner) {
+    const youtube = googleapis_1.google.youtube({ version: "v3", auth });
     let quotaUsed = 0;
     let added = 0;
     let failed = 0;
@@ -82,7 +88,7 @@ export async function addTracksToPlaylist(auth, playlistId, matchedResults, onPr
 async function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
-export async function createPlaylistWithTracks(auth, name, matchedResults, onProgress, onBehalfOfContentOwner) {
+async function createPlaylistWithTracks(auth, name, matchedResults, onProgress, onBehalfOfContentOwner) {
     const { playlistId, playlistUrl } = await createPlaylist(auth, name, onBehalfOfContentOwner);
     const { added, quotaUsed } = await addTracksToPlaylist(auth, playlistId, matchedResults, onProgress, onBehalfOfContentOwner);
     const unmatched = matchedResults.filter((r) => !r.bestMatch).length;
@@ -98,7 +104,7 @@ export async function createPlaylistWithTracks(auth, name, matchedResults, onPro
         quotaUsed,
     };
 }
-export function calculateQuotaUsage(numTracks, matched) {
+function calculateQuotaUsage(numTracks, matched) {
     const searchCost = numTracks * 1;
     const insertCost = matched * 50;
     return searchCost + insertCost;

@@ -2,14 +2,16 @@ import os from 'os';
 import path from 'path';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 import type { Track } from '../types.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// @ts-ignore: __dirname is available in CommonJS
+const __dirname = path.resolve();
 
 export const YTMusicAuthFile = path.join(os.homedir(), '.config', 'm3u-to-ytmusic', 'ytmusic_auth.json');
 // Use fixed path - works both in dev (tsx) and production
-const SEARCHER_SCRIPT = 'C:/Users/Dom/Documents/Projects/El Exportador/m3u-to-ytmusic/src/ytmusic/searcher.py';
+const PYTHON_PATH = '/mnt/e/School/Python/Python311/python.exe';
+const SEARCHER_SCRIPT = '/mnt/c/Users/Dom/Documents/Projects/El Exportador/m3u-to-ytmusic/src/ytmusic/searcher.py';
 
 export interface YTMusicBestMatch {
   title: string;
@@ -54,7 +56,10 @@ async function spawnJson(
   onProgress?: ProgressCallback
 ): Promise<any> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(command, args, {
+    // Usar Python de E:/School/Python/Python311
+    const pythonPath = PYTHON_PATH;
+    console.log(`🐍 Ejecutando: ${pythonPath} ${SEARCHER_SCRIPT} ${args.join(' ')}`);
+    const proc = spawn(pythonPath, [SEARCHER_SCRIPT, ...args], {
       env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' },
     });
 
@@ -129,7 +134,18 @@ async function spawnJson(
 }
 
 export function checkYtMusicAvailable(): boolean {
-  return true;
+  try {
+    const authFileExists = fs.existsSync(YTMusicAuthFile);
+    console.log(`🔍 Auth file exists: ${authFileExists}, path: ${YTMusicAuthFile}`);
+    return authFileExists;
+  } catch (err) {
+    console.error('❌ Error al verificar auth file:', err);
+    return false;
+  }
+}
+
+export function getAuthUrl(): string {
+  return "http://localhost:3000/auth";
 }
 
 export async function runYtMusicScript(input: object, onProgress?: ProgressCallback): Promise<any> {

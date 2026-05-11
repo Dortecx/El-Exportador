@@ -1,4 +1,4 @@
-import { Track, ParsedM3UResult } from "./types.js";
+import { Track, ParsedM3UResult } from "./types";
 export declare function cleanTitle(title: string): string;
 export declare function isValidM3UFile(filePath: string): boolean;
 export declare function validateFilePath(filePath: string): void;

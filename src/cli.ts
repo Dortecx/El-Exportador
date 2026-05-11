@@ -4,9 +4,9 @@ import { Command } from "commander";
 import chalk from "chalk";
 import * as fs from "fs";
 import * as path from "path";
-import { parseFile } from "./parser.js";
-import { convertWithYtMusic, checkYtMusicAvailable } from "./ytmusic/client.js";
-import { Track, CliOptions } from "./types.js";
+import { parseFile } from "./parser";
+import { convertWithYtMusic, checkYtMusicAvailable } from "./ytmusic/client";
+import { Track, CliOptions } from "./types";
 
 const VERSION = "1.0.0";
 
