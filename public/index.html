@@ -952,13 +952,15 @@
         alert('Por favor, desactiva el bloqueador de popups para esta página.');
         return;
       }
-      const checkPopupClosed = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(checkPopupClosed);
-          console.log('Popup cerrado. Verificando estado de autenticación.');
-          checkAuthStatus();
-        }
-      }, 500);
+      // Verificar estado de autenticación cada 2 segundos
+      const checkAuthInterval = setInterval(() => {
+        checkAuthStatus().then(isAuthenticated => {
+          if (isAuthenticated) {
+            clearInterval(checkAuthInterval);
+            console.log('Autenticación exitosa.');
+          }
+        });
+      }, 2000);
     };
 
     // Asignar el manejador de eventos al botón
@@ -1003,9 +1005,22 @@
       }
     };
 
-    // Llamar a restoreState al cargar la página
+    // Escuchar mensajes del popup de autenticación
+    window.addEventListener('message', (event) => {
+      // Verificar el origen del mensaje para evitar problemas de seguridad
+      if (event.origin !== 'http://localhost:3000') return;
+      
+      if (event.data === 'auth_success') {
+        console.log('Mensaje recibido: autenticación exitosa');
+        checkAuthStatus();
+      } else if (event.data === 'auth_error') {
+        console.log('Mensaje recibido: error de autenticación');
+        alert('Error al iniciar la autenticación. Verifica la configuración.');
+      }
+    });
+    
+    // Llamar a checkAuthStatus al cargar la página
     document.addEventListener('DOMContentLoaded', () => {
-      restoreState();
       checkAuthStatus();
     });
 

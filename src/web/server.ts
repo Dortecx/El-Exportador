@@ -34,76 +34,141 @@ const app = express();
 const YTMusicAuthFile = path.join(os.homedir(), '.config', 'm3u-to-ytmusic', 'ytmusic_auth.json');
 const PORT = 3000;
 
+// Configurar CORS para permitir comunicación entre popup y página principal
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  next();
+});
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const publicDir = "/mnt/c/Users/Dom/Documents/Projects/El Exportador/m3u-to-ytmusic/public";
 app.use(express.static(publicDir));
+
+// Importar módulos
+import { handleAuthRequest } from "./authHandler";
+import { validateAuth } from "../../src/auth";
+import jwt from 'jsonwebtoken';
+import { getAuthClient, saveToken } from "../../src/auth";
+
+// Endpoint para verificar el estado de autenticación
+app.get("/api/auth-status", async (req, res) => {
+  console.log("=== SOLICITUD A /api/auth-status ==="); // Depuración
+  try {
+    console.log("=== VERIFICANDO ESTADO DE AUTENTICACIÓN ==="); // Depuración
+    const auth = await getAuthClient(undefined, true); // isBrowser = true
+    const isAuthenticated = await validateAuth(auth);
+    console.log("=== ESTADO DE AUTENTICACIÓN ===", isAuthenticated); // Depuración
+    res.json({ authenticated: isAuthenticated });
+  } catch (err) {
+    console.error("Error al verificar estado de autenticación:", err);
+    res.status(500).json({ authenticated: false });
+  }
+});
+
+// Endpoint para validar tokens JWT
+app.post("/auth/validate", async (req, res) => {
+  const { token } = req.body;
+  if (!token) {
+    return res.status(401).json({ error: "Token no proporcionado" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "default-secret");
+    res.cookie("authToken", token, { httpOnly: true, secure: true });
+    res.json({ valid: true, decoded });
+  } catch (err) {
+    res.status(401).json({ error: "Token inválido" });
+  }
+});
+  console.log("=== SOLICITUD A /api/auth-status ==="); // Depuración
+  try {
+    console.log("=== VERIFICANDO ESTADO DE AUTENTICACIÓN ==="); // Depuración
+    const auth = await getAuthClient(undefined, true); // isBrowser = true
+    const isAuthenticated = await validateAuth(auth);
+    console.log("=== ESTADO DE AUTENTICACIÓN ===", isAuthenticated); // Depuración
+    res.json({ authenticated: isAuthenticated });
+  } catch (err) {
+    console.error("Error al verificar estado de autenticación:", err);
+    res.status(500).json({ authenticated: false });
+  }
+});
+
+// Endpoint para limpiar localStorage
+app.get("/clear-localstorage", (req, res) => {
+  res.send(
+    `<script>
+      localStorage.removeItem('m3uState');
+      alert('localStorage limpiado. Refresca la página.');
+      window.close();
+    </script>`
+  );
+});
+
+// Endpoint para autenticación
+app.get("/auth", (req, res) => {
+  console.log("=== ACCEDIENDO A /auth ==="); // Depuración
+  handleAuthRequest(req, res);
+});
 
 // Redirigir todas las solicitudes a index.html para manejar rutas del frontend
 app.get('*', (req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
 });
 
-// Endpoint para autenticación
-import { handleAuthRequest } from "./authHandler";
-app.get("/auth", handleAuthRequest);
-
 // Endpoint para manejar el callback de OAuth
 app.get("/auth/callback", async (req, res) => {
+  console.log("=== SOLICITUD A /auth/callback ===", req.query); // Depuración
   const { code } = req.query;
   if (!code) {
-    return res.status(400).send("Error: No se recibió el código de autorización");
+    console.error("=== CÓDIGO DE AUTORIZACIÓN NO PROPORCIONADO ==="); // Depuración
+    return res.status(400).send("Authorization code not provided");
   }
-  
+  console.log("=== CÓDIGO DE AUTORIZACIÓN ===", code); // Depuración
+
   try {
-    // Cargar credenciales de Google OAuth
-    const credentials = await loadCredentials();
-    const clientConfig = (credentials as { installed?: object; web?: object }).installed ||
-                         (credentials as { installed?: object; web?: object }).web;
-    if (!clientConfig) {
-      throw new Error("Invalid credentials: missing 'installed' or 'web' configuration");
-    }
-    
-    const auth = new google.auth.OAuth2(
-      (clientConfig as { client_id: string }).client_id,
-      (clientConfig as { client_secret: string }).client_secret,
-      "http://localhost:3000/auth/callback"
-    );
-    
-    // Intercambiar el código por un token
+    const auth = await getAuthClient();
     const { tokens } = await auth.getToken(code as string);
+    console.log("=== TOKENS OBTENIDOS ===", tokens); // Depuración
     auth.setCredentials(tokens);
+    await saveToken(auth, YTMusicAuthFile);
+    console.log("=== TOKEN GUARDADO EN ===", YTMusicAuthFile); // Depuración
     
-    // Guardar el token completo
-    const authFilePath = path.join(os.homedir(), '.config', 'm3u-to-ytmusic', 'ytmusic_auth.json');
-    const authDir = path.dirname(authFilePath);
-    if (!fs.existsSync(authDir)) {
-      fs.mkdirSync(authDir, { recursive: true });
+    // Verificar que el token se guardó correctamente
+    if (fs.existsSync(YTMusicAuthFile)) {
+      const tokenData = JSON.parse(fs.readFileSync(YTMusicAuthFile, "utf-8"));
+      console.log("=== TOKEN GUARDADO ===", tokenData); // Depuración
+    } else {
+      console.error("=== ERROR: EL TOKEN NO SE GUARDÓ ==="); // Depuración
     }
-    fs.writeFileSync(authFilePath, JSON.stringify(tokens));
-    webLogger.success("✅ Autenticación exitosa con YouTube Music");
-    
+
     // Notificar a todos los clientes que la autenticación fue exitosa
     broadcastToAllClients({ type: 'auth_success' });
-    
-    // Cerrar el popup después de guardar el token
+
+    // Cerrar el popup y notificar a la página principal
     res.send(`
       <!DOCTYPE html>
       <html>
         <head>
           <title>Autenticación exitosa</title>
           <script>
-            window.opener?.postMessage('auth_success', '*');
-            window.close();
+            if (window.opener) {
+              window.opener.postMessage('auth_success', '*');
+              window.close();
+            } else {
+              window.location.href = 'http://localhost:3000';
+            }
           </script>
         </head>
         <body>
-          <p>Autenticación exitosa. Cerrando...</p>
+          <p>Autenticación exitosa. Redirigiendo...</p>
         </body>
       </html>
     `);
   } catch (err) {
-    webLogger.error("❌ Error al procesar la autenticación:", err);
+    console.error("❌ Error al procesar la autenticación:", err);
     res.status(500).send("Error al procesar la autenticación");
   }
 });

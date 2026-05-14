@@ -25,7 +25,7 @@ export async function loadCredentials(): Promise<{ installed?: object; web?: obj
   }
 }
 
-export async function getAuthClient(credentialsPath?: string): Promise<OAuth2Client> {
+export async function getAuthClient(credentialsPath?: string, isBrowser = false): Promise<OAuth2Client> {
   const credentials = await loadCredentials();
 
   const clientConfig = (credentials as { installed?: object; web?: object }).installed ||
@@ -65,6 +65,11 @@ export async function getAuthClient(credentialsPath?: string): Promise<OAuth2Cli
     } catch {
       console.warn("Failed to load existing token, will attempt full auth");
     }
+  }
+
+  // Si la solicitud viene del navegador (popup), no ejecutar el flujo CLI
+  if (isBrowser) {
+    return auth;
   }
 
   await authenticate(auth, tokenPath);
