@@ -7,15 +7,14 @@ import { fileURLToPath } from "url";
 import { parseFile } from "../parser";
 import { SessionService } from "../services/session.service";
 import { configureYtMusicBrowserAuth, searchSingleOnYtMusic } from "../ytmusic/client";
-import { AuthMiddleware } from "../../src/middleware/auth.middleware";
-import { ENV } from "../../src/config/env";
+import { GuidedBrowserAuth } from "./guidedBrowserAuth";
 
 // Obtener la ruta del directorio actual usando import.meta.url
-import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // SSE setup
-const clients = new Set();
+type SseClient = { id: string; res: express.Response };
+const clients = new Set<SseClient>();
 
 function addClient(clientId: string, res: express.Response) {
   clients.add({ id: clientId, res });
@@ -40,6 +39,7 @@ function broadcastToAllClients(event: { type: string; [key: string]: unknown }) 
 }
 
 const app = express();
+const guidedBrowserAuth = new GuidedBrowserAuth(configureYtMusicBrowserAuth);
 const PORT = parseInt(process.env.PORT || "3000", 10);
 
 // Middleware
@@ -64,22 +64,29 @@ app.use((req, res, next) => {
   next();
 });
 
-app.post("/api/ytmusic-auth/browser", async (req, res) => {
-  try {
-    const result = await configureYtMusicBrowserAuth(req.body?.headers);
-    if (result.status === "authorized") {
-      SessionService.setAuthenticated(res);
-      return res.json({ authenticated: true });
-    }
-    return res.status(400).json({ error: result.error || "Invalid browser headers" });
-  } catch (error) {
-    console.error("Browser authentication validation failed:", error);
-    return res.status(400).json({ error: "Invalid browser headers" });
-  }
+app.post("/api/ytmusic-auth/browser/start", async (_req, res) => {
+  const result = await guidedBrowserAuth.start();
+  res.status(result.status === "error" ? 400 : 200).json(result);
+});
+
+app.get("/api/ytmusic-auth/browser/status", (_req, res) => {
+  res.json(guidedBrowserAuth.status());
+});
+
+app.post("/api/ytmusic-auth/browser/cancel", async (_req, res) => {
+  res.json(await guidedBrowserAuth.cancel());
+});
+
+app.post("/api/ytmusic-auth/browser/disconnect", async (_req, res) => {
+  await guidedBrowserAuth.disconnect();
+  SessionService.logout(res);
+  res.json({ status: "idle" });
 });
 
 app.get("/api/auth-status", (req, res) => {
-  res.json({ authenticated: req.cookies?.ytmusic_session === "authenticated" });
+  const connected = guidedBrowserAuth.status().status === "connected";
+  if (connected && req.cookies?.ytmusic_session !== "authenticated") SessionService.setAuthenticated(res);
+  res.json({ authenticated: connected || req.cookies?.ytmusic_session === "authenticated" });
 });
 
 app.post("/api/search-single", async (req, res) => {
@@ -156,7 +163,7 @@ app.post("/api/convert", async (req, res) => {
     
     // Convertir la playlist
     const result = await convertWithYtMusic(tracks, playlistName, { dryRun, threshold }, progressCallback);
-    
+
     const unmatchedTracks = result.unmatchedTracks || [];
     const ambiguousTracks = result.ambiguousTracks || [];
     const manualReviewTracks = result.manualReviewTracks || [...unmatchedTracks, ...ambiguousTracks];

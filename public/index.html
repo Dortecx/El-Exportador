@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323:wght@400&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    
+
     @keyframes glitch-title {
       0%, 100% { text-shadow: none; transform: translate(0); clip-path: none; }
       92% { text-shadow: none; transform: translate(0); clip-path: none; }
@@ -19,23 +19,33 @@
       96% { text-shadow: 2px 0 #FF0066, -2px 0 #00FFFF; transform: translate(-1px, 0); clip-path: none; }
       97% { text-shadow: none; transform: translate(0); clip-path: none; }
     }
-    
+
     @keyframes card-border-glitch {
       0%, 100% { border-color: #00AAFF; box-shadow: 0 0 0 transparent; }
       96% { border-color: #00AAFF; box-shadow: 0 0 0 transparent; }
       97% { border-color: #FFFFFF; box-shadow: 0 0 15px #00AAFF, 0 0 30px rgba(0, 170, 255, 0.3); }
       98% { border-color: #00AAFF; box-shadow: 0 0 0 transparent; }
     }
-    
+
     @keyframes dash {
       to { stroke-dashoffset: -20; }
     }
-    
+
     @keyframes blink {
       0%, 50% { opacity: 1; }
       51%, 100% { opacity: 0; }
     }
-    
+
+    @keyframes auth-status-pulse {
+      0% { opacity: 0.82; filter: brightness(0.9); text-shadow: 0 0 0 transparent; }
+      20% { opacity: 1; filter: brightness(1.65); text-shadow: 0 0 12px currentColor, 0 0 24px currentColor; }
+      100% { opacity: 0.82; filter: brightness(0.9); text-shadow: 0 0 0 transparent; }
+    }
+
+    #authStatus.auth-status-pulse {
+      animation: auth-status-pulse 4.5s ease-out;
+    }
+
     body {
       font-family: 'Share Tech Mono', 'Courier New', monospace;
       background: #020818;
@@ -44,7 +54,7 @@
       padding: 2rem;
       position: relative;
     }
-    
+
     body::before {
       content: '';
       position: fixed;
@@ -62,7 +72,7 @@
       pointer-events: none;
       z-index: 1000;
     }
-    
+
     body::after {
       content: '';
       position: fixed;
@@ -75,7 +85,7 @@
       pointer-events: none;
       z-index: 1001;
     }
-    
+
     .scanline-2 {
       position: fixed;
       top: 0;
@@ -88,7 +98,7 @@
       pointer-events: none;
       z-index: 1001;
     }
-    
+
     .scanline-3 {
       position: fixed;
       top: 0;
@@ -101,7 +111,7 @@
       pointer-events: none;
       z-index: 1001;
     }
-    
+
     #matrix-canvas {
       position: fixed;
       top: 0;
@@ -111,9 +121,9 @@
       z-index: -1;
       pointer-events: none;
     }
-    
+
     .container { max-width: 800px; margin: 0 auto; }
-    
+
     h1 {
       color: #00AAFF;
       margin-bottom: 2rem;
@@ -125,7 +135,7 @@
       position: relative;
       animation: glitch-title 4s infinite;
     }
-    
+
     h1::before,
     h1::after {
       content: 'El Exportador';
@@ -136,21 +146,21 @@
       overflow: hidden;
       background: transparent;
     }
-    
+
     h1::before {
       color: #FF0066;
       animation: glitch-title 4s infinite;
       animation-delay: 0.1s;
       clip-path: polygon(0 0, 100% 0, 100% 45%, 0 45%);
     }
-    
+
     h1::after {
       color: #00FFFF;
       animation: glitch-title 4s infinite;
       animation-delay: 0.15s;
       clip-path: polygon(0 55%, 100% 55%, 100% 100%, 0 100%);
     }
-    
+
     h3 {
       color: #5588BB;
       margin-bottom: 1rem;
@@ -161,7 +171,7 @@
       border-bottom: 1px solid #0066CC;
       padding-bottom: 0.5rem;
     }
-    
+
     .card {
       background: #050f2e;
       border: 1px solid #00AAFF;
@@ -169,7 +179,7 @@
       margin-bottom: 1.5rem;
       animation: card-border-glitch 6s infinite;
     }
-    
+
     label {
       display: block;
       margin-bottom: 0.5rem;
@@ -178,7 +188,7 @@
       text-transform: uppercase;
       letter-spacing: 1px;
     }
-    
+
     input[type="text"],
     input[type="number"],
     textarea {
@@ -194,69 +204,69 @@
       scrollbar-width: thin;
       scrollbar-color: #00AAFF #020818;
     }
-    
+
     textarea {
       resize: none;
       min-height: 180px;
     }
-    
+
     textarea::-webkit-scrollbar {
       width: 12px;
     }
-    
+
     textarea::-webkit-scrollbar-track {
       background: linear-gradient(180deg, #020818 0%, #050f2e 100%);
       border-left: 1px solid #0066CC;
       box-shadow: inset 0 0 8px rgba(0, 170, 255, 0.12);
     }
-    
+
     textarea::-webkit-scrollbar-thumb {
       background: linear-gradient(180deg, #0066CC 0%, #00AAFF 100%);
       border: 2px solid #020818;
       border-radius: 999px;
       box-shadow: 0 0 10px rgba(0, 170, 255, 0.35);
     }
-    
+
     textarea::-webkit-scrollbar-thumb:hover {
       background: linear-gradient(180deg, #00AAFF 0%, #6BE8FF 100%);
       box-shadow: 0 0 12px rgba(107, 232, 255, 0.45);
     }
-    
+
     textarea::-webkit-scrollbar-corner {
       background: #020818;
     }
-    
+
     input[type="text"]:focus,
     input[type="number"]:focus,
     textarea:focus {
       box-shadow: 0 0 0 1px #0066CC, 0 0 10px rgba(0, 170, 255, 0.2);
     }
-    
+
     input[type="text"]::placeholder,
     textarea::placeholder {
       color: #336699;
     }
-    
+
     .checkbox-group {
       display: flex;
       align-items: center;
       gap: 0.5rem;
       margin-top: 1rem;
     }
-    
+
     input[type="checkbox"] {
       width: 18px;
       height: 18px;
       accent-color: #00AAFF;
       cursor: pointer;
     }
-    
+
     .checkbox-group label {
       margin: 0;
       cursor: pointer;
       color: #B8D4FF;
     }
-    
+
     .file-upload {
       border: 2px dashed #00AAFF;
       padding: 2rem;
@@ -266,7 +276,7 @@
       position: relative;
       background: #050f2e;
     }
-    
+
     .file-upload::before {
       content: '';
       position: absolute;
@@ -278,13 +288,13 @@
       animation: dash 1s linear infinite;
       pointer-events: none;
     }
-    
+
     .file-upload:hover {
       background: #0a1a40;
     }
-    
+
     .file-upload input { display: none; }
-    
+
     .file-upload .icon {
       font-size: 2rem;
       margin-bottom: 0.5rem;
@@ -292,34 +302,34 @@
       font-family: 'VT323', monospace;
       font-size: 2.5rem;
     }
-    
+
     .file-upload .hint {
       color: #336699;
       font-size: 0.875rem;
     }
-    
+
     .file-upload.has-file {
       border-color: #00FF88;
       color: #00FF88;
     }
-    
+
     .file-upload.has-file::before {
       border-color: #00FF88;
     }
-    
+
     .file-upload .filename {
       color: #00FF88;
     }
-    
+
     .file-upload.has-file::before {
       border-color: #00FF88;
     }
-    
+
     .file-upload .filename {
       color: #00FF88;
       font-weight: bold;
     }
-    
+
     .btn {
       width: 100%;
       padding: 1rem;
@@ -334,18 +344,18 @@
       cursor: pointer;
       transition: all 0.1s;
     }
-    
+
     .btn:hover:not(:disabled) {
       background: #00AAFF;
       color: #020818;
       box-shadow: 0 0 20px rgba(0, 170, 255, 0.4);
     }
-    
+
     .btn:disabled {
       opacity: 0.3;
       cursor: not-allowed;
     }
-    
+
     .log-container {
       background: #020818;
       border: 1px solid #0066CC;
@@ -355,44 +365,44 @@
       font-family: 'Share Tech Mono', 'Courier New', monospace;
       font-size: 0.875rem;
     }
-    
+
     .log-container::-webkit-scrollbar {
       width: 8px;
     }
-    
+
     .log-container::-webkit-scrollbar-track {
       background: #020818;
       border-left: 1px solid #0066CC;
     }
-    
+
     .log-container::-webkit-scrollbar-thumb {
       background: #0066CC;
     }
-    
+
     .log-container::-webkit-scrollbar-thumb:hover {
       background: #00AAFF;
     }
-    
+
     .log-line {
       padding: 0.25rem 0;
       border-bottom: 1px solid #050f2e;
     }
-    
+
     .log-line:last-child {
       border-bottom: none;
     }
-    
+
     .log-prefix {
       color: #336699;
       margin-right: 0.75rem;
     }
-    
+
     .log-info { color: #5588BB; }
     .log-success { color: #00FF88; }
     .log-warning { color: #FFAA00; }
     .log-error { color: #FF3366; }
     .log-progress { color: #00AAFF; }
-    
+
     .progress-shell {
       margin: 0 0 1rem;
       padding: 0.85rem 1rem;
@@ -400,7 +410,7 @@
       background: linear-gradient(180deg, rgba(2, 8, 24, 0.95) 0%, rgba(5, 15, 46, 0.9) 100%);
       box-shadow: inset 0 0 12px rgba(0, 170, 255, 0.06);
     }
-    
+
     .progress-meta {
       display: flex;
       justify-content: space-between;
@@ -412,18 +422,18 @@
       letter-spacing: 1.5px;
       color: #7FB7FF;
     }
-    
+
     .progress-label {
       color: #5588BB;
     }
-    
+
     .progress-percent {
       color: #00E1FF;
       font-weight: bold;
       min-width: 56px;
       text-align: right;
     }
-    
+
     .progress-track {
       position: relative;
       height: 14px;
@@ -433,7 +443,7 @@
         linear-gradient(90deg, rgba(0, 170, 255, 0.08) 0%, rgba(0, 170, 255, 0.02) 100%),
         #020818;
     }
-    
+
     .progress-bar {
       position: absolute;
       inset: 0 auto 0 0;
@@ -442,7 +452,7 @@
       box-shadow: 0 0 12px rgba(0, 170, 255, 0.35);
       transition: width 0.2s ease;
     }
-    
+
     .progress-scan {
       position: absolute;
       inset: 0;
@@ -456,7 +466,7 @@
       mix-blend-mode: screen;
       pointer-events: none;
     }
-    
+
     .summary {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -466,35 +476,35 @@
       margin-left: auto;
       margin-right: auto;
     }
-    
+
     .summary-item {
       text-align: center;
       padding: 1rem;
       border: 1px solid #0066CC;
       background: #020818;
     }
-    
+
     .summary-matched { border-color: #00FF88; }
     .summary-ambiguous { border-color: #FFAA00; }
     .summary-unmatched { border-color: #FF3366; }
-    
+
     .summary-value {
       font-size: 2rem;
       font-weight: bold;
       font-family: 'VT323', monospace;
     }
-    
+
     .summary-matched .summary-value { color: #00FF88; }
     .summary-ambiguous .summary-value { color: #FFAA00; }
     .summary-unmatched .summary-value { color: #FF3366; }
-    
+
     .summary-label {
       color: #336699;
       font-size: 0.875rem;
       text-transform: uppercase;
       letter-spacing: 1px;
     }
-    
+
     .playlist-url {
       background: #020818;
       padding: 1rem;
@@ -504,23 +514,23 @@
       font-size: 0.875rem;
       color: #00FF88;
     }
-    
+
     .playlist-url a { color: #00FF88; }
-    
+
     .track-count {
       color: #336699;
       font-size: 0.875rem;
       margin-top: 0.5rem;
     }
-    
+
     .config-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 1rem;
     }
-    
+
     .config-row label { margin-top: 1rem; }
-    
+
     .help-icon {
       display: inline-flex;
       align-items: center;
@@ -535,11 +545,11 @@
       cursor: help;
       position: relative;
     }
-    
+
     .help-icon:hover .tooltip {
       display: block;
     }
-    
+
     .tooltip {
       display: none;
       position: absolute;
@@ -560,7 +570,7 @@
       text-transform: none;
       letter-spacing: 0;
     }
-    
+
     .tooltip::after {
       content: '';
       position: absolute;
@@ -570,7 +580,7 @@
       border: 6px solid transparent;
       border-top-color: #00AAFF;
     }
-    
+
     .manual-review-section {
       display: none;
       max-width: 800px;
@@ -578,14 +588,14 @@
       margin-right: auto;
     }
     .manual-review-section.visible { display: block; }
-    
+
     .manual-track {
       background: #020818;
       border: 1px solid #0066CC;
       padding: 1rem;
       margin-bottom: 0.75rem;
     }
-    
+
     .manual-track-header {
       display: flex;
       justify-content: space-between;
@@ -594,18 +604,18 @@
       flex-wrap: wrap;
       gap: 0.5rem;
     }
-    
+
     .manual-track-info {
       font-size: 0.9rem;
       color: #B8D4FF;
     }
-    
+
     .manual-track-actions {
       display: flex;
       gap: 0.5rem;
       align-items: center;
     }
-    
+
     .manual-search-input {
       flex: 1;
       min-width: 150px;
@@ -616,7 +626,7 @@
       font-family: 'Share Tech Mono', 'Courier New', monospace;
       font-size: 0.875rem;
     }
-    
+
     .btn-small {
       padding: 0.5rem 1rem;
       border: 1px solid #00AAFF;
@@ -628,23 +638,23 @@
       text-transform: uppercase;
       letter-spacing: 1px;
     }
-    
+
     .btn-small:hover:not(:disabled) {
       background: #00AAFF;
       color: #020818;
     }
-    
+
     .btn-small:disabled {
       opacity: 0.4;
       cursor: not-allowed;
     }
-    
+
     .manual-results {
       margin-top: 0.75rem;
       border-top: 1px solid #0066CC;
       padding-top: 0.75rem;
     }
-    
+
     .manual-result {
       display: block;
       width: 100%;
@@ -658,46 +668,46 @@
       text-align: left;
       transition: all 0.1s;
     }
-    
+
     .manual-result:hover {
       border-color: #00AAFF;
       box-shadow: 0 0 10px rgba(0, 170, 255, 0.2);
     }
-    
+
     .manual-result.selected {
       background: #00AAFF;
       color: #020818;
       border-color: #00AAFF;
     }
-    
+
     .manual-result-title {
       color: #B8D4FF;
       font-weight: bold;
       font-size: 0.875rem;
       line-height: 1.35;
     }
-    
+
     .manual-result-artist {
       font-size: 0.75rem;
       color: #5588BB;
     }
-    
+
     .manual-result.selected .manual-result-artist {
       color: #020818;
     }
-    
+
     .btn-add-manual {
       background: #050f2e;
       border: 1px solid #00AAFF;
       color: #00AAFF;
       margin-top: 1rem;
     }
-    
+
     .btn-add-manual:hover:not(:disabled) {
       background: #00AAFF;
       color: #020818;
     }
-    
+
     .ytmusic-badge {
       display: inline-block;
       background: #020818;
@@ -709,7 +719,7 @@
       text-transform: uppercase;
       letter-spacing: 1px;
     }
-    
+
     .backend-status {
       display: flex;
       align-items: center;
@@ -718,25 +728,25 @@
       color: #336699;
       margin-top: 0.5rem;
     }
-    
+
     .backend-dot {
       width: 8px;
       height: 8px;
       border: 1px solid #00AAFF;
     }
-    
+
     .backend-dot.available {
       background: #00FF88;
       border-color: #00FF88;
       box-shadow: 0 0 6px #00FF88;
     }
-    
+
     .backend-dot.unavailable {
       background: #FF3366;
       border-color: #FF3366;
       box-shadow: 0 0 6px #FF3366;
     }
-    
+
     .subtitle {
       text-align: center;
       color: #336699;
@@ -745,12 +755,80 @@
       letter-spacing: 3px;
       text-transform: uppercase;
     }
-    
-    @media (max-width: 600px) {
+
+    div:has(> #oauthPopupContainer) {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          flex-flow: row wrap;
+          gap: 0.75rem;
+          max-width: 100%;
+        }
+
+        #oauthPopupContainer,
+        #browserAuthPanel:not([hidden]) {
+          display: contents;
+        }
+
+        div:has(> #oauthPopupContainer) #authBtn,
+        div:has(> #oauthPopupContainer) #disconnectAuthBtn {
+          flex: 0 0 320px;
+          width: 320px;
+          height: 48px;
+          padding: 0 1rem;
+          border: 1px solid;
+          border-radius: 4px;
+          cursor: pointer;
+          font-family: 'Share Tech Mono', monospace;
+          font-size: 0.95rem;
+          font-weight: normal;
+          letter-spacing: normal;
+          text-transform: none;
+          white-space: nowrap;
+          transition: all 0.2s;
+        }
+
+        div:has(> #oauthPopupContainer) #authBtn {
+          background: #050f2e;
+          color: #00AAFF;
+          border-color: #00AAFF;
+        }
+
+        div:has(> #oauthPopupContainer) #authBtn:hover:not(:disabled) {
+          background: #00AAFF;
+          color: #020818;
+          box-shadow: 0 0 20px rgba(0, 170, 255, 0.4);
+        }
+
+        div:has(> #oauthPopupContainer) #disconnectAuthBtn {
+          background: #210b1a;
+          color: #FF5577;
+          border-color: #FF3366;
+          box-shadow: 0 0 8px rgba(255, 51, 102, 0.2);
+        }
+
+        div:has(> #oauthPopupContainer) #disconnectAuthBtn:hover:not(:disabled) {
+          background: #3b1025;
+          color: #FF99AA;
+          box-shadow: 0 0 16px rgba(255, 51, 102, 0.45);
+        }
+
+        div:has(> #oauthPopupContainer) > #authStatus {
+          order: 2;
+          flex-basis: 100%;
+        }
+
+        @media (max-width: 600px) {
+      div:has(> #oauthPopupContainer) #authBtn,
+      div:has(> #oauthPopupContainer) #disconnectAuthBtn {
+        flex: 0 1 320px;
+        width: min(320px, 100%);
+      }
+
       .config-row {
         grid-template-columns: 1fr;
       }
-      
+
       .summary {
         grid-template-columns: 1fr;
       }
@@ -802,20 +880,7 @@
       <!-- Componente OAuthPopup -->
       <div style="margin: 1rem 0;">
         <div id="oauthPopupContainer">
-          <button id="authBtn" style="
-            background: #050f2e;
-            color: #00AAFF;
-            border: 1px solid #00AAFF;
-            padding: 0.75rem 1.5rem;
-            border-radius: 4px;
-            cursor: pointer;
-            font-family: 'Share Tech Mono', monospace;
-            font-size: 0.875rem;
-            transition: all 0.2s;
-          "
-          >
-            🔗 AUTENTICARSE CON YOUTUBE MUSIC
-          </button>
+          <button id="authBtn" type="button">[ CONNECT YOUTUBE MUSIC ]</button>
         </div>
         <div id="authStatus" style="
           margin-top: 0.5rem;
@@ -823,18 +888,17 @@
           font-family: 'Share Tech Mono', monospace;
           font-size: 0.875rem;
         ">
-          ESTADO: ❌ NO AUTENTICADO
+          ESTADO: NO AUTENTICADO
         </div>
         <div id="browserAuthPanel" hidden style="margin-top: 0.75rem; font-family: 'Share Tech Mono', monospace; font-size: 0.8rem; color: #00AAFF;">
-          <p>In music.youtube.com, copy an authenticated request's headers from browser DevTools and paste them here. Headers stay on this computer.</p>
-          <textarea id="browserAuthHeaders" placeholder="Paste request headers" style="width: 100%; min-height: 100px;"></textarea>
-          <button class="btn" id="saveBrowserAuthBtn" type="button">[ SAVE AUTH ]</button>
+                    <button class="btn" id="disconnectAuthBtn" type="button" hidden>[ DISCONNECT ]</button>
+          <button class="btn" id="unusedBrowserAuthBtn" type="button" hidden aria-hidden="true"></button>
         </div>
       </div>
-      
+
       <script>
-        document.getElementById('authBtn').onclick = () => {
-          document.getElementById('browserAuthPanel').hidden = false;
+        document.getElementById('authBtn').onclick = async () => {
+          await startGuidedAuth();
         };
       </script>
       </div>
@@ -898,20 +962,20 @@
          // Set playlist name
          const playlistInput = document.getElementById('playlistName');
          playlistInput.value = file.name.replace(/\.(m3u|m3u8)$/i, '').replace(/[^\w\s-]/g, '_').toUpperCase();
-         
+
          // Aplicar estilo verde al cuadro [FILE] inmediatamente
          dropZone.classList.add('has-file');
          uploadText.innerHTML = `<span class="filename">[OK] ${file.name}</span>`;
          dropZone.style.borderColor = '#00FF88';
          dropZone.style.color = '#00FF88';
          dropZone.style.backgroundColor = 'rgba(0, 255, 136, 0.1)';
-         
+
           // Forzar actualización del DOM
           setTimeout(() => {
             dropZone.style.borderColor = '#00FF88';
             dropZone.style.color = '#00FF88';
           }, 100);
-          
+
           // Habilitar el botón [EXECUTE] si el usuario está autenticado
           if (await checkAuthStatus()) {
             startBtn.disabled = false;
@@ -951,33 +1015,108 @@
     let lastPlaylistId = null;
     let lastConversionResults = [];
     let eventSource = null;
-    const browserAuthPanel = document.getElementById('browserAuthPanel');
-    const browserAuthHeaders = document.getElementById('browserAuthHeaders');
+    const guidedBrowserAuthPanel = document.getElementById('browserAuthPanel');
+        const disconnectAuthBtn = document.getElementById('disconnectAuthBtn');
+    let authPoll = null;
+    let authStatusPulseTimer = null;
+    let authStatusShouldPulse = false;
+    const unusedBrowserAuthHeaders = null;
+
+    function stopAuthStatusPulse() {
+      authStatusShouldPulse = false;
+      if (authStatusPulseTimer !== null) {
+        window.clearTimeout(authStatusPulseTimer);
+        authStatusPulseTimer = null;
+      }
+      authStatus.classList.remove('auth-status-pulse');
+    }
+
+    function scheduleAuthStatusPulse() {
+      if (!authStatusShouldPulse) return;
+      authStatusPulseTimer = window.setTimeout(() => {
+        authStatusPulseTimer = null;
+        authStatus.classList.add('auth-status-pulse');
+      }, 1000 + Math.random() * 4000);
+    }
+
+    authStatus.addEventListener('animationend', (event) => {
+      if (event.animationName !== 'auth-status-pulse') return;
+      authStatus.classList.remove('auth-status-pulse');
+      scheduleAuthStatusPulse();
+    });
+
+    function setAuthStatus(message, color, shouldPulse = false) {
+      stopAuthStatusPulse();
+      authStatus.textContent = message;
+      authStatus.style.color = color;
+      authStatusShouldPulse = shouldPulse;
+      if (shouldPulse) scheduleAuthStatusPulse();
+    }
 
     async function saveBrowserAuth() {
       try {
         const response = await fetch('/api/ytmusic-auth/browser', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ headers: browserAuthHeaders.value }),
+          body: JSON.stringify({ headers: "" }),
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Invalid browser headers');
-        browserAuthHeaders.value = '';
-        browserAuthPanel.hidden = true;
+
+        guidedBrowserAuthPanel.hidden = true;
         await checkAuthStatus();
       } catch (error) {
-        authStatus.textContent = 'ESTADO: ❌ AUTENTICACIÓN REQUERIDA';
-        authStatus.style.color = '#FF4444';
+        setAuthStatus('ESTADO: AUTENTICACIÓN REQUERIDA', '#FF4444');
         console.error('Browser authentication failed:', error);
       }
     }
 
-    document.getElementById('saveBrowserAuthBtn').onclick = saveBrowserAuth;
+    async function startGuidedAuth() {
+      const response = await fetch('/api/ytmusic-auth/browser/start', { method: 'POST' });
+      const result = await response.json();
+      showGuidedAuthStatus(result.status);
+      if (response.ok && !authPoll) pollGuidedAuth();
+    }
+
+    function showGuidedAuthStatus(status) {
+      const active = ['launching', 'waiting_for_sign_in', 'validating'].includes(status);
+          guidedBrowserAuthPanel.hidden = !(active || status === 'connected');
+                    disconnectAuthBtn.hidden = status !== 'connected';
+          if (status === 'connected') {
+            setAuthStatus('ESTADO: AUTENTICADO', '#00FF88', true);
+          } else if (active) {
+            setAuthStatus('ESTADO: ESPERANDO AUTENTICACIÓN', '#00AAFF');
+          } else if (status === 'cancelled') {
+            setAuthStatus('ESTADO: AUTENTICACIÓN CANCELADA', '#FF4444');
+          } else if (status === 'timed_out') {
+            setAuthStatus('ESTADO: AUTENTICACIÓN AGOTADA', '#FF4444');
+          } else if (status === 'error') {
+            setAuthStatus('ESTADO: AUTENTICACIÓN FALLIDA', '#FF4444');
+          } else {
+            setAuthStatus('ESTADO: NO AUTENTICADO', '#FF4444', true);
+          }
+        }
+
+        async function pollGuidedAuth() {
+          const response = await fetch('/api/ytmusic-auth/browser/status');
+          const result = await response.json();
+          showGuidedAuthStatus(result.status);
+          if (['launching', 'waiting_for_sign_in', 'validating'].includes(result.status)) {
+            authPoll = window.setTimeout(pollGuidedAuth, 1000);
+          } else {
+            authPoll = null;
+            if (result.status === 'connected') await checkAuthStatus();
+          }
+        }
+
+                disconnectAuthBtn.onclick = async () => {
+          await fetch('/api/ytmusic-auth/browser/disconnect', { method: 'POST' });
+          showGuidedAuthStatus('idle');
+          await checkAuthStatus();
+        };
 
     async function startYtMusicAuthorization(popup) {
-      authStatus.textContent = 'ESTADO: ⏳ AUTENTICANDO...';
-      authStatus.style.color = '#00AAFF';
+      setAuthStatus('ESTADO: ESPERANDO AUTENTICACIÓN', '#00AAFF');
       try {
         const response = await fetch('/api/ytmusic-auth/start', { method: 'POST' });
         const authorization = await response.json();
@@ -1005,15 +1144,13 @@
             return;
           }
           popup.close();
-          authStatus.textContent = 'ESTADO: ❌ AUTENTICACIÓN FALLIDA';
-          authStatus.style.color = '#FF4444';
+          setAuthStatus('ESTADO: AUTENTICACIÓN FALLIDA', '#FF4444');
         };
         window.setTimeout(poll, Math.max(authorization.interval, 5) * 1000);
       } catch (error) {
         popup.close();
         console.error('Unable to start YouTube Music authorization:', error);
-        authStatus.textContent = 'ESTADO: ❌ AUTENTICACIÓN FALLIDA';
-        authStatus.style.color = '#FF4444';
+        setAuthStatus('ESTADO: AUTENTICACIÓN FALLIDA', '#FF4444');
       }
     }
 
@@ -1023,9 +1160,8 @@
         const response = await fetch('/api/auth-status');
         const data = await response.json();
         if (data.authenticated) {
-          authStatus.textContent = "ESTADO: ✅ AUTENTICADO";
-          authStatus.style.color = "#00FF88";
-          
+          setAuthStatus('ESTADO: AUTENTICADO', '#00FF88', true);
+
            // Actualizar el estado global en zustand
            if (window.authStore) {
              window.authStore.getState().setCredentials("dummy-token", "youtube");
@@ -1038,14 +1174,13 @@
 
            return true;
         } else {
-          authStatus.textContent = "ESTADO: ❌ NO AUTENTICADO";
-          authStatus.style.color = "#FF4444";
-          
+          setAuthStatus('ESTADO: NO AUTENTICADO', '#FF4444', true);
+
           // Limpiar el estado global en zustand
           if (window.authStore) {
             window.authStore.getState().clearCredentials();
           }
-          
+
           return false;
         }
       } catch (err) {
@@ -1235,17 +1370,17 @@
         alert("No hay tracks para convertir. Carga un archivo .m3u primero.");
         return;
       }
-      
+
       const playlistNameValue = playlistName.value.trim();
       if (!playlistNameValue) {
         alert("Ingresa un nombre para la playlist.");
         return;
       }
-      
+
       // Deshabilitar el botón durante la conversión
       startBtn.disabled = true;
       startBtn.textContent = "[ PROCESSING... ]";
-      
+
       // Clear the previous conversion summary.
       summaryCard.style.display = "none";
           playlistUrl.style.display = "none";
@@ -1253,16 +1388,16 @@
           manualTracksList.replaceChildren();
           manualReviewSection.classList.remove('visible');
           addManualBtn.disabled = true;
-      
+
       // Configurar la barra de progreso
       progressBar.style.width = "0%";
       progressPercent.textContent = "0%";
       progressLabel.textContent = "Starting conversion...";
-      
+
       try {
         // Crear EventSource para recibir actualizaciones de progreso
         eventSource = new EventSource(`/api/convert-progress?playlistName=${encodeURIComponent(playlistNameValue)}&dryRun=${dryRun.checked}&threshold=${threshold.value}`);
-        
+
         eventSource.onmessage = (event) => {
           const data = JSON.parse(event.data);
           if (data.type === "progress") {
@@ -1292,12 +1427,12 @@
               <div class="summary-item summary-unmatched"><div class="summary-label">Unmatched:</div><div class="summary-value">${data.unmatched}</div></div>
               <div class="summary-item summary-ambiguous"><div class="summary-label">Ambiguous:</div><div class="summary-value">${data.ambiguous}</div></div>
             `;
-            
+
             if (data.playlistUrl) {
               playlistUrl.innerHTML = `Playlist URL: <a href="${data.playlistUrl}" target="_blank">${data.playlistUrl}</a>`;
               playlistUrl.style.display = "block";
             }
-            
+
             // Guardar resultados para revisión manual
             lastPlaylistId = data.playlistId || null;
                 lastConversionResults = data.manualReviewTracks || [
@@ -1309,15 +1444,15 @@
             }
           }
         };
-        
+
         eventSource.onerror = (err) => {
           console.error("EventSource failed:", err);
           eventSource.close();
-          
+
           // Rehabilitar el botón
           startBtn.disabled = false;
           startBtn.textContent = "[ EXECUTE ]";
-          
+
           alert("Error durante la conversión. Revisa los logs.");
         };
 
@@ -1330,7 +1465,7 @@
             resolve();
           };
         });
-        
+
         // Send tracks only after the progress stream is connected.
         const response = await fetch('/api/convert', {
           method: 'POST',
@@ -1342,21 +1477,21 @@
             threshold: parseInt(threshold.value)
           })
         });
-        
+
         if (!response.ok) {
           throw new Error(`Server error: ${response.statusText}`);
         }
-        
+
       } catch (err) {
         console.error("Error durante la conversión:", err);
         alert("Error durante la conversión. Revisa los logs.");
-        
+
         // Rehabilitar el botón
         startBtn.disabled = false;
         startBtn.textContent = "[ EXECUTE ]";
       }
     };
-    
+
     // Asignar el evento onclick al botón [EXECUTE]
     startBtn.onclick = startConversion;
 
@@ -1398,62 +1533,59 @@
 
     // Escuchar mensajes del popup de autenticación
     window.addEventListener('message', async (event) => {
-      console.log('📩 EVENTO MESSAGE RECIBIDO:', {
-        origin: event.origin,
-        data: event.data
-      });
-      
+      console.info('[auth] Window message received');
+
       // Verificar el origen del mensaje para evitar problemas de seguridad
       if (event.origin !== 'http://localhost:3000') {
-        console.warn('⚠️ Origen no válido:', event.origin);
+        console.warn('[auth] Window message rejected: invalid origin');
         return;
       }
-      
+
       if (event.data.type === 'auth_success') {
-        console.log('✅ Mensaje recibido: autenticación exitosa');
+        console.info('[auth] Authentication success message received');
         const token = event.data.token;
-        
+
         // Validar el token en el backend
         try {
-          console.log('🔍 Validando token en el backend...');
+          console.info('[auth] Token validation requested');
           const response = await fetch('/auth/validate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token })
           });
           const data = await response.json();
-          console.log('📊 Respuesta del backend:', data);
-          
+
+
            if (data.valid) {
-             console.log('✅ Token válido. Actualizando estado...');
+             console.info('[auth] Token validation accepted');
              // Actualizar el estado de autenticación
              if (window.authStore) {
                window.authStore.getState().setCredentials(token, "youtube");
              }
              const isAuthenticated = await checkAuthStatus();
-             
+
              // Habilitar el botón [EXECUTE] si hay un archivo cargado
              if (isAuthenticated && dropZone.classList.contains('has-file')) {
                startBtn.disabled = false;
              }
            } else {
-             console.error('❌ Token inválido:', data);
+             console.error('[auth] Token validation rejected');
            }
         } catch (err) {
-          console.error('❌ Error al validar el token:', err);
+          console.error('[auth] Token validation failed');
         }
       } else if (event.data === 'auth_error') {
-        console.error('❌ Mensaje recibido: error de autenticación');
+        console.error('[auth] Authentication error message received');
         alert('Error al iniciar la autenticación. Verifica la configuración.');
       } else {
-        console.warn('⚠️ Mensaje desconocido:', event.data);
+        console.warn('[auth] Unknown window message received');
       }
     });
-    
+
     // Llamar a checkAuthStatus al cargar la página
     document.addEventListener('DOMContentLoaded', () => {
       checkAuthStatus();
-      
+
       // Verificar si hay un parámetro de autenticación
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.has('auth')) {
@@ -1488,7 +1620,7 @@
       const HEAD_COLOR = '#0066AA';
       let columns = [];
       let width, height;
-      
+
       function resize() {
         width = canvas.width = window.innerWidth;
         height = canvas.height = window.innerHeight;
@@ -1503,11 +1635,11 @@
           });
         }
       }
-      
+
       function getRandomChar() {
         return CHARS[Math.floor(Math.random() * CHARS.length)];
       }
-      
+
       function draw() {
         ctx.fillStyle = 'rgba(2, 8, 24, 0.05)';
         ctx.fillRect(0, 0, width, height);
@@ -1542,7 +1674,7 @@
         });
         requestAnimationFrame(draw);
       }
-      
+
       resize();
       window.addEventListener('resize', resize);
       draw();
