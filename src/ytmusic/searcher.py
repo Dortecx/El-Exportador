@@ -13,19 +13,54 @@ sys.stderr.reconfigure(encoding='utf-8')
 
 try:
     from ytmusicapi import YTMusic
+    from ytmusicapi.auth.browser import setup_browser
 except ImportError:
     print(json.dumps({'error': 'ytmusicapi not installed. Run: pip install ytmusicapi'}))
     sys.exit(1)
 
-AUTH_FILE = os.path.join(os.path.expanduser('~'), '.config', 'm3u-to-ytmusic', 'ytmusic_auth.json')
 
-# Thread-local storage for ytmusic clients
+AUTH_FILE = os.path.join(os.path.expanduser('~'), '.config', 'm3u-to-ytmusic', 'ytmusic_auth.json')
 thread_local = threading.local()
 
 def get_ytmusic():
     if not os.path.exists(AUTH_FILE):
-        raise FileNotFoundError(f'Auth file not found: {AUTH_FILE}')
+        raise FileNotFoundError('ytmusicapi browser authentication is not configured')
     return YTMusic(AUTH_FILE)
+
+def normalize_browser_headers(headers):
+    lines = [line.strip() for line in headers.splitlines() if line.strip()]
+    if any(': ' in line for line in lines):
+        return headers
+
+    known_headers = {
+        'accept', 'accept-language', 'authorization', 'content-type', 'cookie',
+        'origin', 'referer', 'user-agent', 'x-goog-authuser', 'x-goog-visitor-id',
+        'x-origin', 'x-youtube-client-name', 'x-youtube-client-version',
+    }
+    normalized = []
+    index = 0
+    while index + 1 < len(lines):
+        name = lines[index].lower()
+        if name in known_headers:
+            normalized.append(f'{name}: {lines[index + 1]}')
+            index += 2
+        else:
+            index += 1
+    return '\n'.join(normalized)
+
+def configure_browser_auth(headers):
+    if not isinstance(headers, str) or not headers.strip():
+        return {'status': 'failed', 'error': 'Browser headers are required'}
+    os.makedirs(os.path.dirname(AUTH_FILE), exist_ok=True)
+    try:
+        setup_browser(AUTH_FILE, normalize_browser_headers(headers))
+        os.chmod(AUTH_FILE, 0o600)
+        YTMusic(AUTH_FILE).get_library_playlists(limit=1)
+        return {'status': 'authorized'}
+    except Exception:
+        if os.path.exists(AUTH_FILE):
+            os.remove(AUTH_FILE)
+        return {'status': 'failed', 'error': 'The browser headers could not be validated'}
 
 def get_ytmusic_thread():
     if not hasattr(thread_local, 'ytmusic'):
@@ -366,21 +401,20 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
 def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15):
     results = []
     total = len(tracks)
-    completed = 0
     result_map = {}
-    
+
     def search_single_track(idx, track):
         ytmusic = get_ytmusic_thread()
         artist = track.get('artist', '')
         title = track.get('title', '')
-        
         best_result = None
         best_status = 'unmatched'
         best_similarity = 0.0
         alternatives = []
-        
-        # Collect best match and alternatives
-        for result, query_used, similarity, status in search_with_fallback(ytmusic, artist, title, collect_alternatives=True):
+
+        for result, query_used, similarity, status in search_with_fallback(
+            ytmusic, artist, title, collect_alternatives=True
+        ):
             if best_result is None:
                 best_result = result
                 best_status = status
@@ -392,56 +426,62 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15):
                     'videoId': result.get('videoId'),
                     'similarity': similarity,
                 })
-        
+
         return {
             'idx': idx,
             'artist': artist,
             'title': title,
-            'matched': best_result,
             'status': best_status,
             'similarity': best_similarity,
             'alternatives': alternatives,
-            'result': best_result
+            'result': best_result,
         }
-    
+
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_track = {
             executor.submit(search_single_track, idx, track): (idx, track)
             for idx, track in enumerate(tracks)
         }
-        
-        for future in as_completed(future_to_track):
+
+        for completed, future in enumerate(as_completed(future_to_track), start=1):
+            idx, track = future_to_track[future]
             try:
                 result = future.result()
-                result_map[result['idx']] = result
-                completed += 1
-                
-                progress_status = result.get('status', 'unmatched')
-                progress_line = json.dumps({
-                    'progress': {
-                        'current': completed,
-                        'total': total,
-                        'artist': result['artist'],
-                        'title': result['title'],
-                        'status': progress_status
-                    }
-                })
-                print(progress_line, flush=True)
-            except Exception as e:
-                print(f'DEBUG: Error processing track: {e}', file=sys.stderr)
-    
+            except Exception as error:
+                print(f'DEBUG: Error processing track: {error}', file=sys.stderr)
+                result = {
+                    'idx': idx,
+                    'artist': track.get('artist', ''),
+                    'title': track.get('title', ''),
+                    'status': 'unmatched',
+                    'similarity': 0.0,
+                    'alternatives': [],
+                    'result': None,
+                }
+
+            result_map[result['idx']] = result
+            print(json.dumps({
+                'progress': {
+                    'current': completed,
+                    'total': total,
+                    'artist': result['artist'],
+                    'title': result['title'],
+                    'status': result['status'],
+                }
+            }), flush=True)
+
     for idx in range(total):
         result = result_map[idx]
         matched_result = result['result']
-        status = result.get('status', 'unmatched')
-        similarity = result.get('similarity', 0.0)
-        alternatives = result.get('alternatives', [])
-        
-        # Use status from result (matched/ambiguous/unmatched)
+        status = result['status']
+        similarity = result['similarity']
+        alternatives = result['alternatives']
+
         if status == 'unmatched' or matched_result is None:
-            artist_name = result.get('artist', 'UNKNOWN')
-            title_name = result['title']
-            print(f'DEBUG: No match found for {artist_name} - {title_name}', file=sys.stderr)
+            print(
+                f"DEBUG: No match found for {result['artist']} - {result['title']}",
+                file=sys.stderr,
+            )
             results.append({
                 'status': 'unmatched',
                 'artist': result['artist'],
@@ -465,31 +505,35 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15):
                 'alternatives': alternatives,
                 'similarity': similarity,
             })
-    
+
     ytmusic = get_ytmusic()
-    video_ids = [r['videoId'] for r in results if r['status'] == 'matched' and r.get('videoId')]
-    
-    print(f'DEBUG: Found {len(video_ids)} videoIds to add: {video_ids}', file=sys.stderr)
-    
+    video_ids = list(dict.fromkeys(
+        result['videoId']
+        for result in results
+        if result['status'] == 'matched' and result.get('videoId')
+    ))
+
+    print(f'DEBUG: Found {len(video_ids)} unique videoIds to add: {video_ids}', file=sys.stderr)
+
     if create_playlist and video_ids:
         try:
             print(f'DEBUG: Creating playlist {playlist_name}...', file=sys.stderr)
-            playlist_id = ytmusic.create_playlist(playlist_name, 'Created by m3u-to-ytmusic')
-            print(f'DEBUG: Playlist created with ID: {playlist_id} (type: {type(playlist_id).__name__})', file=sys.stderr)
-            
-            for vid in video_ids:
-                print(f'DEBUG: ADDING videoId={vid} to playlist {playlist_id}', file=sys.stderr)
-            
-            add_result = ytmusic.add_playlist_items(playlist_id, video_ids)
-            print(f'DEBUG: add_playlist_items FULL RESPONSE: {json.dumps(add_result, indent=2)}', file=sys.stderr)
-            
+            playlist_id = ytmusic.create_playlist(
+                playlist_name,
+                'Created by m3u-to-ytmusic',
+                video_ids=video_ids,
+            )
+            print(
+                f'DEBUG: Playlist created with ID: {playlist_id} '
+                f'and {len(video_ids)} initial songs '
+                f'(type: {type(playlist_id).__name__})',
+                file=sys.stderr,
+            )
             playlist_url = f'https://music.youtube.com/playlist?list={playlist_id}'
-        except Exception as e:
-            print(f'DEBUG ERROR creating playlist: {e}', file=sys.stderr)
-            import traceback
-            traceback.print_exc(file=sys.stderr)
-            playlist_url = None
+        except Exception as error:
+            print(f'DEBUG ERROR creating playlist: {error}', file=sys.stderr)
             playlist_id = None
+            playlist_url = None
     else:
         if not create_playlist:
             print('DEBUG: Dry run enabled, skipping playlist creation', file=sys.stderr)
@@ -497,30 +541,50 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15):
             print('DEBUG: No videoIds found, skipping playlist creation', file=sys.stderr)
         playlist_id = None
         playlist_url = None
-    
-    matched_count = sum(1 for r in results if r['status'] == 'matched')
-    
+
     return {
         'playlistId': playlist_id,
         'playlistUrl': playlist_url,
-        'matched': matched_count,
-        'results': results
+        'matched': sum(1 for result in results if result['status'] == 'matched'),
+        'results': results,
     }
 
 
-def search_single(query):
+def search_single(query, artist='', title=''):
     ytmusic = get_ytmusic()
+    expected_title = extract_series_name(title).strip() or query
+    is_japanese = contains_japanese(expected_title)
     try:
-        results = ytmusic.search(query, filter='songs', limit=3)
-        formatted = []
-        for r in results[:3]:
-            formatted.append({
-                'videoId': r.get('videoId'),
-                'title': r.get('title', ''),
-                'artist': get_artists(r),
-                'duration': r.get('duration', ''),
-            })
-        return {'results': formatted}
+        candidates = []
+        seen_video_ids = set()
+        for result in ytmusic.search(query, filter='songs', limit=15):
+            video_id = result.get('videoId')
+            if not video_id or video_id in seen_video_ids:
+                continue
+            seen_video_ids.add(video_id)
+
+            result_title = result.get('title', '')
+            result_artists = get_all_artists(result)
+            if artist and not artist_has_correct_match(result_artists, artist, is_japanese):
+                continue
+            if penalize_excluded(result_title, expected_title) is not None:
+                continue
+
+            expected_title_similarity = title_similarity(expected_title, result_title)
+            query_similarity = title_similarity(query, result_title)
+            relevance = (2 * expected_title_similarity) + query_similarity
+            candidates.append((relevance, expected_title_similarity, result))
+
+        candidates.sort(key=lambda candidate: (candidate[0], candidate[1]), reverse=True)
+        return {'results': [
+            {
+                'videoId': result.get('videoId'),
+                'title': result.get('title', ''),
+                'artist': get_artists(result),
+                'duration': result.get('duration', ''),
+            }
+            for _, _, result in candidates[:5]
+        ]}
     except Exception as e:
         return {'error': str(e), 'results': []}
 
@@ -539,14 +603,27 @@ def add_to_playlist(playlist_id, video_ids):
 
 def main():
     try:
-        data = json.loads(sys.stdin.read())
+        print('DEBUG: Script started', file=sys.stderr)
+        # Leer el input desde los argumentos
+        if len(sys.argv) > 1:
+            print(f'DEBUG: Reading input from args: {sys.argv[-1]}', file=sys.stderr)
+            data = json.loads(sys.argv[-1])
+        else:
+            print('DEBUG: Reading input from stdin', file=sys.stderr)
+            data = json.loads(sys.stdin.read())
+        print('DEBUG: Parsed request', file=sys.stderr)
         action = data.get('action', 'search')
+        print(f'DEBUG: Action: {action}', file=sys.stderr)
         
+        if action == 'browser-auth':
+            print(json.dumps(configure_browser_auth(data.get('headers', ''))))
+            return
+
         if action == 'setup':
-            if os.path.exists(AUTH_FILE):
-                print(json.dumps({'status': 'configured', 'authFile': AUTH_FILE}))
-            else:
-                print(json.dumps({'status': 'not_configured', 'authFile': AUTH_FILE}))
+            print(json.dumps({
+                'status': 'configured' if os.path.exists(AUTH_FILE) else 'not_configured',
+                'authFile': AUTH_FILE,
+            }))
             return
         
         if action == 'search':
@@ -555,9 +632,40 @@ def main():
                 data.get('playlistName', ''),
                 data.get('createPlaylist', True)
             )
-            print(json.dumps(output))
+            # Imprimir resultados para el cliente
+            for result in output.get('results', []):
+                progress = {
+                    'current': output.get('matched', 0),
+                    'total': len(data.get('tracks', [])),
+                    'artist': result.get('artist', ''),
+                    'title': result.get('title', ''),
+                    'status': result.get('status', 'unmatched')
+                }
+                print(json.dumps({'progress': progress}))
+            
+            # Imprimir resultado final
+            results = output.get('results', [])
+            unmatched_tracks = [result for result in results if result.get('status') == 'unmatched']
+            ambiguous_tracks = [result for result in results if result.get('status') == 'ambiguous']
+            print(json.dumps({
+                'playlistId': output.get('playlistId'),
+                'playlistUrl': output.get('playlistUrl'),
+                'matched': output.get('matched', 0),
+                'unmatched': len(unmatched_tracks),
+                'ambiguous': len(ambiguous_tracks),
+                'unmatchedTracks': unmatched_tracks,
+                'ambiguousTracks': ambiguous_tracks,
+                'manualReviewTracks': [
+                    result for result in results
+                    if result.get('status') in ('unmatched', 'ambiguous')
+                    ],
+            }))
         elif action == 'search-single':
-            output = search_single(data.get('query', ''))
+            output = search_single(
+                data.get('query', ''),
+                data.get('artist', ''),
+                data.get('title', ''),
+            )
             print(json.dumps(output))
         elif action == 'add-to-playlist':
             output = add_to_playlist(data.get('playlistId'), data.get('videoIds', []))

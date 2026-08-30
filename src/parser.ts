@@ -4,6 +4,7 @@ import { Track, ParsedM3UResult } from "./types";
 
 const EXTENDED_M3U_HEADER = "#EXTM3U";
 const EXTINF_PREFIX = "#EXTINF:";
+const PLAYLIST_PREFIX = "#PLAYLIST:";
 const LEADING_NUMBER_REGEX = /^\d+(?:[-\s.]+\s*|\s+)/;
 
 export function cleanTitle(title: string): string {
@@ -132,12 +133,17 @@ export function validateFilePath(filePath: string): void {
   if (!isValidM3UFile(filePath)) throw new Error(`Expected .m3u or .m3u8 file`);
 }
 
-export function parseM3U(content: string, isExtended: boolean): Track[] {
+export function parseM3U(content: string, isExtended: boolean): { tracks: Track[], playlistName?: string } {
   const lines = content.split(/\r?\n/);
   const tracks: Track[] = [];
   let pendingExtInf: { duration?: number; artist: string; title: string } | null = null;
+  let playlistName: string | undefined;
 
   for (const line of lines) {
+    if (line.startsWith(PLAYLIST_PREFIX)) {
+      playlistName = line.slice(PLAYLIST_PREFIX.length).trim();
+      continue;
+    }
     if (isExtended && line.startsWith(EXTENDED_M3U_HEADER)) continue;
     if (isExtended && line.startsWith(EXTINF_PREFIX)) {
       pendingExtInf = parseExtInfLine(line);
@@ -166,7 +172,7 @@ export function parseM3U(content: string, isExtended: boolean): Track[] {
     }
   }
 
-  return tracks;
+  return { tracks, playlistName };
 }
 
 export function detectFormat(content: string): "extended" | "standard" {
@@ -183,7 +189,7 @@ export function parseFile(filePath: string): ParsedM3UResult {
   validateFilePath(filePath);
   const content = fs.readFileSync(filePath, "utf-8");
   const format = detectFormat(content);
-  const tracks = parseM3U(content, format === "extended");
+  const { tracks, playlistName } = parseM3U(content, format === "extended");
   if (tracks.length === 0) throw new Error("No tracks found in M3U file");
-  return { tracks, format };
+  return { tracks, format, playlistName };
 }

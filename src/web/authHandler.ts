@@ -1,60 +1,51 @@
-import { loadCredentials } from "../../src/auth";
 import { Request, Response } from "express";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { SessionService } from "../services/session.service";
+import { YouTubeAuthService } from "../services/youtubeAuth.service";
 
-// Generar la URL de autenticación con Google OAuth2
-export async function generateAuthUrl(): Promise<string> {
+const YTMUSIC_SCOPE = "https://www.googleapis.com/auth/youtube";
+const authDir = path.join(os.homedir(), ".config", "m3u-to-ytmusic");
+const ytmusicOAuthPath = path.join(authDir, "ytmusic_oauth.json");
+
+/** Starts the single Google web OAuth flow used by the UI and ytmusicapi. */
+export const handleAuthRequest = (_req: Request, res: Response) => {
+  res.redirect(YouTubeAuthService.generateAuthUrl());
+};
+
+/** Exchanges the web code and persists a refreshable token for ytmusicapi. */
+export const handleAuthCallback = async (req: Request, res: Response) => {
+  const { code } = req.query;
+  if (!code || typeof code !== "string") {
+    res.status(400).send("Invalid authorization code");
+    return;
+  }
+
   try {
-    console.log("=== INICIANDO generateAuthUrl ==="); // Depuración
-    const credentials = await loadCredentials();
-    console.log("=== CREDENCIALES CARGADAS ==="); // Depuración
-    
-    const clientConfig = credentials.installed || credentials.web;
-    if (!clientConfig) {
-      throw new Error("Configuración de credenciales no válida: falta 'installed' o 'web'");
+    const tokens = await YouTubeAuthService.exchangeCodeForTokens(code);
+    if (!tokens.refresh_token) {
+      throw new Error("Google did not return a refresh token. Re-authorize with consent.");
     }
-    
-    console.log("=== CLIENT CONFIG ===", clientConfig); // Depuración
-    const clientId = clientConfig.client_id;
-    const redirectUri = `http://localhost:3000/auth/callback`;
-    const scope = "https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.force-ssl";
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline`;
-    
-    console.log("=== URL DE AUTENTICACIÓN ===", authUrl); // Depuración
-    return authUrl;
-  } catch (err) {
-    console.error("=== ERROR EN generateAuthUrl ===", err); // Depuración
-    throw err;
-  }
-}
 
-// Manejar el endpoint /auth
-export async function handleAuthRequest(req: Request, res: Response) {
-  console.log("=== ACCEDIENDO A /auth ==="); // Depuración
-  try {
-    const authUrl = await generateAuthUrl();
-    console.log("=== REDIRIGIENDO A GOOGLE OAUTH2 ==="); // Depuración
-    res.redirect(authUrl);
-  } catch (err) {
-    console.error("=== ERROR EN handleAuthRequest ===", err); // Depuración
-    // Notificar a la página principal y cerrar el popup
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Error de autenticación</title>
-          <script>
-            if (window.opener) {
-              window.opener.postMessage('auth_error', '*');
-              window.close();
-            } else {
-              window.location.href = 'http://localhost:3000';
-            }
-          </script>
-        </head>
-        <body>
-          <p>Error al iniciar la autenticación. Verifica la configuración.</p>
-        </body>
-      </html>
-    `);
+    fs.mkdirSync(authDir, { recursive: true, mode: 0o700 });
+    const ytmusicToken = {
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      token_type: "Bearer",
+      scope: YTMUSIC_SCOPE,
+      expires_at: Math.floor(Date.now() / 1000) + tokens.expires_in,
+      expires_in: tokens.expires_in,
+    };
+    fs.writeFileSync(ytmusicOAuthPath, JSON.stringify(ytmusicToken, null, 2), {
+      mode: 0o600,
+    });
+
+    SessionService.setAuthenticated(res);
+    res.redirect("/");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown OAuth callback error";
+    console.error(`Web OAuth callback failed: ${message}`);
+    res.redirect("/?auth=error");
   }
-}
+};

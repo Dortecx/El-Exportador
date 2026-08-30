@@ -112,7 +112,7 @@ async function authenticate(auth: OAuth2Client, tokenPath: string): Promise<void
   console.log("\nAuthentication successful! Token saved.\n");
 }
 
-async function saveToken(auth: OAuth2Client, tokenPath: string): Promise<void> {
+export async function saveToken(auth: OAuth2Client, tokenPath: string): Promise<void> {
   ensureConfigDir();
 
   const token = auth.credentials;

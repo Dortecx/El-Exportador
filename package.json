@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Convert M3U playlists to YouTube Music",
   "main": "dist/index.js",
-  "type": "commonjs",
+  "type": "module",
   "bin": {
     "m3u-to-ytmusic": "./dist/cli.js"
   },
@@ -25,17 +25,24 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@types/cookie-parser": "^1.4.10",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
+    "cookie-parser": "^1.4.7",
     "express": "^4.21.0",
     "google-auth-library": "^10.6.2",
-    "googleapis": "^171.4.0"
+    "googleapis": "^171.4.0",
+    "jsonwebtoken": "^9.0.3",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-oauth-popup": "^1.0.5",
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
-    "@esbuild/linux-x64": "^0.28.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
-    "esbuild": "^0.28.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^5.6.0",

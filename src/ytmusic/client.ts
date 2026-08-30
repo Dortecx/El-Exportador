@@ -5,13 +5,43 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import type { Track } from '../types.js';
 
-// @ts-ignore: __dirname is available in CommonJS
-const __dirname = path.resolve();
+// Obtener la ruta del directorio actual usando import.meta.url
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Ruta absoluta al script de Python (formato Windows)
+const SEARCHER_SCRIPT = path.join(__dirname, 'searcher.py');
+
+// Verificar que el script exista
+if (!fs.existsSync(SEARCHER_SCRIPT)) {
+  console.error(`❌ Error: El script ${SEARCHER_SCRIPT} no existe`);
+  process.exit(1);
+}
+
+// Use the Python interpreter available in the PowerShell PATH.
+const PYTHON_CANDIDATES = ["python"];
 
 export const YTMusicAuthFile = path.join(os.homedir(), '.config', 'm3u-to-ytmusic', 'ytmusic_auth.json');
-// Use fixed path - works both in dev (tsx) and production
-const PYTHON_PATH = '/mnt/e/School/Python/Python311/python.exe';
-const SEARCHER_SCRIPT = '/mnt/c/Users/Dom/Documents/Projects/El Exportador/m3u-to-ytmusic/src/ytmusic/searcher.py';
+
+/**
+ * Verifica si el usuario está autenticado con YouTube Music.
+ * @returns {boolean} - `true` si está autenticado, `false` si no.
+ */
+export async function checkYtMusicAvailable(): Promise<boolean> {
+  try {
+    if (!fs.existsSync(YTMusicAuthFile)) {
+      return false;
+    }
+    
+    const authData = JSON.parse(fs.readFileSync(YTMusicAuthFile, 'utf-8'));
+    const requiredKeys = ['cookie', 'authorization'];
+    const hasRequiredKeys = requiredKeys.some(key => authData[key] !== undefined);
+    
+    return hasRequiredKeys;
+  } catch (error) {
+    console.error("Error al verificar autenticación:", error);
+    return false;
+  }
+}
 
 export interface YTMusicBestMatch {
   title: string;
@@ -36,19 +66,6 @@ export interface YTMusicConversionResult {
 
 export type ProgressCallback = (current: number, total: number, artist: string, title: string, status: string) => void;
 
-function getPythonCandidates(): string[] {
-  const projectVenv = path.resolve(__dirname, '../../.venv/Scripts/python.exe');
-  // Windows paths work better with spawn in WSL
-  const eDiskPython = '/mnt/e/School/Python/Python311/python.exe';
-  return [
-    process.env.YTMUSIC_PYTHON_PATH,
-    eDiskPython,
-    projectVenv,
-    'python',
-    'py',
-  ].filter((value): value is string => Boolean(value));
-}
-
 async function spawnJson(
   command: string,
   args: string[],
@@ -56,105 +73,73 @@ async function spawnJson(
   onProgress?: ProgressCallback
 ): Promise<any> {
   return new Promise((resolve, reject) => {
-    // Usar Python de E:/School/Python/Python311
-    const pythonPath = PYTHON_PATH;
-    console.log(`🐍 Ejecutando: ${pythonPath} ${SEARCHER_SCRIPT} ${args.join(' ')}`);
-    const proc = spawn(pythonPath, [SEARCHER_SCRIPT, ...args], {
+    console.log(`🐍 Ejecutando: ${command} ${args.join(' ')}`);
+    const proc = spawn(command, args, {
       env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' },
     });
 
     let stdout = '';
     let stderr = '';
 
+    // Enviar el input al script de Python
+    proc.stdin.write(JSON.stringify(input));
+    proc.stdin.end();
+
     proc.stdout.on('data', (data) => {
       const chunk = data.toString();
       stdout += chunk;
-      
-      console.log(`[PROGRESS-DEBUG] client.ts: stdout chunk received: ${chunk.substring(0, 200)}`);
-      
+
       const lines = chunk.split('\n').filter((l: string) => l.trim());
       for (const line of lines) {
         try {
           const parsed = JSON.parse(line);
-          console.log(`[PROGRESS-DEBUG] client.ts: parsed JSON, keys: ${Object.keys(parsed).join(', ')}`);
-          
+          if (parsed.error) {
+            const error = new Error(String(parsed.error));
+            console.error(`[ytmusic] ${error.message}`);
+            reject(error);
+            return;
+          }
           if (parsed.progress && onProgress) {
             const p = parsed.progress;
-            console.log(`[PROGRESS-DEBUG] client.ts: calling onProgress callback with current=${p.current}, total=${p.total}, artist=${p.artist}, title=${p.title}, status=${p.status}`);
             onProgress(p.current, p.total, p.artist, p.title, p.status);
           }
+          if (
+            parsed.results !== undefined ||
+            parsed.playlistId !== undefined ||
+            parsed.status !== undefined
+          ) {
+            resolve(parsed);
+          }
         } catch {
-          console.log(`[PROGRESS-DEBUG] client.ts: chunk is not valid JSON`);
+          console.log(`[PROGRESS-DEBUG] chunk is not valid JSON`);
         }
       }
     });
 
     proc.stderr.on('data', (data) => {
       const chunk = data.toString();
-      if (!chunk.startsWith('DEBUG:') && !chunk.includes('Searching query:') && !chunk.includes('SUBSTRING CHECK:') && !chunk.includes('Got ')) {
-        stderr += chunk;
+      stderr += chunk;
+      for (const line of chunk.split('\n').filter((line) => line.trim())) {
+        console.error(`[ytmusic] ${line}`);
       }
     });
 
     proc.on('error', (error) => reject(error));
 
     proc.on('close', (code) => {
-      try {
-        const stdoutLines = stdout.split('\n').filter((line) => line.trim());
-        
-        // Find the last JSON line with results or playlistId
-        for (let i = stdoutLines.length - 1; i >= 0; i--) {
-          try {
-            const parsed = JSON.parse(stdoutLines[i]);
-            if (parsed.results !== undefined || parsed.playlistId !== undefined) {
-              resolve(parsed);
-              return;
-            }
-          } catch { continue; }
-        }
-        
-        // Fallback: try to parse any JSON in stdout
-        const parsed = JSON.parse(stdout);
-        resolve(parsed);
-      } catch {
-        // Only reject if there's a real error message
-        if (stderr.trim() && !stderr.includes('DEBUG:') && stderr.length > 10) {
-          reject(new Error(stderr || `Script exited with code ${code}`));
-        } else if (code !== 0) {
-          reject(new Error(`Script exited with code ${code}`));
-        } else {
-          reject(new Error('No valid result from script'));
-        }
+      if (code !== 0) {
+        reject(new Error(`Process exited with code ${code}: ${stderr}`));
       }
     });
-
-    proc.stdin.write(JSON.stringify(input));
-    proc.stdin.end();
   });
 }
 
-export function checkYtMusicAvailable(): boolean {
-  try {
-    const authFileExists = fs.existsSync(YTMusicAuthFile);
-    console.log(`🔍 Auth file exists: ${authFileExists}, path: ${YTMusicAuthFile}`);
-    return authFileExists;
-  } catch (err) {
-    console.error('❌ Error al verificar auth file:', err);
-    return false;
-  }
-}
-
-export function getAuthUrl(): string {
-  return "http://localhost:3000/auth";
-}
-
-export async function runYtMusicScript(input: object, onProgress?: ProgressCallback): Promise<any> {
-  const candidates = getPythonCandidates();
+async function runYtMusicScript(input: object, onProgress?: ProgressCallback): Promise<any> {
   const errors: string[] = [];
 
-  for (const candidate of candidates) {
+  for (const candidate of PYTHON_CANDIDATES) {
     try {
-      const args = candidate.toLowerCase() === 'py' ? ['-3', SEARCHER_SCRIPT] : [SEARCHER_SCRIPT];
+      const args = [SEARCHER_SCRIPT];
       return await spawnJson(candidate, args, input, onProgress);
     } catch (error) {
       errors.push(`${candidate}: ${(error as Error).message}`);
@@ -167,7 +152,7 @@ export async function runYtMusicScript(input: object, onProgress?: ProgressCallb
 export async function convertWithYtMusic(
   tracks: Track[],
   playlistName: string,
-  options: { dryRun: boolean },
+  options: { dryRun: boolean, threshold?: number },
   onProgress?: ProgressCallback
 ): Promise<YTMusicConversionResult> {
   const result = await runYtMusicScript({
@@ -175,13 +160,18 @@ export async function convertWithYtMusic(
     createPlaylist: !options.dryRun,
     playlistName,
     tracks: tracks.map((track) => ({ artist: track.artist, title: track.title })),
+    threshold: options.threshold || 0.6
   }, onProgress);
 
   return result as YTMusicConversionResult;
 }
 
-export async function searchSingleOnYtMusic(query: string): Promise<any> {
-  return runYtMusicScript({ action: 'search-single', query });
+export async function configureYtMusicBrowserAuth(headers: string): Promise<{ status: string; error?: string }> {
+  return runYtMusicScript({ action: "browser-auth", headers });
+}
+
+export async function searchSingleOnYtMusic(query: string, artist: string, title: string): Promise<any> {
+  return runYtMusicScript({ action: 'search-single', query, artist, title });
 }
 
 export async function addToPlaylistOnYtMusic(playlistId: string, videoIds: string[]): Promise<any> {

@@ -73,4 +73,5 @@ export interface CliOptions {
 export interface ParsedM3UResult {
   tracks: Track[];
   format: "extended" | "standard";
+  playlistName?: string;
 }

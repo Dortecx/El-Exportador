@@ -462,6 +462,9 @@
       grid-template-columns: repeat(3, 1fr);
       gap: 1rem;
       margin-top: 1rem;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
     }
     
     .summary-item {
@@ -568,7 +571,12 @@
       border-top-color: #00AAFF;
     }
     
-    .manual-review-section { display: none; }
+    .manual-review-section {
+      display: none;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
     .manual-review-section.visible { display: block; }
     
     .manual-track {
@@ -638,11 +646,16 @@
     }
     
     .manual-result {
-      padding: 0.5rem;
+      display: block;
+      width: 100%;
+      padding: 0.65rem 0.75rem;
       border: 1px solid #0066CC;
       cursor: pointer;
       margin-bottom: 0.5rem;
       background: #050f2e;
+      color: #B8D4FF;
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      text-align: left;
       transition: all 0.1s;
     }
     
@@ -658,8 +671,10 @@
     }
     
     .manual-result-title {
+      color: #B8D4FF;
       font-weight: bold;
       font-size: 0.875rem;
+      line-height: 1.35;
     }
     
     .manual-result-artist {
@@ -784,21 +799,24 @@
         <label for="dryRun">Dry Run Mode (no playlist creation)</label>
       </div>
 
-      <!-- Botón de autenticación -->
+      <!-- Componente OAuthPopup -->
       <div style="margin: 1rem 0;">
-        <button id="authBtn" style="
-          background: #050f2e;
-          color: #00AAFF;
-          border: 1px solid #00AAFF;
-          padding: 0.75rem 1.5rem;
-          border-radius: 4px;
-          cursor: pointer;
-          font-family: 'Share Tech Mono', monospace;
-          font-size: 0.875rem;
-          transition: all 0.2s;
-        ">
-          🔗 AUTENTICARSE CON YOUTUBE MUSIC
-        </button>
+        <div id="oauthPopupContainer">
+          <button id="authBtn" style="
+            background: #050f2e;
+            color: #00AAFF;
+            border: 1px solid #00AAFF;
+            padding: 0.75rem 1.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+          "
+          >
+            🔗 AUTENTICARSE CON YOUTUBE MUSIC
+          </button>
+        </div>
         <div id="authStatus" style="
           margin-top: 0.5rem;
           color: #FF4444;
@@ -807,6 +825,18 @@
         ">
           ESTADO: ❌ NO AUTENTICADO
         </div>
+        <div id="browserAuthPanel" hidden style="margin-top: 0.75rem; font-family: 'Share Tech Mono', monospace; font-size: 0.8rem; color: #00AAFF;">
+          <p>In music.youtube.com, copy an authenticated request's headers from browser DevTools and paste them here. Headers stay on this computer.</p>
+          <textarea id="browserAuthHeaders" placeholder="Paste request headers" style="width: 100%; min-height: 100px;"></textarea>
+          <button class="btn" id="saveBrowserAuthBtn" type="button">[ SAVE AUTH ]</button>
+        </div>
+      </div>
+      
+      <script>
+        document.getElementById('authBtn').onclick = () => {
+          document.getElementById('browserAuthPanel').hidden = false;
+        };
+      </script>
       </div>
 
       <div style="margin-top: 1.5rem;">
@@ -814,7 +844,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" style="margin-top: 1.5rem; max-width: 800px; margin-left: auto; margin-right: auto;">
       <h3>Progress Log</h3>
       <div class="progress-shell">
         <div class="progress-meta">
@@ -826,9 +856,7 @@
           <div class="progress-scan"></div>
         </div>
       </div>
-      <div class="log-container" id="logContainer">
-        <div class="log-line log-info"><span class="log-prefix">&gt;</span>Awaiting input...</div>
-      </div>
+
       <div class="backend-status" id="backendStatus">
         <span class="backend-dot unavailable"></span>
         <span>Checking backend...</span>
@@ -837,14 +865,14 @@
 
     <div class="card manual-review-section" id="manualReviewSection">
       <h3>Manual Review</h3>
-      <p style="color: #336699; font-size: 0.875rem; margin-bottom: 1rem;">
-        Unmatched tracks detected. Search manually to find matches.
+      <p id="manualReviewDescription" style="color: #336699; font-size: 0.875rem; margin-bottom: 1rem;">
+        Unmatched or ambiguous tracks detected. Search manually or choose a suggested match.
       </p>
       <div id="manualTracksList"></div>
       <button class="btn btn-add-manual" id="addManualBtn" disabled>[ ADD SELECTED ]</button>
     </div>
 
-    <div class="card" id="summaryCard" style="display: none;">
+    <div class="card" id="summaryCard" style="display: none; max-width: 800px; margin-left: auto; margin-right: auto;">
       <h3>Summary</h3>
       <div class="summary" id="summaryGrid"></div>
       <div class="playlist-url" id="playlistUrl" style="display: none;"></div>
@@ -857,28 +885,38 @@
       const file = input.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = async function(e) {
-        document.getElementById('m3uContent').value = e.target.result;
-        const res = await fetch('/api/parse-m3u', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: e.target.result })
-        });
-        const data = await res.json();
-        window.parsedTracks = data.tracks || [];
-        document.getElementById('trackCount').textContent = '[' + window.parsedTracks.length + '] tracks loaded';
-        // Set playlist name
-        const playlistInput = document.getElementById('playlistName');
-        playlistInput.value = file.name.replace(/\.(m3u|m3u8)$/i, '').replace(/[^\w\s-]/g, '_').toUpperCase();
-        // El botón [EXECUTE] se activará solo en parseM3U si hay tracks y un nombre de playlist
-        // Aplicar estilo verde al cuadro [FILE]
-        dropZone.classList.add('has-file');
-        uploadText.innerHTML = `<span class="filename">[OK] ${file.name}</span>`;
-        // Forzar estilo verde
-        dropZone.style.borderColor = '#00FF88';
-        dropZone.style.color = '#00FF88';
-        dropZone.style.backgroundColor = 'rgba(0, 255, 136, 0.1)';
-      };
+       reader.onload = async function(e) {
+         document.getElementById('m3uContent').value = e.target.result;
+         const res = await fetch('/api/parse-m3u', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ content: e.target.result })
+         });
+         const data = await res.json();
+         window.parsedTracks = data.tracks || [];
+         document.getElementById('trackCount').textContent = '[' + window.parsedTracks.length + '] tracks loaded';
+         // Set playlist name
+         const playlistInput = document.getElementById('playlistName');
+         playlistInput.value = file.name.replace(/\.(m3u|m3u8)$/i, '').replace(/[^\w\s-]/g, '_').toUpperCase();
+         
+         // Aplicar estilo verde al cuadro [FILE] inmediatamente
+         dropZone.classList.add('has-file');
+         uploadText.innerHTML = `<span class="filename">[OK] ${file.name}</span>`;
+         dropZone.style.borderColor = '#00FF88';
+         dropZone.style.color = '#00FF88';
+         dropZone.style.backgroundColor = 'rgba(0, 255, 136, 0.1)';
+         
+          // Forzar actualización del DOM
+          setTimeout(() => {
+            dropZone.style.borderColor = '#00FF88';
+            dropZone.style.color = '#00FF88';
+          }, 100);
+          
+          // Habilitar el botón [EXECUTE] si el usuario está autenticado
+          if (await checkAuthStatus()) {
+            startBtn.disabled = false;
+          }
+       };
       reader.readAsText(file);
     };
   </script>
@@ -893,7 +931,7 @@
     const threshold = document.getElementById('threshold');
     const dryRun = document.getElementById('dryRun');
     const startBtn = document.getElementById('startBtn');
-    const logContainer = document.getElementById('logContainer');
+
     const summaryCard = document.getElementById('summaryCard');
     const summaryGrid = document.getElementById('summaryGrid');
     const playlistUrl = document.getElementById('playlistUrl');
@@ -903,10 +941,81 @@
     const progressLabel = document.getElementById('progressLabel');
     const progressTrack = document.querySelector('.progress-track');
     const authStatus = document.getElementById('authStatus');
+    const backendStatus = document.getElementById('backendStatus');
+        const manualReviewSection = document.getElementById('manualReviewSection');
+        const manualReviewDescription = document.getElementById('manualReviewDescription');
+        const manualTracksList = document.getElementById('manualTracksList');
+        const addManualBtn = document.getElementById('addManualBtn');
+        const manualSelections = new Map();
     let parsedTracks = [];
     let lastPlaylistId = null;
     let lastConversionResults = [];
     let eventSource = null;
+    const browserAuthPanel = document.getElementById('browserAuthPanel');
+    const browserAuthHeaders = document.getElementById('browserAuthHeaders');
+
+    async function saveBrowserAuth() {
+      try {
+        const response = await fetch('/api/ytmusic-auth/browser', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ headers: browserAuthHeaders.value }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Invalid browser headers');
+        browserAuthHeaders.value = '';
+        browserAuthPanel.hidden = true;
+        await checkAuthStatus();
+      } catch (error) {
+        authStatus.textContent = 'ESTADO: ❌ AUTENTICACIÓN REQUERIDA';
+        authStatus.style.color = '#FF4444';
+        console.error('Browser authentication failed:', error);
+      }
+    }
+
+    document.getElementById('saveBrowserAuthBtn').onclick = saveBrowserAuth;
+
+    async function startYtMusicAuthorization(popup) {
+      authStatus.textContent = 'ESTADO: ⏳ AUTENTICANDO...';
+      authStatus.style.color = '#00AAFF';
+      try {
+        const response = await fetch('/api/ytmusic-auth/start', { method: 'POST' });
+        const authorization = await response.json();
+        if (!response.ok) throw new Error(authorization.error || 'Unable to start authorization');
+
+        const authorizationUrl = new URL(authorization.verificationUrl);
+        authorizationUrl.searchParams.set('user_code', authorization.userCode);
+        navigator.clipboard?.writeText(authorization.userCode).catch(() => {});
+        popup.location.href = authorizationUrl.toString();
+
+        const poll = async () => {
+          const pollResponse = await fetch('/api/ytmusic-auth/poll', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ authorizationId: authorization.authorizationId }),
+          });
+          const result = await pollResponse.json();
+          if (result.status === 'authorized') {
+            popup.close();
+            await checkAuthStatus();
+            return;
+          }
+          if (result.status === 'pending') {
+            window.setTimeout(poll, Math.max(authorization.interval, 5) * 1000);
+            return;
+          }
+          popup.close();
+          authStatus.textContent = 'ESTADO: ❌ AUTENTICACIÓN FALLIDA';
+          authStatus.style.color = '#FF4444';
+        };
+        window.setTimeout(poll, Math.max(authorization.interval, 5) * 1000);
+      } catch (error) {
+        popup.close();
+        console.error('Unable to start YouTube Music authorization:', error);
+        authStatus.textContent = 'ESTADO: ❌ AUTENTICACIÓN FALLIDA';
+        authStatus.style.color = '#FF4444';
+      }
+    }
 
     // Función para verificar el estado de autenticación
     async function checkAuthStatus() {
@@ -916,10 +1025,27 @@
         if (data.authenticated) {
           authStatus.textContent = "ESTADO: ✅ AUTENTICADO";
           authStatus.style.color = "#00FF88";
-          return true;
+          
+           // Actualizar el estado global en zustand
+           if (window.authStore) {
+             window.authStore.getState().setCredentials("dummy-token", "youtube");
+           }
+
+           // Habilitar el botón [EXECUTE] si hay un archivo cargado
+           if (dropZone.classList.contains('has-file')) {
+             startBtn.disabled = false;
+           }
+
+           return true;
         } else {
           authStatus.textContent = "ESTADO: ❌ NO AUTENTICADO";
           authStatus.style.color = "#FF4444";
+          
+          // Limpiar el estado global en zustand
+          if (window.authStore) {
+            window.authStore.getState().clearCredentials();
+          }
+          
           return false;
         }
       } catch (err) {
@@ -941,33 +1067,298 @@
       console.log('Estado guardado en localStorage:', state);
     };
 
-    // Función para abrir el popup de autenticación
-    const openAuthPopup = () => {
+    // Función para redirigir a la autenticación en la misma pestaña
+    const redirectToAuth = () => {
       console.log('Botón de autenticación clickeado.');
       saveAuthState();
-      const authUrl = `/auth`;
-      console.log('Abriendo popup con URL:', authUrl);
-      const popup = window.open(authUrl, 'AuthPopup', 'width=600,height=600');
-      if (!popup) {
-        alert('Por favor, desactiva el bloqueador de popups para esta página.');
-        return;
-      }
-      // Verificar estado de autenticación cada 2 segundos
-      const checkAuthInterval = setInterval(() => {
-        checkAuthStatus().then(isAuthenticated => {
-          if (isAuthenticated) {
-            clearInterval(checkAuthInterval);
-            console.log('Autenticación exitosa.');
-          }
-        });
-      }, 2000);
+      window.location.href = `/auth`;
     };
 
-    // Asignar el manejador de eventos al botón
-    const authBtn = document.getElementById('authBtn');
-    if (authBtn) {
-      authBtn.onclick = openAuthPopup;
-    }
+    // Función para iniciar la conversión de la playlist
+    function formatArtists(artist) {
+          return Array.isArray(artist) ? artist.join(', ') : (artist || 'Unknown artist');
+        }
+
+        function updateManualAddButton() {
+          addManualBtn.disabled = manualSelections.size === 0 || !lastPlaylistId;
+          addManualBtn.title = lastPlaylistId
+            ? ''
+            : 'Manual additions require a playlist created by a non-dry-run conversion.';
+        }
+
+        function selectManualCandidate(trackId, candidate, candidateList) {
+          manualSelections.set(trackId, candidate);
+          candidateList.querySelectorAll('.manual-result').forEach((element) => {
+            element.classList.toggle('selected', element.dataset.videoId === candidate.videoId);
+          });
+          updateManualAddButton();
+        }
+
+        function appendManualCandidate(trackId, candidate, candidateList) {
+          if (!candidate || !candidate.videoId) return;
+          const option = document.createElement('button');
+          option.type = 'button';
+          option.className = 'manual-result';
+          option.dataset.videoId = candidate.videoId;
+
+          const title = document.createElement('div');
+          title.className = 'manual-result-title';
+          title.textContent = candidate.title || 'Untitled track';
+          const artist = document.createElement('div');
+          artist.className = 'manual-result-artist';
+          artist.textContent = formatArtists(candidate.artist);
+          option.append(title, artist);
+          option.addEventListener('click', () => selectManualCandidate(trackId, candidate, candidateList));
+          candidateList.appendChild(option);
+        }
+
+        async function searchManualTrack(trackId, query, expectedArtist, expectedTitle, candidateList, searchButton) {
+          if (!query) return;
+          manualSelections.delete(trackId);
+          updateManualAddButton();
+          searchButton.disabled = true;
+          try {
+            const response = await fetch('/api/search-single', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query, artist: expectedArtist, title: expectedTitle }),
+            });
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error || 'Search failed');
+            candidateList.replaceChildren();
+            (payload.results || []).forEach((candidate) => {
+              appendManualCandidate(trackId, candidate, candidateList);
+            });
+            if (!candidateList.childElementCount) {
+              const noResults = document.createElement('div');
+              noResults.className = 'manual-result-artist';
+              noResults.textContent = 'No matches found. Try a different query.';
+              candidateList.appendChild(noResults);
+            }
+          } catch (error) {
+            console.error('Manual search failed:', error);
+            const failed = document.createElement('div');
+            failed.className = 'manual-result-artist';
+            failed.textContent = 'Search failed. Please try again.';
+            candidateList.replaceChildren(failed);
+          } finally {
+            searchButton.disabled = false;
+          }
+        }
+
+        function showManualReview() {
+          manualTracksList.replaceChildren();
+          manualReviewSection.classList.add('visible');
+          manualReviewDescription.textContent = lastPlaylistId
+            ? 'Choose a suggestion or search YouTube Music for each unmatched or ambiguous track.'
+            : 'Choose or search for matches now. Adding selections requires a playlist from a non-dry-run conversion.';
+
+          lastConversionResults.forEach((track, index) => {
+            const trackId = `review-${index}`;
+            const card = document.createElement('div');
+            card.className = 'manual-track';
+            const header = document.createElement('div');
+            header.className = 'manual-track-header';
+            const info = document.createElement('div');
+            info.className = 'manual-track-info';
+            info.textContent = `${track.artist || 'Unknown artist'} — ${track.title || 'Untitled track'} (${track.status})`;
+            header.appendChild(info);
+
+            const actions = document.createElement('div');
+            actions.className = 'manual-track-actions';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'manual-search-input';
+            input.value = [track.artist, track.title].filter(Boolean).join(' ');
+            input.setAttribute('aria-label', `Search match for ${track.title || 'track'}`);
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn-small';
+            button.textContent = '[ SEARCH ]';
+            actions.append(input, button);
+            header.appendChild(actions);
+            card.appendChild(header);
+
+            const candidates = document.createElement('div');
+            candidates.className = 'manual-results';
+            const seenVideoIds = new Set();
+            [track.bestMatch, ...(track.alternatives || [])].forEach((candidate) => {
+              if (candidate && candidate.videoId && !seenVideoIds.has(candidate.videoId)) {
+                seenVideoIds.add(candidate.videoId);
+                appendManualCandidate(trackId, candidate, candidates);
+              }
+            });
+            if (!candidates.childElementCount) {
+              const prompt = document.createElement('div');
+              prompt.className = 'manual-result-artist';
+              prompt.textContent = 'No suggested match. Search YouTube Music to choose one.';
+              candidates.appendChild(prompt);
+            }
+            button.addEventListener('click', () => searchManualTrack(
+              trackId, input.value.trim(), track.artist, track.title, candidates, button
+            ));
+            input.addEventListener('keydown', (event) => {
+              if (event.key === 'Enter') searchManualTrack(
+                trackId, input.value.trim(), track.artist, track.title, candidates, button
+              );
+            });
+            card.append(candidates);
+            manualTracksList.appendChild(card);
+          });
+          updateManualAddButton();
+        }
+
+        addManualBtn.addEventListener('click', async () => {
+          if (!lastPlaylistId || !manualSelections.size) return;
+          const tracks = [...new Map(
+            [...manualSelections.values()].map((track) => [track.videoId, track])
+          ).values()];
+          addManualBtn.disabled = true;
+          try {
+            const response = await fetch('/api/add-to-playlist', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ playlistId: lastPlaylistId, tracks }),
+            });
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error || 'Could not add selected tracks');
+            manualSelections.clear();
+            updateManualAddButton();
+          } catch (error) {
+            console.error('Adding manual selections failed:', error);
+            updateManualAddButton();
+          }
+        });
+
+        const startConversion = async () => {
+      if (!window.parsedTracks || window.parsedTracks.length === 0) {
+        alert("No hay tracks para convertir. Carga un archivo .m3u primero.");
+        return;
+      }
+      
+      const playlistNameValue = playlistName.value.trim();
+      if (!playlistNameValue) {
+        alert("Ingresa un nombre para la playlist.");
+        return;
+      }
+      
+      // Deshabilitar el botón durante la conversión
+      startBtn.disabled = true;
+      startBtn.textContent = "[ PROCESSING... ]";
+      
+      // Clear the previous conversion summary.
+      summaryCard.style.display = "none";
+          playlistUrl.style.display = "none";
+          manualSelections.clear();
+          manualTracksList.replaceChildren();
+          manualReviewSection.classList.remove('visible');
+          addManualBtn.disabled = true;
+      
+      // Configurar la barra de progreso
+      progressBar.style.width = "0%";
+      progressPercent.textContent = "0%";
+      progressLabel.textContent = "Starting conversion...";
+      
+      try {
+        // Crear EventSource para recibir actualizaciones de progreso
+        eventSource = new EventSource(`/api/convert-progress?playlistName=${encodeURIComponent(playlistNameValue)}&dryRun=${dryRun.checked}&threshold=${threshold.value}`);
+        
+        eventSource.onmessage = (event) => {
+          const data = JSON.parse(event.data);
+          if (data.type === "progress") {
+            const percent = Math.round((data.added / data.total) * 100);
+            progressBar.style.width = `${percent}%`;
+            progressPercent.textContent = `${percent}%`;
+            progressLabel.textContent = data.artist && data.title
+              ? `Searching ${data.artist} — ${data.title}`
+              : `Processed ${data.added} of ${data.total} tracks`;
+            backendStatus.lastElementChild.textContent = 'Backend is searching...';
+            backendStatus.firstElementChild.className = 'backend-dot available';
+          } else if (data.type === "result") {
+            progressBar.style.width = "100%";
+            progressPercent.textContent = "100%";
+            progressLabel.textContent = "Completed";
+            progressBar.parentElement.setAttribute("aria-valuenow", "100");
+            backendStatus.lastElementChild.textContent = "Conversion completed";
+            backendStatus.firstElementChild.className = "backend-dot available";
+            eventSource.close();
+            startBtn.disabled = false;
+            startBtn.textContent = "[ EXECUTE ]";
+
+            // Mostrar resumen solo al finalizar
+            summaryCard.style.display = "block";
+            summaryGrid.innerHTML = `
+              <div class="summary-item summary-matched"><div class="summary-label">Matched:</div><div class="summary-value">${data.matched}</div></div>
+              <div class="summary-item summary-unmatched"><div class="summary-label">Unmatched:</div><div class="summary-value">${data.unmatched}</div></div>
+              <div class="summary-item summary-ambiguous"><div class="summary-label">Ambiguous:</div><div class="summary-value">${data.ambiguous}</div></div>
+            `;
+            
+            if (data.playlistUrl) {
+              playlistUrl.innerHTML = `Playlist URL: <a href="${data.playlistUrl}" target="_blank">${data.playlistUrl}</a>`;
+              playlistUrl.style.display = "block";
+            }
+            
+            // Guardar resultados para revisión manual
+            lastPlaylistId = data.playlistId || null;
+                lastConversionResults = data.manualReviewTracks || [
+                  ...(data.unmatchedTracks || []),
+                  ...(data.ambiguousTracks || []),
+                ];
+            if (lastConversionResults.length > 0) {
+              showManualReview();
+            }
+          }
+        };
+        
+        eventSource.onerror = (err) => {
+          console.error("EventSource failed:", err);
+          eventSource.close();
+          
+          // Rehabilitar el botón
+          startBtn.disabled = false;
+          startBtn.textContent = "[ EXECUTE ]";
+          
+          alert("Error durante la conversión. Revisa los logs.");
+        };
+
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Progress stream timed out')), 5000);
+          eventSource.onopen = () => {
+            clearTimeout(timeout);
+            backendStatus.lastElementChild.textContent = 'Backend connected';
+            backendStatus.firstElementChild.className = 'backend-dot available';
+            resolve();
+          };
+        });
+        
+        // Send tracks only after the progress stream is connected.
+        const response = await fetch('/api/convert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tracks: window.parsedTracks,
+            playlistName: playlistNameValue,
+            dryRun: dryRun.checked,
+            threshold: parseInt(threshold.value)
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.statusText}`);
+        }
+        
+      } catch (err) {
+        console.error("Error durante la conversión:", err);
+        alert("Error durante la conversión. Revisa los logs.");
+        
+        // Rehabilitar el botón
+        startBtn.disabled = false;
+        startBtn.textContent = "[ EXECUTE ]";
+      }
+    };
+    
+    // Asignar el evento onclick al botón [EXECUTE]
+    startBtn.onclick = startConversion;
 
     // Restaurar estado desde localStorage al cargar la página
     const restoreState = () => {
@@ -1006,22 +1397,76 @@
     };
 
     // Escuchar mensajes del popup de autenticación
-    window.addEventListener('message', (event) => {
-      // Verificar el origen del mensaje para evitar problemas de seguridad
-      if (event.origin !== 'http://localhost:3000') return;
+    window.addEventListener('message', async (event) => {
+      console.log('📩 EVENTO MESSAGE RECIBIDO:', {
+        origin: event.origin,
+        data: event.data
+      });
       
-      if (event.data === 'auth_success') {
-        console.log('Mensaje recibido: autenticación exitosa');
-        checkAuthStatus();
+      // Verificar el origen del mensaje para evitar problemas de seguridad
+      if (event.origin !== 'http://localhost:3000') {
+        console.warn('⚠️ Origen no válido:', event.origin);
+        return;
+      }
+      
+      if (event.data.type === 'auth_success') {
+        console.log('✅ Mensaje recibido: autenticación exitosa');
+        const token = event.data.token;
+        
+        // Validar el token en el backend
+        try {
+          console.log('🔍 Validando token en el backend...');
+          const response = await fetch('/auth/validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token })
+          });
+          const data = await response.json();
+          console.log('📊 Respuesta del backend:', data);
+          
+           if (data.valid) {
+             console.log('✅ Token válido. Actualizando estado...');
+             // Actualizar el estado de autenticación
+             if (window.authStore) {
+               window.authStore.getState().setCredentials(token, "youtube");
+             }
+             const isAuthenticated = await checkAuthStatus();
+             
+             // Habilitar el botón [EXECUTE] si hay un archivo cargado
+             if (isAuthenticated && dropZone.classList.contains('has-file')) {
+               startBtn.disabled = false;
+             }
+           } else {
+             console.error('❌ Token inválido:', data);
+           }
+        } catch (err) {
+          console.error('❌ Error al validar el token:', err);
+        }
       } else if (event.data === 'auth_error') {
-        console.log('Mensaje recibido: error de autenticación');
+        console.error('❌ Mensaje recibido: error de autenticación');
         alert('Error al iniciar la autenticación. Verifica la configuración.');
+      } else {
+        console.warn('⚠️ Mensaje desconocido:', event.data);
       }
     });
     
     // Llamar a checkAuthStatus al cargar la página
     document.addEventListener('DOMContentLoaded', () => {
       checkAuthStatus();
+      
+      // Verificar si hay un parámetro de autenticación
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('auth')) {
+        const authStatus = urlParams.get('auth');
+        if (authStatus === 'success') {
+          console.log('Autenticación exitosa detectada');
+          checkAuthStatus(); // Verificar el estado nuevamente
+        } else if (authStatus === 'error') {
+          alert('Error en la autenticación. Inténtalo nuevamente.');
+        }
+        // Limpiar el parámetro de la URL
+        window.history.replaceState({}, document.title, '/');
+      }
     });
 
     // Verificar si la autenticación fue cancelada
