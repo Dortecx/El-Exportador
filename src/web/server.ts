@@ -6,7 +6,7 @@ import cookieParser from "cookie-parser";
 import { fileURLToPath } from "url";
 import { parseFile } from "../parser";
 import { SessionService } from "../services/session.service";
-import { addToPlaylistOnYtMusic, configureYtMusicBrowserAuth, searchSingleOnYtMusic } from "../ytmusic/client";
+import { addToPlaylistOnYtMusic, checkYtMusicAvailable, configureYtMusicBrowserAuth, searchSingleOnYtMusic } from "../ytmusic/client";
 import { GuidedBrowserAuth } from "./guidedBrowserAuth";
 
 // Obtener la ruta del directorio actual usando import.meta.url
@@ -192,10 +192,14 @@ app.post("/api/ytmusic-auth/browser/disconnect", async (_req, res) => {
   res.json({ status: "idle" });
 });
 
-app.get("/api/auth-status", (req, res) => {
-  const connected = guidedBrowserAuth.status().status === "connected";
-  if (connected && req.cookies?.ytmusic_session !== "authenticated") SessionService.setAuthenticated(res);
-  res.json({ authenticated: connected || req.cookies?.ytmusic_session === "authenticated" });
+app.get("/api/auth-status", async (req, res) => {
+  const authenticated = await checkYtMusicAvailable();
+  if (authenticated && req.cookies?.ytmusic_session !== "authenticated") {
+    SessionService.setAuthenticated(res);
+  } else if (!authenticated && req.cookies?.ytmusic_session === "authenticated") {
+    res.clearCookie("ytmusic_session");
+  }
+  res.json({ authenticated });
 });
 
 app.post("/api/add-to-playlist", async (req, res) => {
