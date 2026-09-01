@@ -16,16 +16,19 @@ const ALLOWED_HEADERS = new Set([
   "referer", "user-agent", "content-type", "x-youtube-client-name", "x-youtube-client-version",
 ]);
 
-type BrowserId = "edge" | "chrome" | "brave" | "opera";
+type BrowserId = "edge" | "helium" | "chrome" | "brave" | "opera";
 type AuthStatus = "idle" | "launching" | "waiting_for_sign_in" | "validating" | "connected" | "cancelled" | "timed_out" | "error";
 type Browser = { id: BrowserId; executable: string };
 type Validator = (headers: string) => Promise<{ status: string; error?: string }>;
 type RequestWillBeSentEvent = { requestId: string; request: { url: string } };
 type RequestWillBeSentExtraInfoEvent = { requestId: string; headers: Record<string, string> };
 type PendingHeaders = { headers: string; observedAt: number };
+type CdpSession = Awaited<ReturnType<typeof CDP>>;
+type CdpAttachment = { cdp: CdpSession; targetId: string };
 
 const browserPaths: Record<BrowserId, string[]> = {
   edge: ["Microsoft/Edge/Application/msedge.exe", "Microsoft/Edge Beta/Application/msedge.exe"],
+  helium: ["imput/Helium/Application/chrome.exe"],
   chrome: ["Google/Chrome/Application/chrome.exe", "Google/Chrome Beta/Application/chrome.exe"],
   brave: ["BraveSoftware/Brave-Browser/Application/brave.exe"],
   opera: ["Programs/Opera/launcher.exe", "Opera/launcher.exe", "Programs/Opera GX/opera.exe"],
@@ -37,8 +40,10 @@ function executableFor(id: BrowserId): string | undefined {
 }
 
 function idForExecutable(executable: string): BrowserId | undefined {
+  const normalizedPath = executable.replace(/\//g, "\\").toLowerCase();
   const name = path.basename(executable).toLowerCase();
   if (name === "msedge.exe") return "edge";
+  if (normalizedPath.endsWith("\\imput\\helium\\application\\chrome.exe")) return "helium";
   if (name === "chrome.exe") return "chrome";
   if (name === "brave.exe") return "brave";
   if ((name === "launcher.exe" || name === "opera.exe") && executable.toLowerCase().includes("opera")) return "opera";
@@ -68,7 +73,7 @@ function commandExecutable(command: string | undefined): string | undefined {
 }
 
 async function preferredBrowser(): Promise<Browser | undefined> {
-  const preferred = ["chrome", "brave", "opera"] as BrowserId[];
+  const preferred = ["helium", "chrome", "brave", "opera"] as BrowserId[];
   const progId = await readRegistry("HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoice", "ProgId");
   const executable = commandExecutable(await readRegistry(`HKCR\\${progId}\\shell\\open\\command`, "(Default)"));
   const id = executable && idForExecutable(executable);
@@ -87,8 +92,9 @@ function sleep(ms: number): Promise<void> {
 export class GuidedBrowserAuth {
   private statusValue: AuthStatus = "idle";
   private browser?: ChildProcess;
-  private cdp?: Awaited<ReturnType<typeof CDP>>;
+  private cdp?: CdpSession;
   private cdpPort?: number;
+  private activeLoginTargetId?: string;
   private timeout?: NodeJS.Timeout;
   private correlationEviction?: NodeJS.Timeout;
   private profile?: string;
@@ -118,7 +124,7 @@ export class GuidedBrowserAuth {
       return { status: this.statusValue, error: "No supported Chromium-compatible browser was found" };
     }
 
-    console.info(`[guided-auth] browser selected id=${browser.id}`);
+    console.info("[guided-auth] browser selected");
     this.stopped = false;
     const operation = ++this.operation;
     this.profile = path.join(PROFILE_ROOT, browser.id);
@@ -194,13 +200,14 @@ export class GuidedBrowserAuth {
 
   private async observe(port: number, operation: number): Promise<void> {
     try {
-      const cdp = await this.waitForCdp(port);
+      const { cdp, targetId } = await this.waitForCdp(port);
       console.info("[guided-auth] CDP attached");
       if (this.stopped || this.operation !== operation) {
         await cdp.close().catch(() => undefined);
         return;
       }
       this.cdp = cdp;
+      this.activeLoginTargetId = targetId;
       await this.cdp.Network.enable();
       if (this.stopped || this.operation !== operation) {
         await cdp.close().catch(() => undefined);
@@ -282,14 +289,14 @@ export class GuidedBrowserAuth {
     this.pendingRequestHeaders.clear();
   }
 
-  private async waitForCdp(port: number): Promise<Awaited<ReturnType<typeof CDP>>> {
+  private async waitForCdp(port: number): Promise<CdpAttachment> {
     for (let elapsed = 0; elapsed < 30_000 && !this.stopped; elapsed += 250) {
       try {
         const targets = await CDP.List({ host: "127.0.0.1", port });
         const target = targets.find(({ type, url }) => type === "page" && url.startsWith(MUSIC_URL));
         if (target) {
           console.info("[guided-auth] Music page target found");
-          return await CDP({ host: "127.0.0.1", port, target });
+          return { cdp: await CDP({ host: "127.0.0.1", port, target }), targetId: target.id };
         }
       } catch { /* browser debugging port is not available yet */ }
       await sleep(250);
@@ -325,17 +332,36 @@ export class GuidedBrowserAuth {
     return operation;
   }
 
-  private async closePageTargets(port: number): Promise<void> {
+  private async closeExtraPageTargets(port: number, activeTargetId: string | undefined): Promise<void> {
+    if (!activeTargetId) return;
     try {
       const targets = await CDP.List({ host: "127.0.0.1", port });
-      await Promise.allSettled(
+      const extraPageTargetIds = new Set(
         targets
-          .filter((target) => target.type === "page")
-          .map((target) => CDP.Close({ host: "127.0.0.1", port, id: target.id })),
+          .filter((target) => target.type === "page" && target.id !== activeTargetId)
+          .map((target) => target.id),
       );
+      if (extraPageTargetIds.size === 0) return;
+      await Promise.allSettled(
+        [...extraPageTargetIds].map((id) => CDP.Close({ host: "127.0.0.1", port, id })),
+      );
+
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const remainingTargetIds = new Set((await CDP.List({ host: "127.0.0.1", port })).map((target: { id: string }) => target.id));
+        if (![...extraPageTargetIds].some((id) => remainingTargetIds.has(id))) return;
+        if (attempt < 4) await sleep(100);
+      }
     } catch {
       // CDP may already be disconnected or the browser may already be closed.
     }
+  }
+
+  private async waitForBrowserExit(browser: ChildProcess): Promise<void> {
+    if (browser.exitCode !== null || browser.killed) return;
+    await Promise.race([
+      new Promise<void>((resolve) => browser.once("exit", () => resolve())),
+      sleep(1_000),
+    ]);
   }
 
   private async closeResources(): Promise<void> {
@@ -346,16 +372,25 @@ export class GuidedBrowserAuth {
 
     const cdp = this.cdp;
     const port = this.cdpPort;
+    const activeTargetId = this.activeLoginTargetId;
     const browser = this.browser;
     this.cdp = undefined;
     this.cdpPort = undefined;
+    this.activeLoginTargetId = undefined;
     this.browser = undefined;
 
-    if (port !== undefined) {
-      await this.closePageTargets(port);
-      await sleep(250);
+    if (port !== undefined) await this.closeExtraPageTargets(port, activeTargetId);
+    let gracefulCdp = cdp;
+    if (!gracefulCdp && port !== undefined && activeTargetId) {
+      gracefulCdp = await CDP({ host: "127.0.0.1", port, target: activeTargetId }).catch(() => undefined);
     }
-    if (cdp) await cdp.close().catch(() => undefined);
-    if (browser && !browser.killed) browser.kill();
+    if (gracefulCdp) {
+      await gracefulCdp.Browser.close().catch(() => undefined);
+      await gracefulCdp.close().catch(() => undefined);
+    }
+    if (browser && !browser.killed) {
+      await this.waitForBrowserExit(browser);
+      if (browser.exitCode === null && !browser.killed) browser.kill();
+    }
   }
 }

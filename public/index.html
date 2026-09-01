@@ -468,18 +468,21 @@
     }
 
     .summary {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      display: flex;
+      flex-wrap: nowrap;
       gap: 1rem;
       margin-top: 1rem;
-      max-width: 600px;
+      width: 100%;
+      max-width: none;
       margin-left: auto;
       margin-right: auto;
     }
 
     .summary-item {
+      flex: 1 1 0;
+      min-width: 0;
       text-align: center;
-      padding: 1rem;
+      padding: 0.75rem;
       border: 1px solid #0066CC;
       background: #020818;
     }
@@ -487,9 +490,10 @@
     .summary-matched { border-color: #00FF88; }
     .summary-ambiguous { border-color: #FFAA00; }
     .summary-unmatched { border-color: #FF3366; }
+    .summary-manual-additions { border-color: #C77DFF; }
 
     .summary-value {
-      font-size: 2rem;
+      font-size: 2.25rem;
       font-weight: bold;
       font-family: 'VT323', monospace;
     }
@@ -497,12 +501,16 @@
     .summary-matched .summary-value { color: #00FF88; }
     .summary-ambiguous .summary-value { color: #FFAA00; }
     .summary-unmatched .summary-value { color: #FF3366; }
+    .summary-manual-additions .summary-value { color: #C77DFF; }
 
     .summary-label {
+      overflow: hidden;
       color: #336699;
-      font-size: 0.875rem;
+      font-size: 0.85rem;
+      text-overflow: ellipsis;
       text-transform: uppercase;
-      letter-spacing: 1px;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
     }
 
     .playlist-url {
@@ -529,7 +537,12 @@
       gap: 1rem;
     }
 
-    .config-row label { margin-top: 1rem; }
+    .config-row label {
+      display: flex;
+      align-items: center;
+      min-height: 18px;
+      margin-top: 1rem;
+    }
 
     .help-icon {
       display: inline-flex;
@@ -588,6 +601,22 @@
       margin-right: auto;
     }
     .manual-review-section.visible { display: block; }
+
+    .manual-add-toast {
+      position: fixed;
+      top: 1.5rem;
+      right: 1.5rem;
+      z-index: 1002;
+      max-width: min(360px, calc(100vw - 3rem));
+      padding: 1rem 1.25rem;
+      border: 1px solid #00FF88;
+      background: #050f2e;
+      color: #00FF88;
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      font-size: 0.875rem;
+      line-height: 1.4;
+      box-shadow: 0 0 12px rgba(0, 255, 136, 0.45), inset 0 0 10px rgba(0, 255, 136, 0.08);
+    }
 
     .manual-track {
       background: #020818;
@@ -653,6 +682,41 @@
       margin-top: 0.75rem;
       border-top: 1px solid #0066CC;
       padding-top: 0.75rem;
+    }
+
+    .manual-search-threshold {
+      color: #7FB7FF;
+      font-size: 0.7rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .manual-result-section + .manual-result-section {
+      margin-top: 1rem;
+      padding-top: 0.75rem;
+      border-top: 1px dashed #336699;
+    }
+
+    .manual-result-heading {
+      margin-bottom: 0.5rem;
+      color: #7FB7FF;
+      font-size: 0.75rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .manual-result-section-relaxed {
+      opacity: 0.72;
+    }
+
+    .manual-result-section-relaxed .manual-result-heading {
+      color: #5588BB;
+    }
+
+    .manual-result-review-reason {
+      margin-top: 0.25rem;
+      color: #FFAA00;
+      font-size: 0.7rem;
     }
 
     .manual-result {
@@ -830,7 +894,7 @@
       }
 
       .summary {
-        grid-template-columns: 1fr;
+        gap: 0.25rem;
       }
     }
   </style>
@@ -878,7 +942,7 @@
       </div>
 
       <!-- Componente OAuthPopup -->
-      <div style="margin: 1rem 0;">
+      <div style="margin: 1rem 0 0.75rem;">
         <div id="oauthPopupContainer">
           <button id="authBtn" type="button">[ CONNECT YOUTUBE MUSIC ]</button>
         </div>
@@ -886,7 +950,7 @@
           margin-top: 0.5rem;
           color: #FF4444;
           font-family: 'Share Tech Mono', monospace;
-          font-size: 0.875rem;
+          font-size: 1rem;
         ">
           ESTADO: NO AUTENTICADO
         </div>
@@ -903,7 +967,7 @@
       </script>
       </div>
 
-      <div style="margin-top: 1.5rem;">
+      <div style="margin-top: 0.75rem;">
         <button class="btn" id="startBtn" disabled>[ EXECUTE ]</button>
       </div>
     </div>
@@ -934,6 +998,7 @@
       </p>
       <div id="manualTracksList"></div>
       <button class="btn btn-add-manual" id="addManualBtn" disabled>[ ADD SELECTED ]</button>
+          <p id="manualAddStatus" role="status" style="display: none; margin-top: 0.75rem; font-size: 0.875rem;"></p>
     </div>
 
     <div class="card" id="summaryCard" style="display: none; max-width: 800px; margin-left: auto; margin-right: auto;">
@@ -1010,7 +1075,12 @@
         const manualReviewDescription = document.getElementById('manualReviewDescription');
         const manualTracksList = document.getElementById('manualTracksList');
         const addManualBtn = document.getElementById('addManualBtn');
+            const manualAddStatus = document.getElementById('manualAddStatus');
         const manualSelections = new Map();
+        let manualAdditionsCount = 0;
+        let manualAddToastTimer = null;
+            const manualSearchRequests = new Map();
+        const manualSearchStates = new Map();
     let parsedTracks = [];
     let lastPlaylistId = null;
     let lastConversionResults = [];
@@ -1160,7 +1230,7 @@
         const response = await fetch('/api/auth-status');
         const data = await response.json();
         if (data.authenticated) {
-          setAuthStatus('ESTADO: AUTENTICADO', '#00FF88', true);
+          showGuidedAuthStatus('connected');
 
            // Actualizar el estado global en zustand
            if (window.authStore) {
@@ -1174,7 +1244,7 @@
 
            return true;
         } else {
-          setAuthStatus('ESTADO: NO AUTENTICADO', '#FF4444', true);
+          showGuidedAuthStatus('idle');
 
           // Limpiar el estado global en zustand
           if (window.authStore) {
@@ -1217,8 +1287,43 @@
         function updateManualAddButton() {
           addManualBtn.disabled = manualSelections.size === 0 || !lastPlaylistId;
           addManualBtn.title = lastPlaylistId
-            ? ''
+                        ? ''
             : 'Manual additions require a playlist created by a non-dry-run conversion.';
+        }
+
+        function showManualAddToast(count) {
+          let toast = document.getElementById('manualAddToast');
+          if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'manualAddToast';
+            toast.className = 'manual-add-toast';
+            toast.setAttribute('role', 'status');
+            toast.setAttribute('aria-live', 'polite');
+            document.body.appendChild(toast);
+          }
+          toast.textContent = `${count} track${count === 1 ? '' : 's'} added to the playlist.`;
+          if (manualAddToastTimer !== null) window.clearTimeout(manualAddToastTimer);
+          manualAddToastTimer = window.setTimeout(() => {
+            toast.remove();
+            manualAddToastTimer = null;
+          }, 4000);
+        }
+
+        function updateManualAdditionsSummary() {
+          let item = document.getElementById('manualAdditionsSummary');
+          if (!item) {
+            item = document.createElement('div');
+            item.id = 'manualAdditionsSummary';
+            item.className = 'summary-item summary-manual-additions';
+            const label = document.createElement('div');
+            label.className = 'summary-label';
+            label.textContent = 'Manual additions:';
+            const value = document.createElement('div');
+            value.className = 'summary-value';
+            item.append(label, value);
+            summaryGrid.appendChild(item);
+          }
+          item.querySelector('.summary-value').textContent = String(manualAdditionsCount);
         }
 
         function selectManualCandidate(trackId, candidate, candidateList) {
@@ -1229,7 +1334,7 @@
           updateManualAddButton();
         }
 
-        function appendManualCandidate(trackId, candidate, candidateList) {
+        function appendManualCandidate(trackId, candidate, candidateList, section) {
           if (!candidate || !candidate.videoId) return;
           const option = document.createElement('button');
           option.type = 'button';
@@ -1243,46 +1348,145 @@
           artist.className = 'manual-result-artist';
           artist.textContent = formatArtists(candidate.artist);
           option.append(title, artist);
+          if (candidate.reviewReason) {
+            const reason = document.createElement('div');
+            reason.className = 'manual-result-review-reason';
+            reason.textContent = 'Verify artist/version before adding';
+            option.appendChild(reason);
+          }
           option.addEventListener('click', () => selectManualCandidate(trackId, candidate, candidateList));
-          candidateList.appendChild(option);
+          section.appendChild(option);
         }
 
-        async function searchManualTrack(trackId, query, expectedArtist, expectedTitle, candidateList, searchButton) {
-          if (!query) return;
+        function appendManualResultSection(trackId, candidates, candidateList, heading, relaxed = false) {
+          if (!candidates.length) return;
+          const section = document.createElement('div');
+          section.className = `manual-result-section${relaxed ? ' manual-result-section-relaxed' : ''}`;
+          const label = document.createElement('div');
+          label.className = 'manual-result-heading';
+          label.textContent = heading;
+          section.appendChild(label);
+          candidates.forEach((candidate) => appendManualCandidate(trackId, candidate, candidateList, section));
+          candidateList.appendChild(section);
+        }
+
+        function renderManualCandidates(trackId, strictCandidates, relaxedCandidates, candidateList) {
+          candidateList.replaceChildren();
+          const seenVideoIds = new Set();
+          const uniqueCandidates = (candidates) => candidates.filter((candidate) => {
+            if (!candidate || !candidate.videoId || seenVideoIds.has(candidate.videoId)) return false;
+            seenVideoIds.add(candidate.videoId);
+            return true;
+          });
+          appendManualResultSection(
+            trackId, uniqueCandidates(strictCandidates), candidateList, 'Recommended results'
+          );
+          appendManualResultSection(
+            trackId, uniqueCandidates(relaxedCandidates), candidateList,
+            'Other results — verify artist/version', true
+          );
+          if (!candidateList.childElementCount) {
+            const noResults = document.createElement('div');
+            noResults.className = 'manual-result-artist';
+            noResults.textContent = 'No matches found. Try a different query.';
+            candidateList.appendChild(noResults);
+          }
+        }
+
+        function cancelManualSearches() {
+              manualSearchRequests.forEach((request) => request.controller.abort());
+              manualSearchRequests.clear();
+            }
+
+            function nextManualSearch(trackId, query, artist, title) {
+          const prior = manualSearchStates.get(trackId);
+          if (!prior || prior.query !== query || prior.artist !== artist || prior.title !== title) {
+            return { threshold: 0, offset: 0, exhausted: false };
+          }
+          if (prior.hasMore && prior.offset < 10) return { threshold: prior.threshold, offset: prior.offset + 5, exhausted: false };
+          if (prior.candidateCount === 5) {
+            return { threshold: Math.round(Math.min(prior.threshold + 0.15, 0.60) * 100) / 100, offset: 0, exhausted: false };
+          }
+          return { threshold: prior.threshold, offset: prior.offset, exhausted: true };
+        }
+
+        function showManualSearchThreshold(element, threshold, offset = 0, candidateCount = 0, exhausted = false) {
+          const range = candidateCount ? `Results ${offset + 1}–${offset + candidateCount}` : `Results ${offset + 1}–${offset + 5}`;
+          element.textContent = `Search threshold: ${threshold.toFixed(2)} · ${range}${exhausted ? ' · No more results at this threshold.' : ''}`;
+        }
+
+        async function searchManualTrack(trackId, query, expectedArtist, expectedTitle, candidateList, searchButton, thresholdDisplay) {
+          if (!query || manualSearchRequests.has(trackId)) return;
+          const search = nextManualSearch(trackId, query, expectedArtist, expectedTitle);
+          if (search.exhausted) {
+            showManualSearchThreshold(thresholdDisplay, search.threshold, search.offset, 0, true);
+            return;
+          }
+          const { threshold: searchThreshold, offset } = search;
+          showManualSearchThreshold(thresholdDisplay, searchThreshold, offset);
+              const request = {
+                controller: new AbortController(),
+                version: Number(searchButton.dataset.searchVersion || 0) + 1,
+              };
+              searchButton.dataset.searchVersion = String(request.version);
+              manualSearchRequests.set(trackId, request);
           manualSelections.delete(trackId);
           updateManualAddButton();
           searchButton.disabled = true;
+              searchButton.setAttribute('aria-busy', 'true');
+              const buttonText = searchButton.textContent;
+              searchButton.textContent = '[ SEARCHING... ]';
+              const isCurrentRequest = () => manualSearchRequests.get(trackId) === request
+                && Number(searchButton.dataset.searchVersion) === request.version;
           try {
             const response = await fetch('/api/search-single', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ query, artist: expectedArtist, title: expectedTitle }),
+              body: JSON.stringify({ query, artist: expectedArtist, title: expectedTitle, threshold: searchThreshold, offset }),
+                  signal: request.controller.signal,
             });
             const payload = await response.json();
             if (!response.ok) throw new Error(payload.error || 'Search failed');
-            candidateList.replaceChildren();
-            (payload.results || []).forEach((candidate) => {
-              appendManualCandidate(trackId, candidate, candidateList);
+                if (!isCurrentRequest()) return;
+            const results = payload.results || [];
+            manualSearchStates.set(trackId, {
+              query,
+              artist: expectedArtist,
+              title: expectedTitle,
+              threshold: searchThreshold,
+              offset,
+              candidateCount: results.length,
+              hasMore: payload.hasMore === true,
             });
-            if (!candidateList.childElementCount) {
-              const noResults = document.createElement('div');
-              noResults.className = 'manual-result-artist';
-              noResults.textContent = 'No matches found. Try a different query.';
-              candidateList.appendChild(noResults);
-            }
+            showManualSearchThreshold(thresholdDisplay, searchThreshold, offset, results.length);
+            renderManualCandidates(trackId, results, [], candidateList);
           } catch (error) {
-            console.error('Manual search failed:', error);
+            if (error && error.name === 'AbortError') return;
+                if (!isCurrentRequest()) return;
+                console.error('Manual search failed:', error);
             const failed = document.createElement('div');
             failed.className = 'manual-result-artist';
             failed.textContent = 'Search failed. Please try again.';
             candidateList.replaceChildren(failed);
           } finally {
-            searchButton.disabled = false;
+            if (isCurrentRequest()) {
+                  manualSearchRequests.delete(trackId);
+                  searchButton.disabled = false;
+                  searchButton.removeAttribute('aria-busy');
+                  searchButton.textContent = buttonText;
+                }
           }
         }
 
         function showManualReview() {
+              cancelManualSearches();
+              manualSearchStates.clear();
           manualTracksList.replaceChildren();
+          if (!lastConversionResults.length) {
+            manualReviewSection.classList.remove('visible');
+            updateManualAddButton();
+            return;
+          }
           manualReviewSection.classList.add('visible');
           manualReviewDescription.textContent = lastPlaylistId
             ? 'Choose a suggestion or search YouTube Music for each unmatched or ambiguous track.'
@@ -1310,31 +1514,46 @@
             button.type = 'button';
             button.className = 'btn-small';
             button.textContent = '[ SEARCH ]';
-            actions.append(input, button);
+            const thresholdDisplay = document.createElement('div');
+            thresholdDisplay.className = 'manual-search-threshold';
+            showManualSearchThreshold(thresholdDisplay, 0);
+            actions.append(input, button, thresholdDisplay);
             header.appendChild(actions);
             card.appendChild(header);
 
             const candidates = document.createElement('div');
             candidates.className = 'manual-results';
-            const seenVideoIds = new Set();
-            [track.bestMatch, ...(track.alternatives || [])].forEach((candidate) => {
-              if (candidate && candidate.videoId && !seenVideoIds.has(candidate.videoId)) {
-                seenVideoIds.add(candidate.videoId);
-                appendManualCandidate(trackId, candidate, candidates);
-              }
-            });
-            if (!candidates.childElementCount) {
+            const initialCandidates = [track.bestMatch, ...(track.alternatives || [])]
+              .filter(Boolean);
+            if (initialCandidates.length) {
+              renderManualCandidates(trackId, initialCandidates, [], candidates);
+            } else {
               const prompt = document.createElement('div');
               prompt.className = 'manual-result-artist';
               prompt.textContent = 'No suggested match. Search YouTube Music to choose one.';
               candidates.appendChild(prompt);
             }
             button.addEventListener('click', () => searchManualTrack(
-              trackId, input.value.trim(), track.artist, track.title, candidates, button
+              trackId, input.value.trim(), track.artist, track.title, candidates, button, thresholdDisplay
             ));
+            input.addEventListener('input', () => {
+              const activeRequest = manualSearchRequests.get(trackId);
+              if (activeRequest) {
+                button.dataset.searchVersion = String(Number(button.dataset.searchVersion || 0) + 1);
+                activeRequest.controller.abort();
+                manualSearchRequests.delete(trackId);
+                button.disabled = false;
+                button.removeAttribute('aria-busy');
+                button.textContent = '[ SEARCH ]';
+              }
+              manualSearchStates.delete(trackId);
+              showManualSearchThreshold(thresholdDisplay, 0);
+            });
             input.addEventListener('keydown', (event) => {
-              if (event.key === 'Enter') searchManualTrack(
-                trackId, input.value.trim(), track.artist, track.title, candidates, button
+              if (event.key !== 'Enter') return;
+                  event.preventDefault();
+                  searchManualTrack(
+                trackId, input.value.trim(), track.artist, track.title, candidates, button, thresholdDisplay
               );
             });
             card.append(candidates);
@@ -1348,6 +1567,7 @@
           const tracks = [...new Map(
             [...manualSelections.values()].map((track) => [track.videoId, track])
           ).values()];
+              manualAddStatus.style.display = 'none';
           addManualBtn.disabled = true;
           try {
             const response = await fetch('/api/add-to-playlist', {
@@ -1356,11 +1576,26 @@
               body: JSON.stringify({ playlistId: lastPlaylistId, tracks }),
             });
             const payload = await response.json();
-            if (!response.ok) throw new Error(payload.error || 'Could not add selected tracks');
+            if (!response.ok || payload?.success !== true || !Number.isInteger(payload?.count) || payload.count !== tracks.length) {
+                  throw new Error(payload?.error || 'Could not confirm all selected tracks were added');
+                }
+
+            const addedCount = payload.count;
+            const selectedTrackIds = new Set(manualSelections.keys());
+            manualAdditionsCount += addedCount;
+            manualAddStatus.style.display = 'none';
+            showManualAddToast(addedCount);
+            updateManualAdditionsSummary();
+            lastConversionResults = lastConversionResults.filter((track, index) =>
+              !selectedTrackIds.has(`review-${index}`)
+            );
             manualSelections.clear();
-            updateManualAddButton();
+            showManualReview();
           } catch (error) {
             console.error('Adding manual selections failed:', error);
+                manualAddStatus.textContent = error?.message || 'Could not add selected tracks. Please try again.';
+                manualAddStatus.style.color = '#FF3366';
+                manualAddStatus.style.display = 'block';
             updateManualAddButton();
           }
         });
@@ -1383,7 +1618,16 @@
 
       // Clear the previous conversion summary.
       summaryCard.style.display = "none";
+          lastPlaylistId = null;
+          manualAdditionsCount = 0;
+          if (manualAddToastTimer !== null) {
+            window.clearTimeout(manualAddToastTimer);
+            manualAddToastTimer = null;
+          }
+          document.getElementById('manualAddToast')?.remove();
+          manualAddStatus.style.display = 'none';
           playlistUrl.style.display = "none";
+              cancelManualSearches();
           manualSelections.clear();
           manualTracksList.replaceChildren();
           manualReviewSection.classList.remove('visible');

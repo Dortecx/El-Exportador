@@ -1,0 +1,63 @@
+@echo off
+setlocal EnableExtensions
+set "ROOT=%~dp0"
+set "USER_LOCALAPPDATA=%LOCALAPPDATA%"
+set "STATE_DIR=%ROOT%state"
+set "LOG_DIR=%ROOT%logs"
+set "SEARCHER=%ROOT%artifacts\searcher.exe"
+set "SUPPORTED_BROWSER_FOUND="
+
+for %%R in ("%USER_LOCALAPPDATA%" "%PROGRAMFILES%" "%PROGRAMFILES(X86)%") do (
+  if not "%%~R"=="" (
+    for %%P in ("imput\Helium\Application\chrome.exe" "Google\Chrome\Application\chrome.exe" "Google\Chrome Beta\Application\chrome.exe" "BraveSoftware\Brave-Browser\Application\brave.exe" "Programs\Opera\launcher.exe" "Opera\launcher.exe" "Programs\Opera GX\opera.exe" "Microsoft\Edge\Application\msedge.exe" "Microsoft\Edge Beta\Application\msedge.exe") do (
+      if exist "%%~R\%%~P" set "SUPPORTED_BROWSER_FOUND=1"
+    )
+  )
+)
+if not defined SUPPORTED_BROWSER_FOUND (
+  echo [ERROR] A supported browser is required for YouTube Music sign-in.
+  echo Install Helium, Chrome, Brave, Opera or Opera GX, or Microsoft Edge, then run start.cmd again.
+  exit /b 1
+)
+
+if not exist "%STATE_DIR%" mkdir "%STATE_DIR%" || goto :mkdir_failed
+if not exist "%LOG_DIR%" mkdir "%LOG_DIR%" || goto :mkdir_failed
+if not exist "%SEARCHER%" (
+  echo [ERROR] Missing packaged searcher: "%SEARCHER%"
+  echo Rebuild the portable ZIP; do not copy only start.cmd.
+  exit /b 1
+)
+
+where node >nul 2>nul || (
+  echo [ERROR] Node.js 20 or newer is required. Install it from https://nodejs.org/
+  exit /b 1
+)
+for /f "tokens=1 delims=." %%V in ('node -p "process.versions.node"') do set "NODE_MAJOR=%%V"
+if %NODE_MAJOR% LSS 20 (
+  echo [ERROR] Node.js 20 or newer is required; found:
+  node --version
+  exit /b 1
+)
+
+set "M3U_YTMUSIC_SEARCHER=%SEARCHER%"
+set "HOME=%STATE_DIR%"
+set "USERPROFILE=%STATE_DIR%"
+set "NODE_ENV=production"
+set "PORT=3000"
+
+echo Starting El Exportador at http://localhost:%PORT%
+echo Logs: "%LOG_DIR%\server.log"
+start "" /b "%ComSpec%" /d /c ""node" "%ROOT%app\node_modules\tsx\dist\cli.mjs" "%ROOT%app\src\web\server.ts" >> "%LOG_DIR%\server.log" 2>&1"
+
+powershell -NoProfile -Command "$deadline = (Get-Date).AddSeconds(30); while ((Get-Date) -lt $deadline) { try { Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:%PORT%/' -TimeoutSec 2 | Out-Null; exit 0 } catch { Start-Sleep -Milliseconds 500 } }; exit 1"
+if errorlevel 1 (
+  echo [ERROR] Server did not become ready within 30 seconds. See "%LOG_DIR%\server.log".
+  exit /b 1
+)
+
+if not "%M3U_PORTABLE_NO_OPEN%"=="1" start "" "http://localhost:%PORT%/"
+exit /b 0
+
+:mkdir_failed
+echo [ERROR] Could not create portable state or log directories beside start.cmd.
+exit /b 1

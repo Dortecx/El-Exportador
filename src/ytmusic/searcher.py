@@ -55,9 +55,23 @@ def configure_browser_auth(headers):
     try:
         setup_browser(AUTH_FILE, normalize_browser_headers(headers))
         os.chmod(AUTH_FILE, 0o600)
+    except Exception as error:
+        print(
+            f'BROWSER_AUTH_DIAGNOSTIC stage=setup_browser exception={type(error).__name__}',
+            file=sys.stderr,
+        )
+        if os.path.exists(AUTH_FILE):
+            os.remove(AUTH_FILE)
+        return {'status': 'failed', 'error': 'The browser headers could not be validated'}
+
+    try:
         YTMusic(AUTH_FILE).get_library_playlists(limit=1)
         return {'status': 'authorized'}
-    except Exception:
+    except Exception as error:
+        print(
+            f'BROWSER_AUTH_DIAGNOSTIC stage=library_validation exception={type(error).__name__}',
+            file=sys.stderr,
+        )
         if os.path.exists(AUTH_FILE):
             os.remove(AUTH_FILE)
         return {'status': 'failed', 'error': 'The browser headers could not be validated'}
@@ -550,10 +564,20 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15):
     }
 
 
-def search_single(query, artist='', title=''):
+def has_unrequested_edition_keyword(result_title, requested_title):
+    requested_lower = requested_title.lower()
+    return any(
+        keyword in result_title.lower() and keyword not in requested_lower
+        for keyword in EXCLUDED_KEYWORDS
+    )
+
+
+def search_single(query, artist='', title='', threshold=0.0, offset=0):
+    if not isinstance(offset, int) or isinstance(offset, bool) or offset not in (0, 5, 10):
+        return {'error': 'Manual search offset must be 0, 5, or 10', 'results': []}
+
     ytmusic = get_ytmusic()
-    expected_title = extract_series_name(title).strip() or query
-    is_japanese = contains_japanese(expected_title)
+    expected_title = title.strip() or query
     try:
         candidates = []
         seen_video_ids = set()
@@ -564,29 +588,43 @@ def search_single(query, artist='', title=''):
             seen_video_ids.add(video_id)
 
             result_title = result.get('title', '')
-            result_artists = get_all_artists(result)
-            if artist and not artist_has_correct_match(result_artists, artist, is_japanese):
+            expected_title_similarity = title_similarity(expected_title, result_title)
+            if expected_title_similarity < threshold:
                 continue
-            if penalize_excluded(result_title, expected_title) is not None:
+            if has_unrequested_edition_keyword(result_title, expected_title):
                 continue
 
-            expected_title_similarity = title_similarity(expected_title, result_title)
             query_similarity = title_similarity(query, result_title)
             relevance = (2 * expected_title_similarity) + query_similarity
             candidates.append((relevance, expected_title_similarity, result))
 
         candidates.sort(key=lambda candidate: (candidate[0], candidate[1]), reverse=True)
-        return {'results': [
-            {
-                'videoId': result.get('videoId'),
-                'title': result.get('title', ''),
-                'artist': get_artists(result),
-                'duration': result.get('duration', ''),
-            }
-            for _, _, result in candidates[:5]
-        ]}
+
+        candidates = candidates[:15]
+        result_count = len(candidates)
+        page_candidates = candidates[offset:offset + 5]
+        return {
+            'results': [
+                {
+                    'videoId': result.get('videoId'),
+                    'title': result.get('title', ''),
+                    'artist': get_artists(result),
+                    'duration': result.get('duration', ''),
+                }
+                for _, _, result in page_candidates
+            ],
+            'hasMore': offset + 5 < result_count,
+            'pageCount': (result_count + 4) // 5,
+            'resultCount': result_count,
+        }
     except Exception as e:
-        return {'error': str(e), 'results': []}
+        return {
+            'error': str(e),
+            'results': [],
+            'hasMore': False,
+            'pageCount': 0,
+            'resultCount': 0,
+        }
 
 
 def add_to_playlist(playlist_id, video_ids):
@@ -665,6 +703,8 @@ def main():
                 data.get('query', ''),
                 data.get('artist', ''),
                 data.get('title', ''),
+                    data.get('threshold', 0.0),
+                    data.get('offset', 0),
             )
             print(json.dumps(output))
         elif action == 'add-to-playlist':
