@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>El Exportador</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323:wght@400&display=swap" rel="stylesheet">
@@ -37,13 +38,30 @@
     }
 
     @keyframes auth-status-pulse {
-      0% { opacity: 0.82; filter: brightness(0.9); text-shadow: 0 0 0 transparent; }
-      20% { opacity: 1; filter: brightness(1.65); text-shadow: 0 0 12px currentColor, 0 0 24px currentColor; }
-      100% { opacity: 0.82; filter: brightness(0.9); text-shadow: 0 0 0 transparent; }
+      0%, 7% { opacity: 0.72; filter: brightness(0.8); transform: translateX(0); text-shadow: 0 0 0 transparent; }
+      8% { opacity: 0.46; transform: translateX(-5px) skewX(-6deg); text-shadow: 4px 0 #00E1FF, -4px 0 #FF3366; }
+      10% { opacity: 0.92; transform: translateX(5px) skewX(5deg); text-shadow: -4px 0 #00E1FF, 4px 0 #FF3366; }
+      13% { opacity: 0.72; transform: translateX(0); text-shadow: 0 0 0 transparent; }
+      22% { opacity: 1; filter: brightness(2); transform: translateX(0); text-shadow: 0 0 16px currentColor, 0 0 32px currentColor, 0 0 48px currentColor; }
+      66% { opacity: 1; filter: brightness(1.7); transform: translateX(0); text-shadow: 0 0 12px currentColor, 0 0 26px currentColor; }
+      72% { opacity: 0.48; filter: brightness(1.1); transform: translateX(5px) skewX(6deg); text-shadow: -4px 0 #00E1FF, 4px 0 #FF3366; }
+      75% { opacity: 0.8; transform: translateX(-3px) skewX(-4deg); text-shadow: 4px 0 #00E1FF, -4px 0 #FF3366; }
+      79%, 100% { opacity: 0.72; filter: brightness(0.8); transform: translateX(0); text-shadow: 0 0 0 transparent; }
     }
 
     #authStatus.auth-status-pulse {
       animation: auth-status-pulse 4.5s ease-out;
+      will-change: filter, opacity, text-shadow, transform;
+    }
+
+    @keyframes dry-run-label-pulse {
+      0%, 100% { filter: brightness(1); text-shadow: 0 0 0 transparent; }
+      50% { filter: brightness(1.25); text-shadow: 0 0 8px #00E1FF; }
+    }
+
+    @keyframes dry-run-checkbox-pulse {
+      0%, 100% { box-shadow: 0 0 8px rgba(0, 225, 255, 0.7), inset 0 0 4px rgba(255, 255, 255, 0.5); }
+      50% { box-shadow: 0 0 12px rgba(0, 225, 255, 0.9), inset 0 0 6px rgba(255, 255, 255, 0.65); }
     }
 
     body {
@@ -255,16 +273,59 @@
     }
 
     input[type="checkbox"] {
+      appearance: none;
       width: 18px;
       height: 18px;
-      accent-color: #00AAFF;
+      border: 1px solid #00AAFF;
+      background: #020818;
       cursor: pointer;
+      display: grid;
+      place-content: center;
+      transition: background 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    input[type="checkbox"]::before {
+      content: '';
+      width: 9px;
+      height: 5px;
+      border: solid #020818;
+      border-width: 0 0 2px 2px;
+      transform: translateY(-1px) rotate(-45deg) scale(0);
+      transition: transform 0.15s ease;
+    }
+
+    input[type="checkbox"]:checked {
+      background: #00E1FF;
+      border-color: #6BE8FF;
+      box-shadow: 0 0 8px rgba(0, 225, 255, 0.7), inset 0 0 4px rgba(255, 255, 255, 0.5);
+    }
+
+    input[type="checkbox"]:checked::before { transform: translateY(-1px) rotate(-45deg) scale(1); }
+
+    input[type="checkbox"]:focus-visible {
+      outline: 2px solid #FFFFFF;
+      outline-offset: 3px;
     }
 
     .checkbox-group label {
       margin: 0;
       cursor: pointer;
       color: #B8D4FF;
+    }
+
+    .checkbox-group:has(#dryRun) input {
+      animation: dry-run-checkbox-pulse 2.6s ease-in-out infinite;
+    }
+
+    .checkbox-group:has(#dryRun) label {
+      animation: dry-run-label-pulse 2.6s ease-in-out infinite;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .checkbox-group:has(#dryRun) input,
+      .checkbox-group:has(#dryRun) label {
+        animation: none;
+      }
     }
 
     .file-upload {
@@ -306,6 +367,10 @@
     .file-upload .hint {
       color: #336699;
       font-size: 0.875rem;
+    }
+
+    .file-upload.has-file .hint {
+      display: none;
     }
 
     .file-upload.has-file {
@@ -905,31 +970,31 @@
   <div class="scanline-3"></div>
   <div class="container">
     <h1>El Exportador</h1>
-    <p class="subtitle">Importa tu biblioteca musical a YouTube Music</p>
+    <p class="subtitle" data-i18n="subtitle">Import your music library to YouTube Music</p>
 
     <div class="card">
       <div class="file-upload" id="dropZone" onclick="document.getElementById('fileInput').click()">
         <div class="icon">[FILE]</div>
-        <div id="uploadText">Drop .m3u file here</div>
-        <div class="hint">or paste M3U content below</div>
+        <div id="uploadText" data-i18n="uploadDrop">Drop .m3u file here</div>
+        <div class="hint" data-i18n="uploadHint">or paste M3U content below</div>
         <input type="file" id="fileInput" accept=".m3u,.m3u8" onchange="handleFileFromInput(this)">
       </div>
       <div class="track-count" id="trackCount"></div>
 
       <div style="margin-top: 1rem;">
-        <label>M3U Content</label>
+        <label data-i18n="m3uContent">M3U Content</label>
         <textarea id="m3uContent" rows="7"></textarea>
       </div>
 
       <div class="config-row">
         <div>
-          <label>Playlist Name</label>
-          <input type="text" id="playlistName" placeholder="MY_PLAYLIST">
+          <label data-i18n="playlistName">Playlist Name</label>
+          <input type="text" id="playlistName" placeholder="MY_PLAYLIST" data-i18n-placeholder="playlistPlaceholder">
         </div>
         <div>
-          <label for="threshold">Match Threshold
-            <span class="help-icon">?
-              <span class="tooltip">Minimum similarity percentage to consider a song as found. 60% works well for most cases.</span>
+          <label for="threshold"><span data-i18n="matchThreshold">Match Threshold</span>
+            <span class="help-icon" title="Minimum similarity percentage to consider a song as found. 60% works well for most cases." data-i18n-title="thresholdHelp">?
+              <span class="tooltip" data-i18n="thresholdHelp">Minimum similarity percentage to consider a song as found. 60% works well for most cases.</span>
             </span>
           </label>
           <input type="number" id="threshold" value="0.6" min="0" max="1" step="0.05">
@@ -938,13 +1003,13 @@
 
       <div class="checkbox-group">
         <input type="checkbox" id="dryRun" checked>
-        <label for="dryRun">Dry Run Mode (no playlist creation)</label>
+        <label for="dryRun" data-i18n="dryRun">Dry Run Mode (no playlist creation)</label>
       </div>
 
       <!-- Componente OAuthPopup -->
       <div style="margin: 1rem 0 0.75rem;">
         <div id="oauthPopupContainer">
-          <button id="authBtn" type="button">[ CONNECT YOUTUBE MUSIC ]</button>
+          <button id="authBtn" type="button" data-i18n="connect">[ CONNECT YOUTUBE MUSIC ]</button>
         </div>
         <div id="authStatus" style="
           margin-top: 0.5rem;
@@ -952,10 +1017,10 @@
           font-family: 'Share Tech Mono', monospace;
           font-size: 1rem;
         ">
-          ESTADO: NO AUTENTICADO
+          <span data-i18n="authUnauthenticated">STATUS: NOT AUTHENTICATED</span>
         </div>
         <div id="browserAuthPanel" hidden style="margin-top: 0.75rem; font-family: 'Share Tech Mono', monospace; font-size: 0.8rem; color: #00AAFF;">
-                    <button class="btn" id="disconnectAuthBtn" type="button" hidden>[ DISCONNECT ]</button>
+                    <button class="btn" id="disconnectAuthBtn" type="button" hidden data-i18n="disconnect">[ DISCONNECT ]</button>
           <button class="btn" id="unusedBrowserAuthBtn" type="button" hidden aria-hidden="true"></button>
         </div>
       </div>
@@ -973,13 +1038,13 @@
     </div>
 
     <div class="card" style="margin-top: 1.5rem; max-width: 800px; margin-left: auto; margin-right: auto;">
-      <h3>Progress Log</h3>
+      <h3 data-i18n="progressLog">Progress Log</h3>
       <div class="progress-shell">
         <div class="progress-meta">
-          <span class="progress-label" id="progressLabel">Idle</span>
+          <span class="progress-label" id="progressLabel" data-i18n="idle">Idle</span>
           <span class="progress-percent" id="progressPercent">0%</span>
         </div>
-        <div class="progress-track" aria-label="Conversion progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" role="progressbar">
+        <div class="progress-track" aria-label="Conversion progress" data-i18n-aria-label="conversionProgress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" role="progressbar">
           <div class="progress-bar" id="progressBar"></div>
           <div class="progress-scan"></div>
         </div>
@@ -987,22 +1052,22 @@
 
       <div class="backend-status" id="backendStatus">
         <span class="backend-dot unavailable"></span>
-        <span>Checking backend...</span>
+        <span data-i18n="checkingBackend">Checking backend...</span>
       </div>
     </div>
 
     <div class="card manual-review-section" id="manualReviewSection">
-      <h3>Manual Review</h3>
-      <p id="manualReviewDescription" style="color: #336699; font-size: 0.875rem; margin-bottom: 1rem;">
+      <h3 data-i18n="manualReview">Manual Review</h3>
+      <p id="manualReviewDescription" data-i18n="manualReviewDescription" style="color: #336699; font-size: 0.875rem; margin-bottom: 1rem;">
         Unmatched or ambiguous tracks detected. Search manually or choose a suggested match.
       </p>
       <div id="manualTracksList"></div>
-      <button class="btn btn-add-manual" id="addManualBtn" disabled>[ ADD SELECTED ]</button>
+      <button class="btn btn-add-manual" id="addManualBtn" disabled data-i18n="addSelected">[ ADD SELECTED ]</button>
           <p id="manualAddStatus" role="status" style="display: none; margin-top: 0.75rem; font-size: 0.875rem;"></p>
     </div>
 
     <div class="card" id="summaryCard" style="display: none; max-width: 800px; margin-left: auto; margin-right: auto;">
-      <h3>Summary</h3>
+      <h3 data-i18n="summary">Summary</h3>
       <div class="summary" id="summaryGrid"></div>
       <div class="playlist-url" id="playlistUrl" style="display: none;"></div>
     </div>
@@ -1023,14 +1088,18 @@
          });
          const data = await res.json();
          window.parsedTracks = data.tracks || [];
-         document.getElementById('trackCount').textContent = '[' + window.parsedTracks.length + '] tracks loaded';
+         document.getElementById('trackCount').textContent = t('tracksLoaded', { count: window.parsedTracks.length });
          // Set playlist name
          const playlistInput = document.getElementById('playlistName');
          playlistInput.value = file.name.replace(/\.(m3u|m3u8)$/i, '').replace(/[^\w\s-]/g, '_').toUpperCase();
 
          // Aplicar estilo verde al cuadro [FILE] inmediatamente
          dropZone.classList.add('has-file');
-         uploadText.innerHTML = `<span class="filename">[OK] ${file.name}</span>`;
+         uploadText.replaceChildren();
+             const filename = document.createElement('span');
+             filename.className = 'filename';
+             filename.textContent = `[OK] ${file.name}`;
+             uploadText.appendChild(filename);
          dropZone.style.borderColor = '#00FF88';
          dropZone.style.color = '#00FF88';
          dropZone.style.backgroundColor = 'rgba(0, 255, 136, 0.1)';
@@ -1051,7 +1120,14 @@
   </script>
 
   <script>
-    // Variables globales
+    const translations = { en: { subtitle: 'Import your music library to YouTube Music', uploadDrop: 'Drop .m3u file here', uploadHint: 'or paste M3U content below', m3uContent: 'M3U Content', playlistName: 'Playlist Name', playlistPlaceholder: 'MY_PLAYLIST', matchThreshold: 'Match Threshold', thresholdHelp: 'Minimum similarity percentage to consider a song as found. 60% works well for most cases.', dryRun: 'Dry Run Mode (no playlist creation)', connect: '[ CONNECT YOUTUBE MUSIC ]', disconnect: '[ DISCONNECT ]', authUnauthenticated: 'STATUS: NOT AUTHENTICATED', authWaiting: 'STATUS: WAITING FOR AUTHENTICATION', authConnected: 'STATUS: AUTHENTICATED', authCancelled: 'STATUS: AUTHENTICATION CANCELLED', authTimedOut: 'STATUS: AUTHENTICATION TIMED OUT', authFailed: 'STATUS: AUTHENTICATION FAILED', authRequired: 'STATUS: AUTHENTICATION REQUIRED', progressLog: 'Progress Log', idle: 'Idle', conversionProgress: 'Conversion progress', checkingBackend: 'Checking backend...', manualReview: 'Manual Review', manualReviewDescription: 'Unmatched or ambiguous tracks detected. Search manually or choose a suggested match.', addSelected: '[ ADD SELECTED ]', summary: 'Summary', tracksLoaded: '[{count}] tracks loaded', manualAdditions: 'Manual additions:', tracksAdded: '{count} track{plural} added to the playlist.', manualAdditionsUnavailable: 'Manual additions require a playlist created by a non-dry-run conversion.', unknownArtist: 'Unknown artist', untitledTrack: 'Untitled track', verifyCandidate: 'Verify artist/version before adding', recommendedResults: 'Recommended results', otherResults: 'Other results — verify artist/version', noMatches: 'No matches found. Try a different query.', searchThreshold: 'Search threshold: {threshold} · {range}{more}', resultsRange: 'Results {from}–{to}', noMoreResults: ' · No more results at this threshold.', searching: '[ SEARCHING... ]', searchFailed: 'Search failed. Please try again.', chooseSuggestion: 'Choose a suggestion or search YouTube Music for each unmatched or ambiguous track.', chooseBeforeAdding: 'Choose or search for matches now. Adding selections requires a playlist from a non-dry-run conversion.', searchMatch: 'Search match for {title}', search: '[ SEARCH ]', noSuggestedMatch: 'No suggested match. Search YouTube Music to choose one.', couldNotAdd: 'Could not add selected tracks. Please try again.', noTracks: 'No tracks to convert. Load an .m3u file first.', playlistRequired: 'Enter a playlist name.', processing: '[ PROCESSING... ]', starting: 'Starting conversion...', searchingTrack: 'Searching {artist} — {title}', processedTracks: 'Processed {added} of {total} tracks', backendSearching: 'Backend is searching...', completed: 'Completed', conversionCompleted: 'Conversion completed', matched: 'Matched:', unmatched: 'Unmatched:', ambiguous: 'Ambiguous:', trackStatusUnmatched: 'unmatched', trackStatusAmbiguous: 'ambiguous', trackStatusManualReview: 'manual review', trackStatusUnknown: 'needs review', playlistUrl: 'Playlist URL:', conversionError: 'Error during conversion. Check the logs.', backendConnected: 'Backend connected' }, es: { subtitle: 'Importa tu biblioteca musical a YouTube Music', uploadDrop: 'Suelta el archivo .m3u aquí', uploadHint: 'o pega el contenido M3U abajo', m3uContent: 'Contenido M3U', playlistName: 'Nombre de la playlist', playlistPlaceholder: 'MI_PLAYLIST', matchThreshold: 'Umbral de coincidencia', thresholdHelp: 'Porcentaje mínimo de similitud para considerar una canción encontrada. El 60 % funciona bien en la mayoría de los casos.', dryRun: 'Modo de prueba (no crea la playlist)', connect: '[ CONECTAR YOUTUBE MUSIC ]', disconnect: '[ DESCONECTAR ]', authUnauthenticated: 'ESTADO: NO AUTENTICADO', authWaiting: 'ESTADO: ESPERANDO AUTENTICACIÓN', authConnected: 'ESTADO: AUTENTICADO', authCancelled: 'ESTADO: AUTENTICACIÓN CANCELADA', authTimedOut: 'ESTADO: AUTENTICACIÓN AGOTADA', authFailed: 'ESTADO: AUTENTICACIÓN FALLIDA', authRequired: 'ESTADO: AUTENTICACIÓN REQUERIDA', progressLog: 'Registro de progreso', idle: 'Inactivo', conversionProgress: 'Progreso de conversión', checkingBackend: 'Comprobando el servidor...', manualReview: 'Revisión manual', manualReviewDescription: 'Se detectaron pistas sin coincidencia o ambiguas. Busca manualmente o elige una coincidencia sugerida.', addSelected: '[ ADD SELECTED ]', summary: 'Resumen', tracksLoaded: '[{count}] pistas cargadas', manualAdditions: 'Añadidos manualmente:', tracksAdded: '{count} pista{plural} añadida{plural} a la playlist.', manualAdditionsUnavailable: 'Los añadidos manuales requieren una playlist creada en una conversión sin modo de prueba.', unknownArtist: 'Artista desconocido', untitledTrack: 'Pista sin título', verifyCandidate: 'Verifica el artista/la versión antes de añadir', recommendedResults: 'Resultados recomendados', otherResults: 'Otros resultados — verifica el artista/la versión', noMatches: 'No se encontraron coincidencias. Prueba otra búsqueda.', searchThreshold: 'Umbral de búsqueda: {threshold} · {range}{more}', resultsRange: 'Resultados {from}–{to}', noMoreResults: ' · No hay más resultados con este umbral.', searching: '[ BUSCANDO... ]', searchFailed: 'La búsqueda falló. Inténtalo de nuevo.', chooseSuggestion: 'Elige una sugerencia o busca en YouTube Music para cada pista sin coincidencia o ambigua.', chooseBeforeAdding: 'Elige o busca coincidencias ahora. Para añadir selecciones se requiere una playlist creada sin modo de prueba.', searchMatch: 'Buscar coincidencia para {title}', search: '[ SEARCH ]', noSuggestedMatch: 'No hay coincidencia sugerida. Busca en YouTube Music para elegir una.', couldNotAdd: 'No se pudieron añadir las pistas seleccionadas. Inténtalo de nuevo.', noTracks: 'No hay pistas para convertir. Carga primero un archivo .m3u.', playlistRequired: 'Introduce un nombre para la playlist.', processing: '[ PROCESSING... ]', starting: 'Iniciando conversión...', searchingTrack: 'Buscando {artist} — {title}', processedTracks: 'Procesadas {added} de {total} pistas', backendSearching: 'El servidor está buscando...', completed: 'Completado', conversionCompleted: 'Conversión completada', matched: 'Con coincidencia:', unmatched: 'Sin coincidencia:', ambiguous: 'Ambigua:', trackStatusUnmatched: 'sin coincidencia', trackStatusAmbiguous: 'ambigua', trackStatusManualReview: 'revisión manual', trackStatusUnknown: 'requiere revisión', playlistUrl: 'URL de la playlist:', conversionError: 'Error durante la conversión. Revisa los registros.', backendConnected: 'Servidor conectado' } };
+        const localePreferences = [...(navigator.languages || []), navigator.language].filter((value) => typeof value === 'string' && value);
+        const locale = localePreferences.some((value) => /^es(?:-|$)/i.test(value)) ? 'es' : 'en';
+        function t(key, params = {}) { const value = translations[locale][key] || translations.en[key] || key; return value.replace(/\{(\w+)\}/g, (_, name) => params[name] ?? `{${name}}`); }
+        function applyTranslations() { document.documentElement.lang = locale; document.querySelectorAll('[data-i18n]').forEach((element) => { element.textContent = t(element.dataset.i18n); }); document.querySelectorAll('[data-i18n-placeholder]').forEach((element) => { element.placeholder = t(element.dataset.i18nPlaceholder); }); document.querySelectorAll('[data-i18n-title]').forEach((element) => { element.title = t(element.dataset.i18nTitle); }); document.querySelectorAll('[data-i18n-aria-label]').forEach((element) => { element.setAttribute('aria-label', t(element.dataset.i18nAriaLabel)); }); }
+        applyTranslations();
+
+        // Variables globales
     const fileInput = document.getElementById('fileInput');
     const dropZone = document.getElementById('dropZone');
     const uploadText = document.getElementById('uploadText');
@@ -1078,13 +1154,15 @@
             const manualAddStatus = document.getElementById('manualAddStatus');
         const manualSelections = new Map();
         let manualAdditionsCount = 0;
-        let manualAddToastTimer = null;
+        const toastTimers = new Map();
             const manualSearchRequests = new Map();
         const manualSearchStates = new Map();
     let parsedTracks = [];
     let lastPlaylistId = null;
     let lastConversionResults = [];
     let eventSource = null;
+        let latestProcessedCount = 0;
+        let latestProgressTotal = 0;
     const guidedBrowserAuthPanel = document.getElementById('browserAuthPanel');
         const disconnectAuthBtn = document.getElementById('disconnectAuthBtn');
     let authPoll = null;
@@ -1136,7 +1214,7 @@
         guidedBrowserAuthPanel.hidden = true;
         await checkAuthStatus();
       } catch (error) {
-        setAuthStatus('ESTADO: AUTENTICACIÓN REQUERIDA', '#FF4444');
+        setAuthStatus(t('authRequired'), '#FF4444');
         console.error('Browser authentication failed:', error);
       }
     }
@@ -1153,17 +1231,17 @@
           guidedBrowserAuthPanel.hidden = !(active || status === 'connected');
                     disconnectAuthBtn.hidden = status !== 'connected';
           if (status === 'connected') {
-            setAuthStatus('ESTADO: AUTENTICADO', '#00FF88', true);
+            setAuthStatus(t('authConnected'), '#00FF88', true);
           } else if (active) {
-            setAuthStatus('ESTADO: ESPERANDO AUTENTICACIÓN', '#00AAFF');
+            setAuthStatus(t('authWaiting'), '#00AAFF');
           } else if (status === 'cancelled') {
-            setAuthStatus('ESTADO: AUTENTICACIÓN CANCELADA', '#FF4444');
+            setAuthStatus(t('authCancelled'), '#FF4444');
           } else if (status === 'timed_out') {
-            setAuthStatus('ESTADO: AUTENTICACIÓN AGOTADA', '#FF4444');
+            setAuthStatus(t('authTimedOut'), '#FF4444');
           } else if (status === 'error') {
-            setAuthStatus('ESTADO: AUTENTICACIÓN FALLIDA', '#FF4444');
+            setAuthStatus(t('authFailed'), '#FF4444');
           } else {
-            setAuthStatus('ESTADO: NO AUTENTICADO', '#FF4444', true);
+            setAuthStatus(t('authUnauthenticated'), '#FF4444', true);
           }
         }
 
@@ -1186,7 +1264,7 @@
         };
 
     async function startYtMusicAuthorization(popup) {
-      setAuthStatus('ESTADO: ESPERANDO AUTENTICACIÓN', '#00AAFF');
+      setAuthStatus(t('authWaiting'), '#00AAFF');
       try {
         const response = await fetch('/api/ytmusic-auth/start', { method: 'POST' });
         const authorization = await response.json();
@@ -1214,13 +1292,13 @@
             return;
           }
           popup.close();
-          setAuthStatus('ESTADO: AUTENTICACIÓN FALLIDA', '#FF4444');
+          setAuthStatus(t('authFailed'), '#FF4444');
         };
         window.setTimeout(poll, Math.max(authorization.interval, 5) * 1000);
       } catch (error) {
         popup.close();
         console.error('Unable to start YouTube Music authorization:', error);
-        setAuthStatus('ESTADO: AUTENTICACIÓN FALLIDA', '#FF4444');
+        setAuthStatus(t('authFailed'), '#FF4444');
       }
     }
 
@@ -1281,32 +1359,37 @@
 
     // Función para iniciar la conversión de la playlist
     function formatArtists(artist) {
-          return Array.isArray(artist) ? artist.join(', ') : (artist || 'Unknown artist');
+          return Array.isArray(artist) ? artist.join(', ') : (artist || t('unknownArtist'));
         }
 
         function updateManualAddButton() {
           addManualBtn.disabled = manualSelections.size === 0 || !lastPlaylistId;
           addManualBtn.title = lastPlaylistId
                         ? ''
-            : 'Manual additions require a playlist created by a non-dry-run conversion.';
+            : t('manualAdditionsUnavailable');
+        }
+
+        function showToast(message, type = 'error', id = 'appToast') {
+          let toast = document.getElementById(id);
+          if (!toast) {
+            toast = document.createElement('div');
+            toast.id = id;
+            document.body.appendChild(toast);
+          }
+          toast.className = type === 'success' ? 'manual-add-toast' : 'manual-add-toast toast-error';
+          toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+          toast.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+          toast.textContent = message;
+          const timer = toastTimers.get(id);
+          if (timer !== undefined) window.clearTimeout(timer);
+          toastTimers.set(id, window.setTimeout(() => {
+            toast.remove();
+            toastTimers.delete(id);
+          }, 4000));
         }
 
         function showManualAddToast(count) {
-          let toast = document.getElementById('manualAddToast');
-          if (!toast) {
-            toast = document.createElement('div');
-            toast.id = 'manualAddToast';
-            toast.className = 'manual-add-toast';
-            toast.setAttribute('role', 'status');
-            toast.setAttribute('aria-live', 'polite');
-            document.body.appendChild(toast);
-          }
-          toast.textContent = `${count} track${count === 1 ? '' : 's'} added to the playlist.`;
-          if (manualAddToastTimer !== null) window.clearTimeout(manualAddToastTimer);
-          manualAddToastTimer = window.setTimeout(() => {
-            toast.remove();
-            manualAddToastTimer = null;
-          }, 4000);
+          showToast(t('tracksAdded', { count, plural: count === 1 ? '' : 's' }), 'success', 'manualAddToast');
         }
 
         function updateManualAdditionsSummary() {
@@ -1317,7 +1400,7 @@
             item.className = 'summary-item summary-manual-additions';
             const label = document.createElement('div');
             label.className = 'summary-label';
-            label.textContent = 'Manual additions:';
+            label.textContent = t('manualAdditions');
             const value = document.createElement('div');
             value.className = 'summary-value';
             item.append(label, value);
@@ -1343,7 +1426,7 @@
 
           const title = document.createElement('div');
           title.className = 'manual-result-title';
-          title.textContent = candidate.title || 'Untitled track';
+          title.textContent = candidate.title || t('untitledTrack');
           const artist = document.createElement('div');
           artist.className = 'manual-result-artist';
           artist.textContent = formatArtists(candidate.artist);
@@ -1351,7 +1434,7 @@
           if (candidate.reviewReason) {
             const reason = document.createElement('div');
             reason.className = 'manual-result-review-reason';
-            reason.textContent = 'Verify artist/version before adding';
+            reason.textContent = t('verifyCandidate');
             option.appendChild(reason);
           }
           option.addEventListener('click', () => selectManualCandidate(trackId, candidate, candidateList));
@@ -1379,16 +1462,16 @@
             return true;
           });
           appendManualResultSection(
-            trackId, uniqueCandidates(strictCandidates), candidateList, 'Recommended results'
+            trackId, uniqueCandidates(strictCandidates), candidateList, t('recommendedResults')
           );
           appendManualResultSection(
             trackId, uniqueCandidates(relaxedCandidates), candidateList,
-            'Other results — verify artist/version', true
+            t('otherResults'), true
           );
           if (!candidateList.childElementCount) {
             const noResults = document.createElement('div');
             noResults.className = 'manual-result-artist';
-            noResults.textContent = 'No matches found. Try a different query.';
+            noResults.textContent = t('noMatches');
             candidateList.appendChild(noResults);
           }
         }
@@ -1411,8 +1494,8 @@
         }
 
         function showManualSearchThreshold(element, threshold, offset = 0, candidateCount = 0, exhausted = false) {
-          const range = candidateCount ? `Results ${offset + 1}–${offset + candidateCount}` : `Results ${offset + 1}–${offset + 5}`;
-          element.textContent = `Search threshold: ${threshold.toFixed(2)} · ${range}${exhausted ? ' · No more results at this threshold.' : ''}`;
+          const range = t('resultsRange', { from: offset + 1, to: offset + (candidateCount || 5) });
+          element.textContent = t('searchThreshold', { threshold: threshold.toFixed(2), range, more: exhausted ? t('noMoreResults') : '' });
         }
 
         async function searchManualTrack(trackId, query, expectedArtist, expectedTitle, candidateList, searchButton, thresholdDisplay) {
@@ -1435,7 +1518,7 @@
           searchButton.disabled = true;
               searchButton.setAttribute('aria-busy', 'true');
               const buttonText = searchButton.textContent;
-              searchButton.textContent = '[ SEARCHING... ]';
+              searchButton.textContent = t('searching');
               const isCurrentRequest = () => manualSearchRequests.get(trackId) === request
                 && Number(searchButton.dataset.searchVersion) === request.version;
           try {
@@ -1466,7 +1549,7 @@
                 console.error('Manual search failed:', error);
             const failed = document.createElement('div');
             failed.className = 'manual-result-artist';
-            failed.textContent = 'Search failed. Please try again.';
+            failed.textContent = t('searchFailed');
             candidateList.replaceChildren(failed);
           } finally {
             if (isCurrentRequest()) {
@@ -1489,8 +1572,8 @@
           }
           manualReviewSection.classList.add('visible');
           manualReviewDescription.textContent = lastPlaylistId
-            ? 'Choose a suggestion or search YouTube Music for each unmatched or ambiguous track.'
-            : 'Choose or search for matches now. Adding selections requires a playlist from a non-dry-run conversion.';
+            ? t('chooseSuggestion')
+            : t('chooseBeforeAdding');
 
           lastConversionResults.forEach((track, index) => {
             const trackId = `review-${index}`;
@@ -1500,7 +1583,12 @@
             header.className = 'manual-track-header';
             const info = document.createElement('div');
             info.className = 'manual-track-info';
-            info.textContent = `${track.artist || 'Unknown artist'} — ${track.title || 'Untitled track'} (${track.status})`;
+            const statusKeys = {
+              unmatched: 'trackStatusUnmatched',
+              ambiguous: 'trackStatusAmbiguous',
+              manual_review: 'trackStatusManualReview'
+            };
+            info.textContent = `${track.artist || t('unknownArtist')} — ${track.title || t('untitledTrack')} (${t(statusKeys[track.status] || 'trackStatusUnknown')})`;
             header.appendChild(info);
 
             const actions = document.createElement('div');
@@ -1509,7 +1597,7 @@
             input.type = 'text';
             input.className = 'manual-search-input';
             input.value = [track.artist, track.title].filter(Boolean).join(' ');
-            input.setAttribute('aria-label', `Search match for ${track.title || 'track'}`);
+            input.setAttribute('aria-label', t('searchMatch', { title: track.title || t('untitledTrack') }));
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'btn-small';
@@ -1530,7 +1618,7 @@
             } else {
               const prompt = document.createElement('div');
               prompt.className = 'manual-result-artist';
-              prompt.textContent = 'No suggested match. Search YouTube Music to choose one.';
+              prompt.textContent = t('noSuggestedMatch');
               candidates.appendChild(prompt);
             }
             button.addEventListener('click', () => searchManualTrack(
@@ -1593,7 +1681,7 @@
             showManualReview();
           } catch (error) {
             console.error('Adding manual selections failed:', error);
-                manualAddStatus.textContent = error?.message || 'Could not add selected tracks. Please try again.';
+                manualAddStatus.textContent = t('couldNotAdd');
                 manualAddStatus.style.color = '#FF3366';
                 manualAddStatus.style.display = 'block';
             updateManualAddButton();
@@ -1602,27 +1690,28 @@
 
         const startConversion = async () => {
       if (!window.parsedTracks || window.parsedTracks.length === 0) {
-        alert("No hay tracks para convertir. Carga un archivo .m3u primero.");
+        showToast(t('noTracks'));
         return;
       }
 
       const playlistNameValue = playlistName.value.trim();
       if (!playlistNameValue) {
-        alert("Ingresa un nombre para la playlist.");
+        showToast(t('playlistRequired'));
         return;
       }
 
       // Deshabilitar el botón durante la conversión
       startBtn.disabled = true;
-      startBtn.textContent = "[ PROCESSING... ]";
+      startBtn.textContent = t('processing');
 
       // Clear the previous conversion summary.
       summaryCard.style.display = "none";
           lastPlaylistId = null;
           manualAdditionsCount = 0;
-          if (manualAddToastTimer !== null) {
-            window.clearTimeout(manualAddToastTimer);
-            manualAddToastTimer = null;
+          const manualToastTimer = toastTimers.get('manualAddToast');
+          if (manualToastTimer !== undefined) {
+            window.clearTimeout(manualToastTimer);
+            toastTimers.delete('manualAddToast');
           }
           document.getElementById('manualAddToast')?.remove();
           manualAddStatus.style.display = 'none';
@@ -1634,9 +1723,11 @@
           addManualBtn.disabled = true;
 
       // Configurar la barra de progreso
+      latestProcessedCount = 0;
+      latestProgressTotal = 0;
       progressBar.style.width = "0%";
       progressPercent.textContent = "0%";
-      progressLabel.textContent = "Starting conversion...";
+      progressLabel.textContent = t('starting');
 
       try {
         // Crear EventSource para recibir actualizaciones de progreso
@@ -1645,20 +1736,33 @@
         eventSource.onmessage = (event) => {
           const data = JSON.parse(event.data);
           if (data.type === "progress") {
-            const percent = Math.round((data.added / data.total) * 100);
+            const added = Number(data.added);
+            const total = Number(data.total);
+            const isValidProgress = Number.isFinite(added) && Number.isFinite(total) && total > 0;
+
+            if (latestProgressTotal > 0 && latestProcessedCount >= latestProgressTotal) return;
+            if (isValidProgress && latestProgressTotal === total && added < latestProcessedCount) return;
+
+            if (isValidProgress) {
+              latestProcessedCount = added;
+              latestProgressTotal = total;
+            }
+
+            const percent = Math.round((added / total) * 100);
             progressBar.style.width = `${percent}%`;
             progressPercent.textContent = `${percent}%`;
-            progressLabel.textContent = data.artist && data.title
-              ? `Searching ${data.artist} — ${data.title}`
-              : `Processed ${data.added} of ${data.total} tracks`;
-            backendStatus.lastElementChild.textContent = 'Backend is searching...';
+            // Progress events only move the bar. The label is reserved for the active search.
+            if (data.artist && data.title) {
+              progressLabel.textContent = t('searchingTrack', { artist: data.artist, title: data.title });
+            }
+            backendStatus.lastElementChild.textContent = t('backendSearching');
             backendStatus.firstElementChild.className = 'backend-dot available';
           } else if (data.type === "result") {
             progressBar.style.width = "100%";
             progressPercent.textContent = "100%";
-            progressLabel.textContent = "Completed";
+            progressLabel.textContent = t('completed');
             progressBar.parentElement.setAttribute("aria-valuenow", "100");
-            backendStatus.lastElementChild.textContent = "Conversion completed";
+            backendStatus.lastElementChild.textContent = t('conversionCompleted');
             backendStatus.firstElementChild.className = "backend-dot available";
             eventSource.close();
             startBtn.disabled = false;
@@ -1666,14 +1770,28 @@
 
             // Mostrar resumen solo al finalizar
             summaryCard.style.display = "block";
-            summaryGrid.innerHTML = `
-              <div class="summary-item summary-matched"><div class="summary-label">Matched:</div><div class="summary-value">${data.matched}</div></div>
-              <div class="summary-item summary-unmatched"><div class="summary-label">Unmatched:</div><div class="summary-value">${data.unmatched}</div></div>
-              <div class="summary-item summary-ambiguous"><div class="summary-label">Ambiguous:</div><div class="summary-value">${data.ambiguous}</div></div>
-            `;
+            summaryGrid.replaceChildren();
+            [['matched', data.matched], ['unmatched', data.unmatched], ['ambiguous', data.ambiguous]].forEach(([key, value]) => {
+              const item = document.createElement('div');
+              item.className = `summary-item summary-${key}`;
+              const label = document.createElement('div');
+              label.className = 'summary-label';
+              label.textContent = t(key);
+              const count = document.createElement('div');
+              count.className = 'summary-value';
+              count.textContent = String(value);
+              item.append(label, count);
+              summaryGrid.appendChild(item);
+            });
 
             if (data.playlistUrl) {
-              playlistUrl.innerHTML = `Playlist URL: <a href="${data.playlistUrl}" target="_blank">${data.playlistUrl}</a>`;
+              playlistUrl.replaceChildren(`${t('playlistUrl')} `);
+              const link = document.createElement('a');
+              link.href = data.playlistUrl;
+              link.target = '_blank';
+              link.rel = 'noopener noreferrer';
+              link.textContent = data.playlistUrl;
+              playlistUrl.appendChild(link);
               playlistUrl.style.display = "block";
             }
 
@@ -1697,14 +1815,14 @@
           startBtn.disabled = false;
           startBtn.textContent = "[ EXECUTE ]";
 
-          alert("Error durante la conversión. Revisa los logs.");
+          showToast(t('conversionError'));
         };
 
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => reject(new Error('Progress stream timed out')), 5000);
           eventSource.onopen = () => {
             clearTimeout(timeout);
-            backendStatus.lastElementChild.textContent = 'Backend connected';
+            backendStatus.lastElementChild.textContent = t('backendConnected');
             backendStatus.firstElementChild.className = 'backend-dot available';
             resolve();
           };
@@ -1728,7 +1846,7 @@
 
       } catch (err) {
         console.error("Error durante la conversión:", err);
-        alert("Error durante la conversión. Revisa los logs.");
+        showToast(t('conversionError'));
 
         // Rehabilitar el botón
         startBtn.disabled = false;
@@ -1760,7 +1878,11 @@
       if (state.file) {
         console.log('Restaurando [File]:', state.file);
         dropZone.classList.add('has-file');
-        uploadText.innerHTML = `[OK] ${state.file}`;
+        uploadText.replaceChildren();
+            const restoredFilename = document.createElement('span');
+            restoredFilename.className = 'filename';
+            restoredFilename.textContent = `[OK] ${state.file}`;
+            uploadText.appendChild(restoredFilename);
         dropZone.style.borderColor = '#00FF88';
         dropZone.style.color = '#00FF88';
         dropZone.style.backgroundColor = 'rgba(0, 255, 136, 0.1)';
@@ -1820,7 +1942,7 @@
         }
       } else if (event.data === 'auth_error') {
         console.error('[auth] Authentication error message received');
-        alert('Error al iniciar la autenticación. Verifica la configuración.');
+        showToast(t('authFailed'));
       } else {
         console.warn('[auth] Unknown window message received');
       }
@@ -1838,7 +1960,7 @@
           console.log('Autenticación exitosa detectada');
           checkAuthStatus(); // Verificar el estado nuevamente
         } else if (authStatus === 'error') {
-          alert('Error en la autenticación. Inténtalo nuevamente.');
+          showToast(t('authFailed'));
         }
         // Limpiar el parámetro de la URL
         window.history.replaceState({}, document.title, '/');

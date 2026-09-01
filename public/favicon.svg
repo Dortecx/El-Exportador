@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Playlist export">
+  <path d="M8 5h26l12 12v42H8z" fill="none" stroke="#00AAFF" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M34 5v12h12M15 27h13M15 35h11" fill="none" stroke="#6BE8FF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M31 43V29l12-4v15" fill="none" stroke="#00E1FF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="27" cy="44" r="4" fill="#00E1FF"/>
+  <circle cx="43" cy="40" r="4" fill="#00E1FF"/>
+  <path d="M45 52h13m0 0-5-5m5 5-5 5" fill="none" stroke="#00E1FF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
