@@ -10,3 +10,15 @@ __pycache__/
 portable-win/
 state/
 logs/
+
+# Local development artifacts
+*.log
+*.m3u
+*.m3u8
+!test/fixtures/*.m3u
+backup/
+backups/
+*.swp
+*.backup
+.codegraph/
+.opencode/
