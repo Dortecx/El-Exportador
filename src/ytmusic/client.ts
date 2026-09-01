@@ -21,7 +21,8 @@ if (!PACKAGED_SEARCHER && !fs.existsSync(SEARCHER_SCRIPT)) {
 // Use the Python interpreter available in the PowerShell PATH.
 const PYTHON_CANDIDATES = ["python"];
 
-export const YTMusicAuthFile = path.join(os.homedir(), '.config', 'm3u-to-ytmusic', 'ytmusic_auth.json');
+const STATE_ROOT = process.env.M3U_YTMUSIC_STATE_DIR?.trim() || os.homedir();
+export const YTMusicAuthFile = path.join(STATE_ROOT, '.config', 'm3u-to-ytmusic', 'ytmusic_auth.json');
 
 /**
  * Verifica si el usuario está autenticado con YouTube Music.

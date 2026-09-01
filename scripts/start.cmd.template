@@ -2,7 +2,8 @@
 setlocal EnableExtensions
 set "ROOT=%~dp0"
 set "USER_LOCALAPPDATA=%LOCALAPPDATA%"
-set "STATE_DIR=%ROOT%state"
+set "M3U_YTMUSIC_STATE_DIR=%ROOT%state"
+set "STATE_DIR=%M3U_YTMUSIC_STATE_DIR%"
 set "LOG_DIR=%ROOT%logs"
 set "SEARCHER=%ROOT%artifacts\searcher.exe"
 set "SUPPORTED_BROWSER_FOUND="
@@ -40,8 +41,6 @@ if %NODE_MAJOR% LSS 20 (
 )
 
 set "M3U_YTMUSIC_SEARCHER=%SEARCHER%"
-set "HOME=%STATE_DIR%"
-set "USERPROFILE=%STATE_DIR%"
 set "NODE_ENV=production"
 set "PORT=3000"
 

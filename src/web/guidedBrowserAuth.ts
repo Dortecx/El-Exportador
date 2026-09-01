@@ -7,7 +7,8 @@ import CDP from "chrome-remote-interface";
 import { YTMusicAuthFile } from "../ytmusic/client";
 
 const MUSIC_URL = "https://music.youtube.com";
-const PROFILE_ROOT = path.join(os.homedir(), ".config", "m3u-to-ytmusic", "browser-profile");
+const STATE_ROOT = process.env.M3U_YTMUSIC_STATE_DIR?.trim() || os.homedir();
+const PROFILE_ROOT = path.join(STATE_ROOT, ".config", "m3u-to-ytmusic", "browser-profile");
 const TIMEOUT_MS = 5 * 60 * 1000;
 const CORRELATION_TTL_MS = 30_000;
 const MAX_PENDING_CORRELATIONS = 100;
@@ -144,6 +145,8 @@ export class GuidedBrowserAuth {
       "--no-first-run",
       "--no-default-browser-check",
       "--disable-extensions",
+      "--disable-gpu",
+      "--disable-gpu-shader-disk-cache",
     ], { detached: false, windowsHide: false });
     console.info("[guided-auth] browser process spawned");
     launchedBrowser.once("error", () => {

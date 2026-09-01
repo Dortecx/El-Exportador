@@ -19,7 +19,8 @@ except ImportError:
     sys.exit(1)
 
 
-AUTH_FILE = os.path.join(os.path.expanduser('~'), '.config', 'm3u-to-ytmusic', 'ytmusic_auth.json')
+STATE_ROOT = os.environ.get('M3U_YTMUSIC_STATE_DIR') or os.path.expanduser('~')
+AUTH_FILE = os.path.join(STATE_ROOT, '.config', 'm3u-to-ytmusic', 'ytmusic_auth.json')
 thread_local = threading.local()
 
 def get_ytmusic():
