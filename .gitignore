@@ -22,3 +22,5 @@ backups/
 *.backup
 .codegraph/
 .opencode/
+install-esbuild.js
+openspec/
