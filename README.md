@@ -54,6 +54,22 @@
 
 ---
 
+## Docker
+
+Build and run the container with port `3000` mapped and persistent authentication state:
+
+```bash
+docker build -t m3u-to-ytmusic .
+docker run --rm -p 3000:3000 \
+  -e M3U_YTMUSIC_STATE_DIR=/state \
+  -v m3u-ytmusic-state:/state \
+  m3u-to-ytmusic
+```
+
+The mounted volume must already contain valid YouTube Music authentication state. Guided browser authentication is Windows-only and is not supported inside the container.
+
+---
+
 ## Usage
 1. **Authenticate**: Click the "Authenticate with YouTube Music" button to log in to your account.
 2. **Upload**: Select and upload your `.m3u` playlist file.
@@ -127,6 +143,22 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
    ```bash
    http://localhost:3000
    ```
+
+---
+
+## Docker
+
+Crea y ejecuta el contenedor con el puerto `3000` mapeado y estado de autenticación persistente:
+
+```bash
+docker build -t m3u-to-ytmusic .
+docker run --rm -p 3000:3000 \
+  -e M3U_YTMUSIC_STATE_DIR=/state \
+  -v m3u-ytmusic-state:/state \
+  m3u-to-ytmusic
+```
+
+El volumen montado debe contener previamente un estado de autenticación válido de YouTube Music. La autenticación guiada mediante navegador solo funciona en Windows y no es compatible dentro del contenedor.
 
 ---
 

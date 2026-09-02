@@ -1,2 +1,10 @@
-ytmusicapi
-requests
+# Direct runtime dependency
+# ytmusicapi requires requests for HTTP access.
+ytmusicapi==1.12.2
+
+# Locked HTTP dependency closure
+requests==2.34.2
+certifi==2026.7.22
+charset-normalizer==3.5.1
+idna==3.19
+urllib3==2.7.0

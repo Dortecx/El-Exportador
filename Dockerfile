@@ -1,21 +1,24 @@
-# Usar Python 3.11.8
+FROM node:20-slim AS node
+
 FROM python:3.11.8-slim
 
-# Instalar Node.js y npm
-RUN apt-get update && apt-get install -y curl && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs
+RUN apt-get update && apt-get install -y --no-install-recommends libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copiar el proyecto
+COPY --from=node /usr/local /usr/local
+
 WORKDIR /app
+
+COPY requirements.txt package.json package-lock.json ./
+RUN pip install --no-cache-dir -r requirements.txt && npm ci
+
 COPY . .
 
-# Instalar dependencias
-RUN pip install -r requirements.txt && \
-    npm install
+ENV PORT=3000
 
-# Exponer el puerto 3000
 EXPOSE 3000
 
-# Comando para correr el servidor
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || '3000') + '/').then(response => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1))"
+
 CMD ["npm", "run", "web"]
