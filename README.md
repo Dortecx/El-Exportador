@@ -30,10 +30,21 @@ npm run web
 
 ## Use and authentication
 
-1. In the local application, authenticate with YouTube Music when prompted.
-2. Upload an `.m3u` file.
-3. Start the conversion and follow its progress.
+1. In the local application, authenticate with YouTube Music when prompted, then upload an `.m3u` file.
+
+   <img src="docs/images/homepage.png" alt="Authentication and playlist upload screen" width="720">
+
+2. Start the conversion and follow its progress.
+
+   <img src="docs/images/converting_process.png" alt="Conversion progress screen" width="720">
+
+3. Resolve any unmatched or ambiguous tracks when prompted.
+
+   <img src="docs/images/manual_revision.png" alt="Manual track review screen" width="720">
+
 4. Find the created playlist in YouTube Music.
+
+   <img src="docs/images/Resume.png" alt="Conversion result summary" width="720">
 
 Guided browser authentication is available only on Windows. Do not expect it to work on macOS, Linux, or WSL.
 
@@ -50,10 +61,6 @@ Building the portable ZIP requires Node.js 20 or later, Python 3.11.8 with PyIns
 ## Platform limitations
 
 The local server can be run where its dependencies are supported, but guided browser authentication is Windows-only. Non-Windows platforms and WSL do not have a guided-login alternative in this project.
-
-## Screenshots
-
-No screenshots are currently included. See the [shared screenshot convention](docs/images/README.md) before adding one.
 
 ## License
 

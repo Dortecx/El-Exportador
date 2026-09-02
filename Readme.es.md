@@ -30,10 +30,21 @@ Se prefiere `npm ci` porque instala las dependencias fijadas en `package-lock.js
 
 ## Uso y autenticación
 
-1. En la aplicación local, autentícate con YouTube Music cuando se solicite.
-2. Sube un archivo `.m3u`.
-3. Inicia la conversión y consulta su progreso.
+1. En la aplicación local, autentícate con YouTube Music cuando se solicite y sube un archivo `.m3u`.
+
+   <img src="docs/images/homepage.png" alt="Pantalla de autenticación y carga de lista" width="720">
+
+2. Inicia la conversión y consulta su progreso.
+
+   <img src="docs/images/converting_process.png" alt="Pantalla de progreso de conversión" width="720">
+
+3. Resuelve las pistas no encontradas o ambiguas cuando se solicite.
+
+   <img src="docs/images/manual_revision.png" alt="Pantalla de revisión manual de pistas" width="720">
+
 4. Busca la lista creada en YouTube Music.
+
+   <img src="docs/images/Resume.png" alt="Resumen del resultado de la conversión" width="720">
 
 La autenticación guiada mediante navegador solo está disponible en Windows. No funciona en macOS, Linux ni WSL.
 
@@ -50,10 +61,6 @@ Para crear el ZIP portátil se requiere Windows, Node.js 20 o posterior y Python
 ## Limitaciones de plataforma
 
 El servidor local puede ejecutarse donde sus dependencias sean compatibles, pero la autenticación guiada mediante navegador es exclusiva de Windows. Las plataformas que no son Windows y WSL no disponen de una alternativa de inicio de sesión guiado en este proyecto.
-
-## Capturas de pantalla
-
-Actualmente no se incluyen capturas de pantalla. Consulta la [convención compartida para capturas](docs/images/README.md) antes de añadir una.
 
 ## Licencia
 
