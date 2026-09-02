@@ -24,25 +24,34 @@ const PYTHON_CANDIDATES = ["python"];
 const STATE_ROOT = process.env.M3U_YTMUSIC_STATE_DIR?.trim() || os.homedir();
 export const YTMusicAuthFile = path.join(STATE_ROOT, '.config', 'm3u-to-ytmusic', 'ytmusic_auth.json');
 
-/**
- * Verifica si el usuario está autenticado con YouTube Music.
- * @returns {boolean} - `true` si está autenticado, `false` si no.
- */
-export async function checkYtMusicAvailable(): Promise<boolean> {
-  try {
-    if (!fs.existsSync(YTMusicAuthFile)) {
-      return false;
-    }
-    
-    const authData = JSON.parse(fs.readFileSync(YTMusicAuthFile, 'utf-8'));
-    const requiredKeys = ['cookie', 'authorization'];
-    const hasRequiredKeys = requiredKeys.some(key => authData[key] !== undefined);
-    
-    return hasRequiredKeys;
-  } catch (error) {
-    console.error("Error al verificar autenticación:", error);
-    return false;
+export type YTMusicAuthValidationStatus = 'valid' | 'missing' | 'invalid' | 'unexpected_failure';
+
+export interface YTMusicAuthValidationResult {
+  status: YTMusicAuthValidationStatus;
+  reason?: string;
+}
+
+export class YTMusicAuthenticationRequiredError extends Error {
+  readonly code = 'AUTHENTICATION_REQUIRED';
+
+  constructor() {
+    super('Authentication required');
+    this.name = 'YTMusicAuthenticationRequiredError';
   }
+}
+
+/** Validates the configured auth file with a minimal live authenticated request. */
+export async function validateYtMusicAuth(): Promise<YTMusicAuthValidationResult> {
+  const result = await runYtMusicScript({ action: 'validate-auth' });
+  if (result?.status === 'valid' || result?.status === 'missing' || result?.status === 'invalid' || result?.status === 'unexpected_failure') {
+    return { status: result.status, ...(typeof result.reason === 'string' ? { reason: result.reason } : {}) };
+  }
+  return { status: 'unexpected_failure', reason: 'validation_failed' };
+}
+
+/** Verifica si el usuario está autenticado con YouTube Music. */
+export async function checkYtMusicAvailable(): Promise<boolean> {
+  return (await validateYtMusicAuth()).status === 'valid';
 }
 
 export interface YTMusicBestMatch {
@@ -64,6 +73,9 @@ export interface YTMusicConversionResult {
   playlistUrl: string | null;
   matched: number;
   results: YTMusicSearchResult[];
+  unmatchedTracks?: YTMusicSearchResult[];
+  ambiguousTracks?: YTMusicSearchResult[];
+  manualReviewTracks?: YTMusicSearchResult[];
 }
 
 export type ProgressCallback = (current: number, total: number, artist: string, title: string, status: string) => void;
@@ -90,7 +102,9 @@ async function spawnJson(
       try {
         const parsed = JSON.parse(line);
         if (parsed.error) {
-          const error = new Error(String(parsed.error));
+          const error = parsed.code === 'AUTHENTICATION_REQUIRED'
+            ? new YTMusicAuthenticationRequiredError()
+            : new Error(String(parsed.error));
           console.error(`[ytmusic] ${error.message}`);
           reject(error);
           return;
@@ -157,6 +171,7 @@ async function runYtMusicScript(input: object, onProgress?: ProgressCallback): P
     try {
       return await spawnJson(PACKAGED_SEARCHER, [], input, onProgress);
     } catch (error) {
+      if (error instanceof YTMusicAuthenticationRequiredError) throw error;
       throw new Error(`Could not execute packaged ytmusic backend (${PACKAGED_SEARCHER}): ${(error as Error).message}`);
     }
   }
@@ -165,6 +180,7 @@ async function runYtMusicScript(input: object, onProgress?: ProgressCallback): P
     try {
       return await spawnJson(candidate, [SEARCHER_SCRIPT], input, onProgress);
     } catch (error) {
+      if (error instanceof YTMusicAuthenticationRequiredError) throw error;
       errors.push(`${candidate}: ${(error as Error).message}`);
     }
   }

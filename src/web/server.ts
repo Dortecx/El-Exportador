@@ -227,7 +227,10 @@ app.post("/api/add-to-playlist", async (req, res) => {
       return res.status(502).json({ error: "Could not confirm all selected tracks were added" });
     }
     return res.json({ success: true, count: addedCount });
-  } catch {
+  } catch (err) {
+    if ((err as { code?: unknown })?.code === "AUTHENTICATION_REQUIRED") {
+      return res.status(401).json({ error: "Authentication required", code: "AUTHENTICATION_REQUIRED" });
+    }
     return res.status(502).json({ error: "Could not add selected tracks" });
   }
 });
@@ -276,9 +279,12 @@ app.post("/api/search-single", async (req, res) => {
           pageCount: Number.isInteger(result.pageCount) && result.pageCount >= 0 ? result.pageCount : 0,
           resultCount: Number.isInteger(result.resultCount) && result.resultCount >= 0 ? result.resultCount : 0,
         });
-  } catch {
+  } catch (err) {
     if (abandoned) return;
     responseComplete = true;
+    if ((err as { code?: unknown })?.code === "AUTHENTICATION_REQUIRED") {
+      return res.status(401).json({ error: "Authentication required", code: "AUTHENTICATION_REQUIRED" });
+    }
     return res.status(502).json({ error: "YouTube Music search failed" });
   }
 });
@@ -358,6 +364,9 @@ app.post("/api/convert", async (req, res) => {
     
     return res.json({ success: true });
   } catch (err) {
+    if ((err as { code?: unknown })?.code === "AUTHENTICATION_REQUIRED") {
+      return res.status(401).json({ error: "Authentication required", code: "AUTHENTICATION_REQUIRED" });
+    }
     console.error("Error al convertir la playlist:", err);
     return res.status(500).json({ error: "Failed to convert playlist" });
   }

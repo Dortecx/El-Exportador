@@ -23,6 +23,29 @@ STATE_ROOT = os.environ.get('M3U_YTMUSIC_STATE_DIR') or os.path.expanduser('~')
 AUTH_FILE = os.path.join(STATE_ROOT, '.config', 'm3u-to-ytmusic', 'ytmusic_auth.json')
 thread_local = threading.local()
 
+class AuthenticationRequiredError(Exception):
+    pass
+
+
+def is_authentication_error(error):
+    response = getattr(error, 'response', None)
+    status_code = getattr(response, 'status_code', None)
+    return status_code == 401 or bool(re.search(r'\b401\b|unauthorized', str(error), re.IGNORECASE))
+
+
+def validate_auth():
+    if not os.path.exists(AUTH_FILE):
+        return {'status': 'missing', 'reason': 'missing'}
+    try:
+        YTMusic(AUTH_FILE).get_library_playlists(limit=1)
+        return {'status': 'valid'}
+    except Exception as error:
+        if is_authentication_error(error):
+            return {'status': 'invalid', 'reason': 'authentication_required'}
+        print(f'AUTH_VALIDATION_DIAGNOSTIC exception={type(error).__name__}', file=sys.stderr)
+        return {'status': 'unexpected_failure', 'reason': 'validation_failed'}
+
+
 def get_ytmusic():
     if not os.path.exists(AUTH_FILE):
         raise FileNotFoundError('ytmusicapi browser authentication is not configured')
@@ -65,17 +88,13 @@ def configure_browser_auth(headers):
             os.remove(AUTH_FILE)
         return {'status': 'failed', 'error': 'The browser headers could not be validated'}
 
-    try:
-        YTMusic(AUTH_FILE).get_library_playlists(limit=1)
+    validation = validate_auth()
+    if validation['status'] == 'valid':
         return {'status': 'authorized'}
-    except Exception as error:
-        print(
-            f'BROWSER_AUTH_DIAGNOSTIC stage=library_validation exception={type(error).__name__}',
-            file=sys.stderr,
-        )
-        if os.path.exists(AUTH_FILE):
-            os.remove(AUTH_FILE)
-        return {'status': 'failed', 'error': 'The browser headers could not be validated'}
+    print(f"BROWSER_AUTH_DIAGNOSTIC stage=library_validation status={validation['status']}", file=sys.stderr)
+    if os.path.exists(AUTH_FILE):
+        os.remove(AUTH_FILE)
+    return {'status': 'failed', 'error': 'The browser headers could not be validated'}
 
 def get_ytmusic_thread():
     if not hasattr(thread_local, 'ytmusic'):
@@ -349,6 +368,8 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
                 
                 all_candidates.append((result, query, similarity, status))
         except Exception as e:
+            if is_authentication_error(e):
+                raise AuthenticationRequiredError() from e
             print(f'DEBUG: Search error: {e}', file=sys.stderr)
             continue
     
@@ -391,6 +412,8 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
                 
                 all_candidates.append((result, artist, similarity, status))
         except Exception as e:
+            if is_authentication_error(e):
+                raise AuthenticationRequiredError() from e
             print(f'DEBUG: Artist-only search failed: {e}', file=sys.stderr)
     
     # Sort by similarity descending and yield
@@ -463,6 +486,8 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15):
             try:
                 result = future.result()
             except Exception as error:
+                if isinstance(error, AuthenticationRequiredError) or is_authentication_error(error):
+                    raise AuthenticationRequiredError() from error
                 print(f'DEBUG: Error processing track: {error}', file=sys.stderr)
                 result = {
                     'idx': idx,
@@ -546,6 +571,8 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15):
             )
             playlist_url = f'https://music.youtube.com/playlist?list={playlist_id}'
         except Exception as error:
+            if is_authentication_error(error):
+                raise AuthenticationRequiredError() from error
             print(f'DEBUG ERROR creating playlist: {error}', file=sys.stderr)
             playlist_id = None
             playlist_url = None
@@ -619,8 +646,10 @@ def search_single(query, artist='', title='', threshold=0.0, offset=0):
             'resultCount': result_count,
         }
     except Exception as e:
+        if is_authentication_error(e):
+            return {'error': 'Authentication required', 'code': 'AUTHENTICATION_REQUIRED'}
         return {
-            'error': str(e),
+            'error': 'YouTube Music search failed',
             'results': [],
             'hasMore': False,
             'pageCount': 0,
@@ -636,8 +665,10 @@ def add_to_playlist(playlist_id, video_ids):
         print(f'DEBUG add_to_playlist response: {add_result}', file=sys.stderr)
         return {'success': True, 'added': len(video_ids)}
     except Exception as e:
+        if is_authentication_error(e):
+            return {'error': 'Authentication required', 'code': 'AUTHENTICATION_REQUIRED'}
         print(f'DEBUG ERROR add_to_playlist: {e}', file=sys.stderr)
-        return {'error': str(e)}
+        return {'error': 'Could not add selected tracks'}
 
 
 def main():
@@ -645,7 +676,7 @@ def main():
         print('DEBUG: Script started', file=sys.stderr)
         # Leer el input desde los argumentos
         if len(sys.argv) > 1:
-            print(f'DEBUG: Reading input from args: {sys.argv[-1]}', file=sys.stderr)
+            print('DEBUG: Reading input from args', file=sys.stderr)
             data = json.loads(sys.argv[-1])
         else:
             print('DEBUG: Reading input from stdin', file=sys.stderr)
@@ -656,6 +687,10 @@ def main():
         
         if action == 'browser-auth':
             print(json.dumps(configure_browser_auth(data.get('headers', ''))))
+            return
+
+        if action == 'validate-auth':
+            print(json.dumps(validate_auth()))
             return
 
         if action == 'setup':
@@ -690,6 +725,7 @@ def main():
                 'playlistId': output.get('playlistId'),
                 'playlistUrl': output.get('playlistUrl'),
                 'matched': output.get('matched', 0),
+                'results': results,
                 'unmatched': len(unmatched_tracks),
                 'ambiguous': len(ambiguous_tracks),
                 'unmatchedTracks': unmatched_tracks,
@@ -714,7 +750,10 @@ def main():
         else:
             print(json.dumps({'error': f'Unknown action: {action}'}))
     except Exception as e:
-        print(json.dumps({'error': str(e)}))
+        if isinstance(e, AuthenticationRequiredError) or is_authentication_error(e):
+            print(json.dumps({'error': 'Authentication required', 'code': 'AUTHENTICATION_REQUIRED'}))
+        else:
+            print(json.dumps({'error': 'YouTube Music operation failed'}))
 
 
 if __name__ == '__main__':
