@@ -56,6 +56,17 @@ npm run build:portable:win
 
 Para crear el ZIP portátil se requiere Windows, Node.js 20 o posterior y Python 3.11.8 con PyInstaller. Para ejecutar el ZIP se requiere Node.js 20 o posterior.
 
+### Configuración de Spotify para mantenimiento
+
+Las compilaciones portátiles con Spotify necesitan una única aplicación de Spotify Developer administrada por mantenimiento:
+
+1. Registra una aplicación de Spotify Developer y configúrala con **Authorization Code + PKCE**.
+2. Registra esta URI exacta de devolución de llamada local: `http://127.0.0.1:3000/api/spotify-auth/callback`.
+3. Durante la compilación, proporciona el Client ID público de la aplicación mediante el parámetro de PowerShell `-SpotifyClientId` o la variable de entorno `SPOTIFY_CLIENT_ID`. La compilación se detiene claramente si no se proporciona ninguno.
+4. Nunca uses ni confirmes en el repositorio un client secret, token, código de autorización ni otro valor de autorización de Spotify. El Client ID público es el único valor de Spotify incluido en el iniciador portátil.
+
+Las personas usuarias no configuran credenciales de Spotify: solo hacen clic en **Connect Spotify** dentro de la aplicación local.
+
 ## Compatibilidad de plataforma
 
 El Exportador solo es compatible con Windows.

@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-  [string]$OutputDirectory = "portable-win"
+  [string]$OutputDirectory = "portable-win",
+  [string]$SpotifyClientId
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,6 +10,16 @@ Set-StrictMode -Version Latest
 if ($env:OS -ne "Windows_NT") {
   throw "This builder must run on Windows so npm selects Windows production dependencies and PyInstaller creates searcher.exe."
 }
+
+$spotifyClientId = $SpotifyClientId
+if ([string]::IsNullOrWhiteSpace($spotifyClientId)) {
+  $spotifyClientId = $env:SPOTIFY_CLIENT_ID
+}
+if ([string]::IsNullOrWhiteSpace($spotifyClientId)) {
+  throw "Spotify-enabled portable build requires a public Spotify Client ID. Supply -SpotifyClientId or set SPOTIFY_CLIENT_ID before building."
+}
+$spotifyClientId = $spotifyClientId.Trim()
+$spotifyClientIdBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($spotifyClientId))
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $package = Get-Content (Join-Path $projectRoot "package.json") -Raw | ConvertFrom-Json
@@ -54,6 +65,10 @@ try {
 $runtimeSources = @(
   "src\web\server.ts",
   "src\web\guidedBrowserAuth.ts",
+  "src\spotify\config.ts",
+  "src\spotify\tokenStore.ts",
+  "src\spotify\types.ts",
+  "src\spotify\oauth.ts",
   "src\ytmusic\client.ts",
   "src\parser.ts",
   "src\services\session.service.ts"
@@ -79,7 +94,9 @@ $searcher = Join-Path $pyInstallerDist "searcher.exe"
 if (-not (Test-Path -LiteralPath $searcher)) { throw "PyInstaller completed but searcher.exe was not produced: $searcher" }
 Copy-Item -LiteralPath $searcher -Destination (Join-Path $releaseRoot "artifacts\searcher.exe")
 
-Copy-Item (Join-Path $PSScriptRoot "start.cmd.template") (Join-Path $releaseRoot "start.cmd")
+$launcherTemplate = Get-Content (Join-Path $PSScriptRoot "start.cmd.template") -Raw
+$launcherContents = $launcherTemplate.Replace("@@SPOTIFY_CLIENT_ID_BASE64@@", $spotifyClientIdBase64)
+[System.IO.File]::WriteAllText((Join-Path $releaseRoot "start.cmd"), $launcherContents, (New-Object System.Text.UTF8Encoding($false)))
 
 # npm ci populates node_modules from the lockfile in an otherwise empty staging directory. Exclude it
 # here because dependency source may legitimately use names such as "credentials"; assert every

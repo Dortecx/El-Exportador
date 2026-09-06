@@ -56,6 +56,17 @@ npm run build:portable:win
 
 Building the portable ZIP requires Node.js 20 or later, Python 3.11.8 with PyInstaller, and Windows. Running the ZIP requires Node.js 20 or later.
 
+### Spotify maintainer setup
+
+Spotify-enabled portable builds need one maintainer-managed Spotify Developer app:
+
+1. Register one Spotify Developer app and configure it for **Authorization Code + PKCE**.
+2. Register this exact loopback callback URI: `http://127.0.0.1:3000/api/spotify-auth/callback`.
+3. At build time, provide the app's public Client ID with the `-SpotifyClientId` PowerShell parameter or the `SPOTIFY_CLIENT_ID` environment variable. The build stops clearly when neither is provided.
+4. Never use or commit a Spotify client secret, token, authorization code, or other authorization value. This public Client ID is the only Spotify value included in the portable launcher.
+
+End users do not configure Spotify credentials: they only click **Connect Spotify** in the local application.
+
 ## Platform support
 
 El Exportador is supported on Windows only.

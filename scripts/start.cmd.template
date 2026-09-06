@@ -41,6 +41,9 @@ if %NODE_MAJOR% LSS 20 (
 )
 
 set "M3U_YTMUSIC_SEARCHER=%SEARCHER%"
+set "SPOTIFY_CLIENT_ID_B64=@@SPOTIFY_CLIENT_ID_BASE64@@"
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -Command "[System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:SPOTIFY_CLIENT_ID_B64))"`) do set "SPOTIFY_CLIENT_ID=%%I"
+set "SPOTIFY_CLIENT_ID_B64="
 set "NODE_ENV=production"
 set "PORT=3000"
 
