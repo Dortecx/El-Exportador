@@ -9,6 +9,7 @@ type ManualSearchState = {
   offset: number;
   candidateCount: number;
   hasMore: boolean;
+  provider?: "spotify" | "youtube";
 };
 
 function loadNextManualSearch(states: Map<string, ManualSearchState>) {
@@ -82,5 +83,25 @@ describe("manual search pagination", () => {
       offset: 0,
       exhausted: false,
     });
+  });
+
+  it("uses Spotify's three fixed pages without threshold progression or a fourth page", () => {
+    const states = new Map<string, ManualSearchState>([["track-1", {
+      query: "query",
+      artist: "artist",
+      title: "title",
+      threshold: 0,
+      offset: 0,
+      candidateCount: 5,
+      hasMore: true,
+      provider: "spotify",
+    }]]);
+    const nextManualSearch = loadNextManualSearch(states);
+
+    expect(nextManualSearch("track-1", "query", "artist", "title")).toEqual({ threshold: 0, offset: 5, exhausted: false });
+    states.set("track-1", { ...states.get("track-1")!, offset: 5, hasMore: true });
+    expect(nextManualSearch("track-1", "query", "artist", "title")).toEqual({ threshold: 0, offset: 10, exhausted: false });
+    states.set("track-1", { ...states.get("track-1")!, offset: 10, hasMore: false });
+    expect(nextManualSearch("track-1", "query", "artist", "title")).toEqual({ threshold: 0, offset: 10, exhausted: true });
   });
 });

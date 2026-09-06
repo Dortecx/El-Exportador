@@ -45,31 +45,51 @@ describe("live YouTube Music auth validation", () => {
     )).rejects.toBeInstanceOf(YTMusicAuthenticationRequiredError);
   });
 
-  it("uses the conversion reauthentication handling for manual search and Add Selected", () => {
+  it("uses the conversion reauthentication handling for manual search and Add Selected", async () => {
     const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
-    const helper = html.match(/function handleAuthenticationRequired\(response, payload\) \{[\s\S]*?(?=\n\s*async function saveBrowserAuth)/)?.[0];
+    const helper = html.match(/async function handleAuthenticationRequired\(response, payload\) \{[\s\S]*?(?=\n\s*function updateStartButton)/)?.[0];
     if (!helper) throw new Error("authentication handler was not found");
 
     const setAuthStatus = vi.fn();
     const clearCredentials = vi.fn();
     const showToast = vi.fn();
+    const refreshProviderStates = vi.fn();
+    const disconnectSpotify = vi.fn(() => refreshProviderStates());
+    const spotifyDestination = { connected: true };
     const handleAuthenticationRequired = new Function(
-      "setAuthStatus", "t", "window", "showToast", `${helper}; return handleAuthenticationRequired;`,
-    )(setAuthStatus, (key: string) => key, { authStore: { getState: () => ({ clearCredentials }) } }, showToast);
+      "setAuthStatus", "t", "window", "showToast", "refreshProviderStates", "spotifyDestination", "disconnectSpotify", "spotifyConversionErrorMessage", `${helper}; return handleAuthenticationRequired;`,
+    )(setAuthStatus, (key: string) => key, { authStore: { getState: () => ({ clearCredentials }) } }, showToast, refreshProviderStates, spotifyDestination, disconnectSpotify, (payload: { code?: string }) => payload.code === "SPOTIFY_AUTHENTICATION_REQUIRED" ? "spotifyAuthenticationRequired" : "spotifyAuthorizationRequired");
 
-    expect(handleAuthenticationRequired({ status: 401 }, { code: "AUTHENTICATION_REQUIRED" })).toBe(true);
+    expect(await handleAuthenticationRequired({ status: 401 }, { code: "AUTHENTICATION_REQUIRED" })).toBe(true);
     expect(setAuthStatus).toHaveBeenCalledWith("authUnauthenticated", "#FF4444", true);
     expect(clearCredentials).toHaveBeenCalledOnce();
     expect(showToast).toHaveBeenCalledWith("authConversionRequired", "error");
+    expect(refreshProviderStates).toHaveBeenCalledOnce();
 
-    expect(handleAuthenticationRequired({ status: 500 }, { code: "AUTHENTICATION_REQUIRED" })).toBe(false);
+    expect(await handleAuthenticationRequired({ status: 500 }, { code: "AUTHENTICATION_REQUIRED" })).toBe(false);
+    expect(await handleAuthenticationRequired({ status: 500 }, { code: "SPOTIFY_AUTHORIZATION_REQUIRED" })).toBe(false);
     expect(showToast).toHaveBeenCalledTimes(1);
+    expect(refreshProviderStates).toHaveBeenCalledOnce();
+    expect(disconnectSpotify).not.toHaveBeenCalled();
+
+    expect(await handleAuthenticationRequired({ status: 401 }, { code: "SPOTIFY_AUTHENTICATION_REQUIRED" })).toBe(true);
+    expect(spotifyDestination.connected).toBe(false);
+    expect(refreshProviderStates).toHaveBeenCalledTimes(2);
+    expect(showToast).toHaveBeenLastCalledWith("spotifyAuthenticationRequired", "error");
+
+    spotifyDestination.connected = true;
+    expect(await handleAuthenticationRequired({ status: 403 }, { code: "SPOTIFY_AUTHORIZATION_REQUIRED" })).toBe(true);
+    expect(spotifyDestination.connected).toBe(false);
+    expect(disconnectSpotify).toHaveBeenCalledOnce();
+    expect(refreshProviderStates).toHaveBeenCalledTimes(3);
+    expect(showToast).toHaveBeenCalledTimes(3);
+    expect(showToast).toHaveBeenLastCalledWith("spotifyAuthorizationRequired", "error");
 
     const manualSearch = html.match(/async function searchManualTrack[\s\S]*?(?=\n\s*function showManualReview)/)?.[0] || "";
     const addSelected = html.match(/addManualBtn\.addEventListener\('click',[\s\S]*?(?=\n\s*const startConversion)/)?.[0] || "";
-    expect(manualSearch.indexOf("if (handleAuthenticationRequired(response, payload)) return;")).toBeGreaterThan(-1);
-    expect(manualSearch.indexOf("if (handleAuthenticationRequired(response, payload)) return;")).toBeLessThan(manualSearch.indexOf("t('searchFailed')"));
-    expect(addSelected.indexOf("if (handleAuthenticationRequired(response, payload)) {")).toBeGreaterThan(-1);
-    expect(addSelected.indexOf("if (handleAuthenticationRequired(response, payload)) {")).toBeLessThan(addSelected.indexOf("t('couldNotAdd')"));
+    expect(manualSearch.indexOf("if (await handleAuthenticationRequired(response, payload)) return;")).toBeGreaterThan(-1);
+    expect(manualSearch.indexOf("if (await handleAuthenticationRequired(response, payload)) return;")).toBeLessThan(manualSearch.indexOf("t('searchFailed')"));
+    expect(addSelected.indexOf("if (await handleAuthenticationRequired(response, payload)) {")).toBeGreaterThan(-1);
+    expect(addSelected.indexOf("if (await handleAuthenticationRequired(response, payload)) {")).toBeLessThan(addSelected.indexOf("t('couldNotAdd')"));
   });
 });

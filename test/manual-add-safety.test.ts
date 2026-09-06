@@ -20,4 +20,11 @@ describe("manual add partial-success safety", () => {
     expect(html).toContain("const addedCount = payload.count;");
     expect(clearSelectionsIndex).toBeGreaterThan(confirmationIndex);
   });
+
+  it("does not submit dry-run selections or candidates without the active provider identity", () => {
+    expect(html).toContain("if (lastConversionDryRun || !lastPlaylistId || !manualSelections.size) return;");
+    expect(html).toContain(".map((track) => [getManualCandidateId(track), track])");
+    expect(html).toContain(".filter(([candidateId]) => candidateId)");
+    expect(html).not.toContain("[...manualSelections.values()].map((track) => [track.videoId || track.uri, track])");
+  });
 });
