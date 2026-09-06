@@ -38,20 +38,28 @@
     }
 
     @keyframes auth-status-pulse {
-      0%, 7% { opacity: 0.72; filter: brightness(0.8); transform: translateX(0); text-shadow: 0 0 0 transparent; }
-      8% { opacity: 0.46; transform: translateX(-5px) skewX(-6deg); text-shadow: 4px 0 #00E1FF, -4px 0 #FF3366; }
-      10% { opacity: 0.92; transform: translateX(5px) skewX(5deg); text-shadow: -4px 0 #00E1FF, 4px 0 #FF3366; }
-      13% { opacity: 0.72; transform: translateX(0); text-shadow: 0 0 0 transparent; }
-      22% { opacity: 1; filter: brightness(2); transform: translateX(0); text-shadow: 0 0 16px currentColor, 0 0 32px currentColor, 0 0 48px currentColor; }
-      66% { opacity: 1; filter: brightness(1.7); transform: translateX(0); text-shadow: 0 0 12px currentColor, 0 0 26px currentColor; }
-      72% { opacity: 0.48; filter: brightness(1.1); transform: translateX(5px) skewX(6deg); text-shadow: -4px 0 #00E1FF, 4px 0 #FF3366; }
-      75% { opacity: 0.8; transform: translateX(-3px) skewX(-4deg); text-shadow: 4px 0 #00E1FF, -4px 0 #FF3366; }
-      79%, 100% { opacity: 0.72; filter: brightness(0.8); transform: translateX(0); text-shadow: 0 0 0 transparent; }
+      0%, 7%, 100% { filter: brightness(1); text-shadow: 0 0 3px currentColor; }
+      8%, 14% { filter: brightness(1.2); text-shadow: -9px 0 #00E1FF, 9px 0 #FF3366, 0 0 10px currentColor; }
+      10%, 16% { filter: brightness(1.2); text-shadow: 9px 0 #00E1FF, -9px 0 #FF3366, 0 0 10px currentColor; }
+      12%, 18% { filter: brightness(1.15); text-shadow: -6px 0 #FF3366, 6px 0 #00E1FF, 0 0 8px currentColor; }
+      20% { filter: brightness(1.05); text-shadow: 0 0 6px currentColor; }
+      22%, 55% { filter: brightness(1.35); text-shadow: 0 0 12px currentColor, 0 0 26px currentColor; }
+      79% { filter: brightness(1.1); text-shadow: 0 0 5px currentColor; }
     }
 
-    #authStatus.auth-status-pulse {
-      animation: auth-status-pulse 4.5s ease-out;
-      will-change: filter, opacity, text-shadow, transform;
+    #providerAuthStatus.auth-status-pulse {
+      animation: auth-status-pulse 2200ms ease-in-out infinite;
+      will-change: filter, text-shadow;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #providerAuthStatus.auth-status-pulse {
+        animation: none;
+        filter: none;
+        opacity: 1;
+        text-shadow: none;
+        transform: none;
+      }
     }
 
     @keyframes dry-run-label-pulse {
@@ -900,7 +908,7 @@
         }
 
         div:has(> #oauthPopupContainer) #authBtn,
-        div:has(> #oauthPopupContainer) #disconnectAuthBtn {
+        div:has(> #oauthPopupContainer) #spotifyConnectBtn {
           flex: 0 0 320px;
           width: 320px;
           height: 48px;
@@ -917,39 +925,85 @@
           transition: all 0.2s;
         }
 
-        div:has(> #oauthPopupContainer) #authBtn {
-          background: #050f2e;
-          color: #00AAFF;
-          border-color: #00AAFF;
-        }
-
-        div:has(> #oauthPopupContainer) #authBtn:hover:not(:disabled) {
-          background: #00AAFF;
-          color: #020818;
-          box-shadow: 0 0 20px rgba(0, 170, 255, 0.4);
-        }
-
-        div:has(> #oauthPopupContainer) #disconnectAuthBtn {
+        div:has(> #oauthPopupContainer) #authBtn,
+        div:has(> #oauthPopupContainer) #spotifyConnectBtn.spotify-disconnect {
           background: #210b1a;
           color: #FF5577;
           border-color: #FF3366;
           box-shadow: 0 0 8px rgba(255, 51, 102, 0.2);
         }
 
-        div:has(> #oauthPopupContainer) #disconnectAuthBtn:hover:not(:disabled) {
+        div:has(> #oauthPopupContainer) #authBtn:hover:not(:disabled),
+        div:has(> #oauthPopupContainer) #spotifyConnectBtn.spotify-disconnect:hover:not(:disabled) {
           background: #3b1025;
           color: #FF99AA;
           box-shadow: 0 0 16px rgba(255, 51, 102, 0.45);
         }
 
-        div:has(> #oauthPopupContainer) > #authStatus {
+        div:has(> #oauthPopupContainer) > #providerAuthStatus {
+          order: 2;
+          flex-basis: 100%;
+        }
+
+        #providerAuthStatus {
+              order: 2;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              gap: 0.5rem;
+              flex-basis: 100%;
+              min-height: 2rem;
+              margin-top: 0.5rem;
+              color: #FF4444;
+              font-family: 'Share Tech Mono', monospace;
+              font-size: 0.875rem;
+            }
+
+            .provider-icon { width: 20px; height: 20px; flex: 0 0 20px; vertical-align: -0.125em; }
+                #providerAuthStatus,
+                #providerAuthText,
+                div:has(> #oauthPopupContainer) #authBtn,
+                div:has(> #oauthPopupContainer) #spotifyConnectBtn { line-height: 1; }
+            .provider-action-icon { width: 18px; height: 18px; margin-right: 0.4rem; vertical-align: -0.125em; }
+
+            #spotifyAuthPanel {
+          display: contents;
+        }
+
+        div:has(> #oauthPopupContainer) #spotifyConnectBtn.spotify-auth-btn {
+          background: #062b1d;
+          color: #00FF88;
+          border-color: #00FF88;
+          box-shadow: 0 0 10px rgba(0, 255, 136, 0.3), inset 0 0 10px rgba(0, 255, 136, 0.08);
+        }
+
+        div:has(> #oauthPopupContainer) #spotifyConnectBtn.spotify-auth-btn:hover:not(:disabled) {
+          background: #00FF88;
+          color: #020818;
+          box-shadow: 0 0 20px rgba(0, 255, 136, 0.55);
+        }
+
+        div:has(> #oauthPopupContainer) #authBtn:focus-visible,
+        div:has(> #oauthPopupContainer) #spotifyConnectBtn:focus-visible {
+          outline: 2px solid #FFFFFF;
+          outline-offset: 3px;
+        }
+
+        div:has(> #oauthPopupContainer) #authBtn:disabled,
+        div:has(> #oauthPopupContainer) #spotifyConnectBtn:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+
+        /* The unified provider status occupies this flex row. */
+            div:has(> #oauthPopupContainer) > #providerAuthStatus {
           order: 2;
           flex-basis: 100%;
         }
 
         @media (max-width: 600px) {
       div:has(> #oauthPopupContainer) #authBtn,
-      div:has(> #oauthPopupContainer) #disconnectAuthBtn {
+      div:has(> #oauthPopupContainer) #spotifyConnectBtn {
         flex: 0 1 320px;
         width: min(320px, 100%);
       }
@@ -1006,27 +1060,43 @@
         <label for="dryRun" data-i18n="dryRun">Dry Run Mode (no playlist creation)</label>
       </div>
 
-      <!-- Componente OAuthPopup -->
-      <div style="margin: 1rem 0 0.75rem;">
+      <div style="margin-top: 1rem;">
+
+
+
+
+
+      </div>
+
+      <!-- Provider authentication controls also choose the active conversion destination. -->
+      <div id="authenticationControls" style="margin: 1rem 0 0.75rem;">
         <div id="oauthPopupContainer">
-          <button id="authBtn" type="button" data-i18n="connect">[ CONNECT YOUTUBE MUSIC ]</button>
+          <button id="authBtn" type="button"><img class="provider-action-icon" src="/icons/ytmusic.svg" alt="YouTube Music"><span id="youtubeAuthButtonLabel" data-i18n="connect">[ CONNECT YOUTUBE MUSIC ]</span></button>
         </div>
-        <div id="authStatus" style="
+        <div id="spotifyAuthPanel">
+              <button class="spotify-auth-btn" id="spotifyConnectBtn" type="button"><img class="provider-action-icon" src="/icons/spotify.svg" alt="Spotify"><span id="spotifyAuthButtonLabel" data-i18n="spotifyConnect">[ CONNECT SPOTIFY ]</span></button>
+            </div>
+            <div id="providerAuthStatus" role="status" aria-live="polite" style="
           margin-top: 0.5rem;
           color: #FF4444;
           font-family: 'Share Tech Mono', monospace;
           font-size: 1rem;
         ">
-          <span data-i18n="authUnauthenticated">STATUS: NOT AUTHENTICATED</span>
+          <img id="providerAuthIcon" class="provider-icon" src="/icons/ytmusic.svg" alt="YouTube Music" hidden>
+              <span id="providerAuthText" data-i18n="authUnauthenticated">STATUS: NOT AUTHENTICATED</span>
         </div>
-        <div id="browserAuthPanel" hidden style="margin-top: 0.75rem; font-family: 'Share Tech Mono', monospace; font-size: 0.8rem; color: #00AAFF;">
-                    <button class="btn" id="disconnectAuthBtn" type="button" hidden data-i18n="disconnect">[ DISCONNECT ]</button>
-          <button class="btn" id="unusedBrowserAuthBtn" type="button" hidden aria-hidden="true"></button>
+            <div id="browserAuthPanel" hidden style="margin-top: 0.75rem; font-family: 'Share Tech Mono', monospace; font-size: 0.8rem; color: #00AAFF;">
         </div>
       </div>
 
       <script>
         document.getElementById('authBtn').onclick = async () => {
+          selectedDestination = 'youtube';
+          if (youtubeAuthenticated) {
+            await disconnectYtMusic();
+            return;
+          }
+          updateDestinationUi();
           await startGuidedAuth();
         };
       </script>
@@ -1110,17 +1180,15 @@
             dropZone.style.color = '#00FF88';
           }, 100);
 
-          // Habilitar el botón [EXECUTE] si el usuario está autenticado
-          if (await checkAuthStatus()) {
-            startBtn.disabled = false;
-          }
+          // Refresh both destinations so a persisted provider session can enable Execute.
+          await refreshProviderStates();
        };
       reader.readAsText(file);
     };
   </script>
 
   <script>
-    const translations = { en: { subtitle: 'Import your music library to YouTube Music', uploadDrop: 'Drop .m3u file here', uploadHint: 'or paste M3U content below', m3uContent: 'M3U Content', playlistName: 'Playlist Name', playlistPlaceholder: 'MY_PLAYLIST', matchThreshold: 'Match Threshold', thresholdHelp: 'Minimum similarity percentage to consider a song as found. 60% works well for most cases.', dryRun: 'Dry Run Mode (no playlist creation)', connect: '[ CONNECT YOUTUBE MUSIC ]', disconnect: '[ DISCONNECT ]', authUnauthenticated: 'STATUS: NOT AUTHENTICATED', authWaiting: 'STATUS: WAITING FOR AUTHENTICATION', authConnected: 'STATUS: AUTHENTICATED', authCancelled: 'STATUS: AUTHENTICATION CANCELLED', authTimedOut: 'STATUS: AUTHENTICATION TIMED OUT', authFailed: 'STATUS: AUTHENTICATION FAILED', authRequired: 'STATUS: AUTHENTICATION REQUIRED', guidedAuthWindowsOnly: 'Guided browser authentication is available on Windows only.', guidedAuthBrowserUnavailable: 'No supported browser was found for guided authentication.', progressLog: 'Progress Log', idle: 'Idle', conversionProgress: 'Conversion progress', checkingBackend: 'Checking backend...', manualReview: 'Manual Review', manualReviewDescription: 'Unmatched or ambiguous tracks detected. Search manually or choose a suggested match.', addSelected: '[ ADD SELECTED ]', summary: 'Summary', tracksLoaded: '[{count}] tracks loaded', manualAdditions: 'Manual additions:', tracksAdded: '{count} track{plural} added to the playlist.', manualAdditionsUnavailable: 'Manual additions require a playlist created by a non-dry-run conversion.', unknownArtist: 'Unknown artist', untitledTrack: 'Untitled track', verifyCandidate: 'Verify artist/version before adding', recommendedResults: 'Recommended results', otherResults: 'Other results — verify artist/version', noMatches: 'No matches found. Try a different query.', searchThreshold: 'Search threshold: {threshold} · {range}{more}', resultsRange: 'Results {from}–{to}', noMoreResults: ' · No more results at this threshold.', searching: '[ SEARCHING... ]', searchFailed: 'Search failed. Please try again.', chooseSuggestion: 'Choose a suggestion or search YouTube Music for each unmatched or ambiguous track.', chooseBeforeAdding: 'Choose or search for matches now. Adding selections requires a playlist from a non-dry-run conversion.', searchMatch: 'Search match for {title}', search: '[ SEARCH ]', noSuggestedMatch: 'No suggested match. Search YouTube Music to choose one.', couldNotAdd: 'Could not add selected tracks. Please try again.', noTracks: 'No tracks to convert. Load an .m3u file first.', playlistRequired: 'Enter a playlist name.', processing: '[ PROCESSING... ]', starting: 'Starting conversion...', searchingTrack: 'Searching {artist} — {title}', processedTracks: 'Processed {added} of {total} tracks', backendSearching: 'Backend is searching...', completed: 'Completed', conversionCompleted: 'Conversion completed', matched: 'Matched:', unmatched: 'Unmatched:', ambiguous: 'Ambiguous:', trackStatusUnmatched: 'unmatched', trackStatusAmbiguous: 'ambiguous', trackStatusManualReview: 'manual review', trackStatusUnknown: 'needs review', playlistUrl: 'Playlist URL:', conversionError: 'Error during conversion. Check the logs.', authConversionRequired: 'YouTube Music authentication is required. Please reconnect.', backendConnected: 'Backend connected' }, es: { subtitle: 'Importa tu biblioteca musical a YouTube Music', uploadDrop: 'Suelta el archivo .m3u aquí', uploadHint: 'o pega el contenido M3U abajo', m3uContent: 'Contenido M3U', playlistName: 'Nombre de la playlist', playlistPlaceholder: 'MI_PLAYLIST', matchThreshold: 'Umbral de coincidencia', thresholdHelp: 'Porcentaje mínimo de similitud para considerar una canción encontrada. El 60 % funciona bien en la mayoría de los casos.', dryRun: 'Modo de prueba (no crea la playlist)', connect: '[ CONECTAR YOUTUBE MUSIC ]', disconnect: '[ DESCONECTAR ]', authUnauthenticated: 'ESTADO: NO AUTENTICADO', authWaiting: 'ESTADO: ESPERANDO AUTENTICACIÓN', authConnected: 'ESTADO: AUTENTICADO', authCancelled: 'ESTADO: AUTENTICACIÓN CANCELADA', authTimedOut: 'ESTADO: AUTENTICACIÓN AGOTADA', authFailed: 'ESTADO: AUTENTICACIÓN FALLIDA', authRequired: 'ESTADO: AUTENTICACIÓN REQUERIDA', guidedAuthWindowsOnly: 'La autenticación guiada por navegador sólo está disponible en Windows.', guidedAuthBrowserUnavailable: 'No se encontró un navegador compatible para la autenticación guiada.', progressLog: 'Registro de progreso', idle: 'Inactivo', conversionProgress: 'Progreso de conversión', checkingBackend: 'Comprobando el servidor...', manualReview: 'Revisión manual', manualReviewDescription: 'Se detectaron pistas sin coincidencia o ambiguas. Busca manualmente o elige una coincidencia sugerida.', addSelected: '[ ADD SELECTED ]', summary: 'Resumen', tracksLoaded: '[{count}] pistas cargadas', manualAdditions: 'Añadidos manualmente:', tracksAdded: '{count} pista{plural} añadida{plural} a la playlist.', manualAdditionsUnavailable: 'Los añadidos manuales requieren una playlist creada en una conversión sin modo de prueba.', unknownArtist: 'Artista desconocido', untitledTrack: 'Pista sin título', verifyCandidate: 'Verifica el artista/la versión antes de añadir', recommendedResults: 'Resultados recomendados', otherResults: 'Otros resultados — verifica el artista/la versión', noMatches: 'No se encontraron coincidencias. Prueba otra búsqueda.', searchThreshold: 'Umbral de búsqueda: {threshold} · {range}{more}', resultsRange: 'Resultados {from}–{to}', noMoreResults: ' · No hay más resultados con este umbral.', searching: '[ BUSCANDO... ]', searchFailed: 'La búsqueda falló. Inténtalo de nuevo.', chooseSuggestion: 'Elige una sugerencia o busca en YouTube Music para cada pista sin coincidencia o ambigua.', chooseBeforeAdding: 'Elige o busca coincidencias ahora. Para añadir selecciones se requiere una playlist creada sin modo de prueba.', searchMatch: 'Buscar coincidencia para {title}', search: '[ SEARCH ]', noSuggestedMatch: 'No hay coincidencia sugerida. Busca en YouTube Music para elegir una.', couldNotAdd: 'No se pudieron añadir las pistas seleccionadas. Inténtalo de nuevo.', noTracks: 'No hay pistas para convertir. Carga primero un archivo .m3u.', playlistRequired: 'Introduce un nombre para la playlist.', processing: '[ PROCESSING... ]', starting: 'Iniciando conversión...', searchingTrack: 'Buscando {artist} — {title}', processedTracks: 'Procesadas {added} de {total} pistas', backendSearching: 'El servidor está buscando...', completed: 'Completado', conversionCompleted: 'Conversión completada', matched: 'Con coincidencia:', unmatched: 'Sin coincidencia:', ambiguous: 'Ambigua:', trackStatusUnmatched: 'sin coincidencia', trackStatusAmbiguous: 'ambigua', trackStatusManualReview: 'revisión manual', trackStatusUnknown: 'requiere revisión', playlistUrl: 'URL de la playlist:', conversionError: 'Error durante la conversión. Revisa los registros.', authConversionRequired: 'Se requiere autenticación de YouTube Music. Vuelve a conectar.', backendConnected: 'Servidor conectado' } };
+    const translations = { en: { subtitle: 'Import your music library to YouTube Music', uploadDrop: 'Drop .m3u file here', uploadHint: 'or paste M3U content below', m3uContent: 'M3U Content', playlistName: 'Playlist Name', playlistPlaceholder: 'MY_PLAYLIST', matchThreshold: 'Match Threshold', thresholdHelp: 'Minimum similarity percentage to consider a song as found. 60% works well for most cases.', dryRun: 'Dry Run Mode (no playlist creation)', destination: 'Destination', destinationYoutube: 'YouTube Music', destinationSpotify: 'Spotify', spotifyConnect: '[ CONNECT SPOTIFY ]', spotifyDisconnect: '[ DISCONNECT ]', spotifyUnavailable: 'Spotify is unavailable: {reason}', spotifyNotConnected: 'NOT CONNECTED', spotifyConnecting: 'CONNECTING', spotifyConnected: 'CONNECTED', spotifyAuthFailed: 'Spotify connection failed: {reason}', connect: '[ CONNECT YOUTUBE MUSIC ]', disconnect: '[ DISCONNECT ]', authUnauthenticated: 'NOT CONNECTED', authWaiting: 'CONNECTING', authConnected: 'CONNECTED', authCancelled: 'STATUS: AUTHENTICATION CANCELLED', authTimedOut: 'STATUS: AUTHENTICATION TIMED OUT', authFailed: 'STATUS: AUTHENTICATION FAILED', authRequired: 'STATUS: AUTHENTICATION REQUIRED', guidedAuthWindowsOnly: 'Guided browser authentication is available on Windows only.', guidedAuthBrowserUnavailable: 'No supported browser was found for guided authentication.', progressLog: 'Progress Log', idle: 'Idle', conversionProgress: 'Conversion progress', checkingBackend: 'Checking backend...', manualReview: 'Manual Review', manualReviewDescription: 'Unmatched or ambiguous tracks detected. Search manually or choose a suggested match.', addSelected: '[ ADD SELECTED ]', summary: 'Summary', tracksLoaded: '[{count}] tracks loaded', manualAdditions: 'Manual additions:', tracksAdded: '{count} track{plural} added to the playlist.', manualAdditionsUnavailable: 'Manual additions require a playlist created by a non-dry-run conversion.', unknownArtist: 'Unknown artist', unknownAlbum: 'Unknown album', untitledTrack: 'Untitled track', verifyCandidate: 'Verify artist/version before adding', recommendedResults: 'Recommended results', otherResults: 'Other results — verify artist/version', noMatches: 'No matches found. Try a different query.', searchThreshold: 'Search threshold: {threshold} · {range}{more}', resultsRange: 'Results {from}–{to}', noMoreResults: ' · No more results at this threshold.', searching: '[ SEARCHING... ]', searchFailed: 'Search failed. Please try again.', chooseSuggestion: 'Choose a suggestion or search YouTube Music for each unmatched or ambiguous track.', chooseSuggestionSpotify: 'Choose a suggestion or search Spotify for each unmatched or ambiguous track.', chooseBeforeAdding: 'Choose or search for matches now. Adding selections requires a playlist from a non-dry-run conversion.', searchMatch: 'Search match for {title}', search: '[ SEARCH ]', noSuggestedMatch: 'No suggested match. Search YouTube Music to choose one.', noSuggestedMatchSpotify: 'No suggested match. Search Spotify to choose one.', searchResults: 'Results {from}–{to}{more}', noMoreSpotifyResults: ' · No more Spotify results.', couldNotAdd: 'Could not add selected tracks. Please try again.', noTracks: 'No tracks to convert. Load an .m3u file first.', playlistRequired: 'Enter a playlist name.', processing: '[ PROCESSING... ]', starting: 'Starting conversion...', searchingTrack: 'Searching {artist} — {title}', processedTracks: 'Processed {added} of {total} tracks', backendSearching: 'Backend is searching...', completed: 'Completed', conversionCompleted: 'Conversion completed', partialInsertion: 'Playlist created with partial insertion: {inserted} of {matched} matched tracks added.', matched: 'Matched:', unmatched: 'Unmatched:', ambiguous: 'Ambiguous:', trackStatusUnmatched: 'unmatched', trackStatusAmbiguous: 'ambiguous', trackStatusManualReview: 'manual review', trackStatusUnknown: 'needs review', playlistUrl: 'Playlist URL:', conversionError: 'Error during conversion. Check the logs.', authConversionRequired: 'YouTube Music authentication is required. Please reconnect.', spotifyAuthenticationRequired: 'Spotify authentication is required. Please reconnect.', spotifyAuthorizationRequired: 'Spotify authorization is required to create playlists. Please reconnect and approve playlist access.', spotifyRateLimited: 'Spotify is rate limited. Please try again shortly.', spotifyProviderUnavailable: 'Spotify is unavailable. Please try again shortly.', backendConnected: 'Backend connected' }, es: { subtitle: 'Importa tu biblioteca musical a YouTube Music', uploadDrop: 'Suelta el archivo .m3u aquí', uploadHint: 'o pega el contenido M3U abajo', m3uContent: 'Contenido M3U', playlistName: 'Nombre de la playlist', playlistPlaceholder: 'MI_PLAYLIST', matchThreshold: 'Umbral de coincidencia', thresholdHelp: 'Porcentaje mínimo de similitud para considerar una canción encontrada. El 60 % funciona bien en la mayoría de los casos.', dryRun: 'Modo de prueba (no crea la playlist)', destination: 'Destino', destinationYoutube: 'YouTube Music', destinationSpotify: 'Spotify', spotifyConnect: '[ CONECTAR SPOTIFY ]', spotifyDisconnect: '[ DESCONECTAR ]', spotifyUnavailable: 'Spotify no está disponible: {reason}', spotifyNotConnected: 'SIN CONEXIÓN', spotifyConnecting: 'CONECTANDO', spotifyConnected: 'CONECTADO', spotifyAuthFailed: 'Falló la conexión con Spotify: {reason}', connect: '[ CONECTAR YOUTUBE MUSIC ]', disconnect: '[ DESCONECTAR ]', authUnauthenticated: 'SIN CONEXIÓN', authWaiting: 'CONECTANDO', authConnected: 'CONECTADO', authCancelled: 'ESTADO: AUTENTICACIÓN CANCELADA', authTimedOut: 'ESTADO: AUTENTICACIÓN AGOTADA', authFailed: 'ESTADO: AUTENTICACIÓN FALLIDA', authRequired: 'ESTADO: AUTENTICACIÓN REQUERIDA', guidedAuthWindowsOnly: 'La autenticación guiada por navegador sólo está disponible en Windows.', guidedAuthBrowserUnavailable: 'No se encontró un navegador compatible para la autenticación guiada.', progressLog: 'Registro de progreso', idle: 'Inactivo', conversionProgress: 'Progreso de conversión', checkingBackend: 'Comprobando el servidor...', manualReview: 'Revisión manual', manualReviewDescription: 'Se detectaron pistas sin coincidencia o ambiguas. Busca manualmente o elige una coincidencia sugerida.', addSelected: '[ ADD SELECTED ]', summary: 'Resumen', tracksLoaded: '[{count}] pistas cargadas', manualAdditions: 'Añadidos manualmente:', tracksAdded: '{count} pista{plural} añadida{plural} a la playlist.', manualAdditionsUnavailable: 'Los añadidos manuales requieren una playlist creada en una conversión sin modo de prueba.', unknownArtist: 'Artista desconocido', unknownAlbum: 'Álbum desconocido', untitledTrack: 'Pista sin título', verifyCandidate: 'Verifica el artista/la versión antes de añadir', recommendedResults: 'Resultados recomendados', otherResults: 'Otros resultados — verifica el artista/la versión', noMatches: 'No se encontraron coincidencias. Prueba otra búsqueda.', searchThreshold: 'Umbral de búsqueda: {threshold} · {range}{more}', resultsRange: 'Resultados {from}–{to}', noMoreResults: ' · No hay más resultados con este umbral.', searching: '[ BUSCANDO... ]', searchFailed: 'La búsqueda falló. Inténtalo de nuevo.', chooseSuggestion: 'Elige una sugerencia o busca en YouTube Music para cada pista sin coincidencia o ambigua.', chooseSuggestionSpotify: 'Elige una sugerencia o busca en Spotify para cada pista sin coincidencia o ambigua.', chooseBeforeAdding: 'Elige o busca coincidencias ahora. Para añadir selecciones se requiere una playlist creada sin modo de prueba.', searchMatch: 'Buscar coincidencia para {title}', search: '[ SEARCH ]', noSuggestedMatch: 'No hay coincidencia sugerida. Busca en YouTube Music para elegir una.', noSuggestedMatchSpotify: 'No hay coincidencia sugerida. Busca en Spotify para elegir una.', searchResults: 'Resultados {from}–{to}{more}', noMoreSpotifyResults: ' · No hay más resultados de Spotify.', couldNotAdd: 'No se pudieron añadir las pistas seleccionadas. Inténtalo de nuevo.', noTracks: 'No hay pistas para convertir. Carga primero un archivo .m3u.', playlistRequired: 'Introduce un nombre para la playlist.', processing: '[ PROCESSING... ]', starting: 'Iniciando conversión...', searchingTrack: 'Buscando {artist} — {title}', processedTracks: 'Procesadas {added} de {total} pistas', backendSearching: 'El servidor está buscando...', completed: 'Completado', conversionCompleted: 'Conversión completada', partialInsertion: 'Playlist creada con inserción parcial: {inserted} de {matched} pistas coincidentes añadidas.', matched: 'Con coincidencia:', unmatched: 'Sin coincidencia:', ambiguous: 'Ambigua:', trackStatusUnmatched: 'sin coincidencia', trackStatusAmbiguous: 'ambigua', trackStatusManualReview: 'revisión manual', trackStatusUnknown: 'requiere revisión', playlistUrl: 'URL de la playlist:', conversionError: 'Error durante la conversión. Revisa los registros.', authConversionRequired: 'Se requiere autenticación de YouTube Music. Vuelve a conectar.', spotifyAuthenticationRequired: 'Se requiere autenticación de Spotify. Vuelve a conectar.', spotifyAuthorizationRequired: 'Se requiere autorización de Spotify para crear playlists. Vuelve a conectar y aprueba el acceso a playlists.', spotifyRateLimited: 'Spotify está limitando solicitudes. Inténtalo de nuevo pronto.', spotifyProviderUnavailable: 'Spotify no está disponible. Inténtalo de nuevo pronto.', backendConnected: 'Servidor conectado' } };
         const localePreferences = [...(navigator.languages || []), navigator.language].filter((value) => typeof value === 'string' && value);
         const locale = localePreferences.some((value) => /^es(?:-|$)/i.test(value)) ? 'es' : 'en';
         function t(key, params = {}) { const value = translations[locale][key] || translations.en[key] || key; return value.replace(/\{(\w+)\}/g, (_, name) => params[name] ?? `{${name}}`); }
@@ -1135,6 +1203,14 @@
     const playlistName = document.getElementById('playlistName');
     const threshold = document.getElementById('threshold');
     const dryRun = document.getElementById('dryRun');
+    const providerAuthStatus = document.getElementById('providerAuthStatus');
+        const providerAuthIcon = document.getElementById('providerAuthIcon');
+        const providerAuthText = document.getElementById('providerAuthText');
+        const authStatus = providerAuthStatus;
+    const spotifyAuthPanel = document.getElementById('spotifyAuthPanel');
+    const spotifyConnectBtn = document.getElementById('spotifyConnectBtn');
+    const spotifyAuthButtonLabel = document.getElementById('spotifyAuthButtonLabel');
+    const youtubeAuthButtonLabel = document.getElementById('youtubeAuthButtonLabel');
     const startBtn = document.getElementById('startBtn');
 
     const summaryCard = document.getElementById('summaryCard');
@@ -1145,7 +1221,6 @@
     const progressPercent = document.getElementById('progressPercent');
     const progressLabel = document.getElementById('progressLabel');
     const progressTrack = document.querySelector('.progress-track');
-    const authStatus = document.getElementById('authStatus');
     const backendStatus = document.getElementById('backendStatus');
         const manualReviewSection = document.getElementById('manualReviewSection');
         const manualReviewDescription = document.getElementById('manualReviewDescription');
@@ -1158,13 +1233,19 @@
             const manualSearchRequests = new Map();
         const manualSearchStates = new Map();
     let parsedTracks = [];
-    let lastPlaylistId = null;
+    let selectedDestination = 'youtube';
+    let youtubeAuthenticated = false;
+    let spotifyDestination = { configured: false, connected: false, supported: true, reason: null };
+    let spotifyAuthPopup = null;
+        const spotifyLoopbackCallbackOrigin = `http://127.0.0.1${window.location.port ? `:${window.location.port}` : ''}`;
+        let lastPlaylistId = null;
+    let lastConversionProvider = 'youtube';
+    let lastConversionDryRun = true;
     let lastConversionResults = [];
     let eventSource = null;
         let latestProcessedCount = 0;
         let latestProgressTotal = 0;
     const guidedBrowserAuthPanel = document.getElementById('browserAuthPanel');
-        const disconnectAuthBtn = document.getElementById('disconnectAuthBtn');
     let authPoll = null;
     let authStatusPulseTimer = null;
     let authStatusShouldPulse = false;
@@ -1180,7 +1261,7 @@
     }
 
     function scheduleAuthStatusPulse() {
-      if (!authStatusShouldPulse) return;
+      return;
       authStatusPulseTimer = window.setTimeout(() => {
         authStatusPulseTimer = null;
         authStatus.classList.add('auth-status-pulse');
@@ -1188,26 +1269,136 @@
     }
 
     authStatus.addEventListener('animationend', (event) => {
-      if (event.animationName !== 'auth-status-pulse') return;
+      if (event.animationName === 'auth-status-pulse') return;
       authStatus.classList.remove('auth-status-pulse');
       scheduleAuthStatusPulse();
     });
 
-    function setAuthStatus(message, color, shouldPulse = false) {
+    function setProviderAuthStatus(provider, message, color, shouldPulse = true, showIcon = false) {
+      providerAuthIcon.src = provider === 'spotify' ? '/icons/spotify.svg' : '/icons/ytmusic.svg';
+      providerAuthIcon.alt = provider === 'spotify' ? 'Spotify' : 'YouTube Music';
+      providerAuthIcon.hidden = !showIcon;
       stopAuthStatusPulse();
-      authStatus.textContent = message;
-      authStatus.style.color = color;
-      authStatusShouldPulse = shouldPulse;
+      providerAuthText.textContent = message;
+      providerAuthStatus.style.color = color;
+      authStatus.classList.toggle('auth-status-pulse', shouldPulse);
+          authStatusShouldPulse = false;
       if (shouldPulse) scheduleAuthStatusPulse();
     }
 
-    function handleAuthenticationRequired(response, payload) {
-      if (response.status !== 401 || payload?.code !== 'AUTHENTICATION_REQUIRED') return false;
+    function setAuthStatus(message, color, shouldPulse = true, showIcon = false) {
+      setProviderAuthStatus('youtube', message, color, shouldPulse, showIcon);
+    }
+
+
+    function spotifyConversionErrorMessage(payload) {
+      if (payload?.code === 'SPOTIFY_AUTHENTICATION_REQUIRED') return t('spotifyAuthenticationRequired');
+      if (payload?.code === 'SPOTIFY_AUTHORIZATION_REQUIRED') return t('spotifyAuthorizationRequired');
+      if (payload?.code === 'SPOTIFY_RATE_LIMITED') return t('spotifyRateLimited');
+      if (payload?.code === 'SPOTIFY_PROVIDER_UNAVAILABLE') return t('spotifyProviderUnavailable');
+      return t('conversionError');
+    }
+
+    async function handleAuthenticationRequired(response, payload) {
+      const spotifyAuthenticationRequired = response.status === 401 && payload?.code === 'SPOTIFY_AUTHENTICATION_REQUIRED';
+      const spotifyAuthorizationRequired = response.status === 403 && payload?.code === 'SPOTIFY_AUTHORIZATION_REQUIRED';
+      const youtubeAuthenticationRequired = response.status === 401 && payload?.code === 'AUTHENTICATION_REQUIRED';
+      if (spotifyAuthenticationRequired) {
+        spotifyDestination.connected = false;
+        void refreshProviderStates();
+        showToast(spotifyConversionErrorMessage(payload), 'error');
+        return true;
+      }
+      if (spotifyAuthorizationRequired) {
+        spotifyDestination.connected = false;
+        try {
+              await disconnectSpotify();
+            } catch {
+              // The local disconnect state and authorization guidance remain authoritative.
+            }
+        showToast(spotifyConversionErrorMessage(payload), 'error');
+        return true;
+      }
+      if (!youtubeAuthenticationRequired) return false;
+      youtubeAuthenticated = false;
       setAuthStatus(t('authUnauthenticated'), '#FF4444', true);
       if (window.authStore) window.authStore.getState().clearCredentials();
+      void refreshProviderStates();
       showToast(t('authConversionRequired'), 'error');
       return true;
     }
+
+    function updateStartButton() {
+      const destinationReady = selectedDestination === 'spotify' ? spotifyDestination.connected : youtubeAuthenticated;
+      startBtn.disabled = !dropZone.classList.contains('has-file') || !destinationReady;
+    }
+
+    function reconcileDestination() {
+      const activeConnected = selectedDestination === 'spotify' ? spotifyDestination.connected : youtubeAuthenticated;
+      if (!activeConnected) {
+        if (selectedDestination === 'spotify' && youtubeAuthenticated) selectedDestination = 'youtube';
+        else if (selectedDestination === 'youtube' && spotifyDestination.connected) selectedDestination = 'spotify';
+      }
+      updateDestinationUi();
+    }
+
+    function updateDestinationUi() {
+      const unavailable = !spotifyDestination.configured || !spotifyDestination.supported;
+      spotifyConnectBtn.disabled = unavailable && !spotifyDestination.connected;
+      spotifyConnectBtn.classList.toggle('spotify-auth-btn', !spotifyDestination.connected);
+      spotifyConnectBtn.classList.toggle('spotify-disconnect', spotifyDestination.connected);
+      spotifyAuthButtonLabel.textContent = t(spotifyDestination.connected ? 'disconnect' : 'spotifyConnect');
+      youtubeAuthButtonLabel.textContent = t(youtubeAuthenticated ? 'disconnect' : 'connect');
+      if (selectedDestination === 'spotify') {
+        const message = spotifyDestination.connected ? t('spotifyConnected') : t('spotifyNotConnected');
+        setProviderAuthStatus('spotify', message, spotifyDestination.connected ? '#00FF88' : '#5588BB', true, spotifyDestination.connected);
+      } else {
+        setProviderAuthStatus('youtube', youtubeAuthenticated ? t('authConnected') : t('authUnauthenticated'), youtubeAuthenticated ? '#00FF88' : '#5588BB', true, youtubeAuthenticated);
+      }
+      updateStartButton();
+    }
+
+    async function refreshSpotifyStatus(reconcile = true) {
+      try {
+        const [destinationsResponse, authResponse] = await Promise.all([fetch('/api/destinations'), fetch('/api/spotify-auth/status')]);
+        const destinationsPayload = await destinationsResponse.json();
+        const authPayload = await authResponse.json();
+        spotifyDestination = { ...spotifyDestination, ...(destinationsPayload.destinations?.spotify || {}), ...authPayload };
+      } catch {
+        spotifyDestination = { ...spotifyDestination, configured: false, connected: false, reason: 'SPOTIFY_CONFIGURATION_REQUIRED' };
+      }
+      if (reconcile) reconcileDestination();
+    }
+
+    async function disconnectSpotify() {
+      await fetch('/api/spotify-auth/disconnect', { method: 'POST' });
+      await refreshProviderStates();
+    }
+
+    async function refreshProviderStates() {
+      await Promise.all([checkAuthStatus(false), refreshSpotifyStatus(false)]);
+      reconcileDestination();
+    }
+
+
+    spotifyConnectBtn.addEventListener('click', async () => {
+      selectedDestination = 'spotify';
+      if (spotifyDestination.connected) {
+        await disconnectSpotify();
+        return;
+      }
+      updateDestinationUi();
+      setProviderAuthStatus('spotify', t('spotifyConnecting'), '#00AAFF', true);
+      try {
+        const response = await fetch('/api/spotify-auth/start', { method: 'POST' });
+        const result = await response.json();
+        if (!response.ok || !result.authorizeUrl) throw new Error(result.reason || 'SPOTIFY_AUTH_START_FAILED');
+        spotifyAuthPopup = window.open(result.authorizeUrl, 'spotify-auth', 'popup,width=520,height=720');
+        window.setTimeout(refreshProviderStates, 1000);
+      } catch (error) {
+        await refreshProviderStates();
+      }
+    });
 
     async function saveBrowserAuth() {
       try {
@@ -1253,22 +1444,15 @@
 
     function showGuidedAuthStatus(status) {
       const active = ['launching', 'waiting_for_sign_in', 'validating'].includes(status);
-          guidedBrowserAuthPanel.hidden = !(active || status === 'connected');
-                    disconnectAuthBtn.hidden = status !== 'connected';
-          if (status === 'connected') {
-            setAuthStatus(t('authConnected'), '#00FF88', true);
-          } else if (active) {
-            setAuthStatus(t('authWaiting'), '#00AAFF');
-          } else if (status === 'cancelled') {
-            setAuthStatus(t('authCancelled'), '#FF4444');
-          } else if (status === 'timed_out') {
-            setAuthStatus(t('authTimedOut'), '#FF4444');
-          } else if (status === 'error') {
-            setAuthStatus(t('authFailed'), '#FF4444');
-          } else {
-            setAuthStatus(t('authUnauthenticated'), '#FF4444', true);
-          }
-        }
+      guidedBrowserAuthPanel.hidden = !active;
+      if (status === 'connected') {
+        setAuthStatus(t('authConnected'), '#00FF88', true, true);
+      } else if (active) {
+        setAuthStatus(t('authWaiting'), '#00AAFF');
+      } else {
+        setAuthStatus(t('authUnauthenticated'), '#5588BB');
+      }
+    }
 
         async function pollGuidedAuth() {
           const response = await fetch('/api/ytmusic-auth/browser/status');
@@ -1282,11 +1466,11 @@
           }
         }
 
-                disconnectAuthBtn.onclick = async () => {
-          await fetch('/api/ytmusic-auth/browser/disconnect', { method: 'POST' });
-          showGuidedAuthStatus('idle');
-          await checkAuthStatus();
-        };
+    async function disconnectYtMusic() {
+      await fetch('/api/ytmusic-auth/browser/disconnect', { method: 'POST' });
+      showGuidedAuthStatus('idle');
+      await refreshProviderStates();
+    }
 
     async function startYtMusicAuthorization(popup) {
       setAuthStatus(t('authWaiting'), '#00AAFF');
@@ -1328,11 +1512,12 @@
     }
 
     // Función para verificar el estado de autenticación
-    async function checkAuthStatus() {
+    async function checkAuthStatus(reconcile = true) {
       try {
         const response = await fetch('/api/auth-status');
         const data = await response.json();
         if (data.authenticated) {
+          youtubeAuthenticated = true;
           showGuidedAuthStatus('connected');
 
            // Actualizar el estado global en zustand
@@ -1340,24 +1525,22 @@
              window.authStore.getState().setCredentials("dummy-token", "youtube");
            }
 
-           // Habilitar el botón [EXECUTE] si hay un archivo cargado
-           if (dropZone.classList.contains('has-file')) {
-             startBtn.disabled = false;
-           }
-
+           if (reconcile) reconcileDestination();
            return true;
-        } else {
-          showGuidedAuthStatus('idle');
-
-          // Limpiar el estado global en zustand
-          if (window.authStore) {
-            window.authStore.getState().clearCredentials();
-          }
-
-          return false;
         }
+        youtubeAuthenticated = false;
+        showGuidedAuthStatus('idle');
+
+        // Limpiar el estado global en zustand
+        if (window.authStore) {
+          window.authStore.getState().clearCredentials();
+        }
+
+        if (reconcile) reconcileDestination();
+        return false;
       } catch (err) {
         console.error("Error al verificar estado de autenticación:", err);
+        if (reconcile) reconcileDestination();
         return false;
       }
     }
@@ -1384,14 +1567,13 @@
 
     // Función para iniciar la conversión de la playlist
     function formatArtists(artist) {
-          return Array.isArray(artist) ? artist.join(', ') : (artist || t('unknownArtist'));
+          return Array.isArray(artist) ? artist.map((entry) => entry?.name || entry).join(', ') : (artist || t('unknownArtist'));
         }
 
         function updateManualAddButton() {
-          addManualBtn.disabled = manualSelections.size === 0 || !lastPlaylistId;
-          addManualBtn.title = lastPlaylistId
-                        ? ''
-            : t('manualAdditionsUnavailable');
+          const manualAddAvailable = Boolean(lastPlaylistId) && !lastConversionDryRun;
+          addManualBtn.disabled = manualSelections.size === 0 || !manualAddAvailable;
+          addManualBtn.title = manualAddAvailable ? '' : t('manualAdditionsUnavailable');
         }
 
         function showToast(message, type = 'error', id = 'appToast') {
@@ -1434,28 +1616,45 @@
           item.querySelector('.summary-value').textContent = String(manualAdditionsCount);
         }
 
+        function getManualCandidateId(candidate) {
+          const candidateId = lastConversionProvider === 'spotify' ? candidate?.uri : candidate?.videoId;
+          return typeof candidateId === 'string' && candidateId.trim() ? candidateId : null;
+        }
+
         function selectManualCandidate(trackId, candidate, candidateList) {
+          const candidateId = getManualCandidateId(candidate);
+          if (!candidateId) return;
           manualSelections.set(trackId, candidate);
           candidateList.querySelectorAll('.manual-result').forEach((element) => {
-            element.classList.toggle('selected', element.dataset.videoId === candidate.videoId);
+            element.classList.toggle('selected', element.dataset.candidateId === candidateId);
           });
           updateManualAddButton();
         }
 
         function appendManualCandidate(trackId, candidate, candidateList, section) {
-          if (!candidate || !candidate.videoId) return;
+          const candidateId = getManualCandidateId(candidate);
+          if (!candidateId) return;
           const option = document.createElement('button');
           option.type = 'button';
           option.className = 'manual-result';
-          option.dataset.videoId = candidate.videoId;
+          option.dataset.candidateId = candidateId;
 
           const title = document.createElement('div');
           title.className = 'manual-result-title';
           title.textContent = candidate.title || t('untitledTrack');
           const artist = document.createElement('div');
           artist.className = 'manual-result-artist';
-          artist.textContent = formatArtists(candidate.artist);
+          artist.textContent = formatArtists(candidate.artists || candidate.artist);
           option.append(title, artist);
+          if (lastConversionProvider === 'spotify') {
+            const details = document.createElement('div');
+            details.className = 'manual-result-artist';
+            const album = candidate.album?.name || candidate.album || t('unknownAlbum');
+            const durationMs = Number(candidate.durationMs ?? candidate.duration_ms);
+            const duration = Number.isFinite(durationMs) ? `${Math.floor(durationMs / 60000)}:${String(Math.floor(durationMs / 1000) % 60).padStart(2, '0')}` : '';
+            details.textContent = [album, duration].filter(Boolean).join(' · ');
+            option.appendChild(details);
+          }
           if (candidate.reviewReason) {
             const reason = document.createElement('div');
             reason.className = 'manual-result-review-reason';
@@ -1480,10 +1679,11 @@
 
         function renderManualCandidates(trackId, strictCandidates, relaxedCandidates, candidateList) {
           candidateList.replaceChildren();
-          const seenVideoIds = new Set();
+          const seenCandidateIds = new Set();
           const uniqueCandidates = (candidates) => candidates.filter((candidate) => {
-            if (!candidate || !candidate.videoId || seenVideoIds.has(candidate.videoId)) return false;
-            seenVideoIds.add(candidate.videoId);
+            const candidateId = getManualCandidateId(candidate);
+            if (!candidateId || seenCandidateIds.has(candidateId)) return false;
+            seenCandidateIds.add(candidateId);
             return true;
           });
           appendManualResultSection(
@@ -1512,26 +1712,32 @@
             return { threshold: 0, offset: 0, exhausted: false };
           }
           if (prior.hasMore && prior.offset < 10) return { threshold: prior.threshold, offset: prior.offset + 5, exhausted: false };
-          if (prior.candidateCount === 5) {
+          if (prior.provider === 'spotify') return { threshold: prior.threshold, offset: prior.offset, exhausted: true };
+              if (prior.candidateCount === 5) {
             return { threshold: Math.round(Math.min(prior.threshold + 0.15, 0.60) * 100) / 100, offset: 0, exhausted: false };
           }
           return { threshold: prior.threshold, offset: prior.offset, exhausted: true };
         }
 
-        function showManualSearchThreshold(element, threshold, offset = 0, candidateCount = 0, exhausted = false) {
-          const range = t('resultsRange', { from: offset + 1, to: offset + (candidateCount || 5) });
-          element.textContent = t('searchThreshold', { threshold: threshold.toFixed(2), range, more: exhausted ? t('noMoreResults') : '' });
+        function showManualSearchThreshold(element, threshold, offset = 0, candidateCount = 0, exhausted = false, provider = 'youtube') {
+          const range = { from: offset + 1, to: offset + (candidateCount || 5) };
+              if (provider === 'spotify') {
+                element.textContent = t('searchResults', { ...range, more: exhausted ? t('noMoreSpotifyResults') : '' });
+                return;
+              }
+          element.textContent = t('searchThreshold', { threshold: threshold.toFixed(2), range: t('resultsRange', range), more: exhausted ? t('noMoreResults') : '' });
         }
 
         async function searchManualTrack(trackId, query, expectedArtist, expectedTitle, candidateList, searchButton, thresholdDisplay) {
           if (!query || manualSearchRequests.has(trackId)) return;
           const search = nextManualSearch(trackId, query, expectedArtist, expectedTitle);
+              const spotifySearch = lastConversionProvider === 'spotify';
           if (search.exhausted) {
-            showManualSearchThreshold(thresholdDisplay, search.threshold, search.offset, 0, true);
+            showManualSearchThreshold(thresholdDisplay, search.threshold, search.offset, 0, true, spotifySearch ? 'spotify' : 'youtube');
             return;
           }
           const { threshold: searchThreshold, offset } = search;
-          showManualSearchThreshold(thresholdDisplay, searchThreshold, offset);
+          showManualSearchThreshold(thresholdDisplay, searchThreshold, offset, 0, false, spotifySearch ? 'spotify' : 'youtube');
               const request = {
                 controller: new AbortController(),
                 version: Number(searchButton.dataset.searchVersion || 0) + 1,
@@ -1547,14 +1753,15 @@
               const isCurrentRequest = () => manualSearchRequests.get(trackId) === request
                 && Number(searchButton.dataset.searchVersion) === request.version;
           try {
-            const response = await fetch('/api/search-single', {
+            const spotifySearch = lastConversionProvider === 'spotify';
+            const response = await fetch(spotifySearch ? '/api/spotify/search-single' : '/api/search-single', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ query, artist: expectedArtist, title: expectedTitle, threshold: searchThreshold, offset }),
+              body: JSON.stringify(spotifySearch ? { query, limit: 5, offset } : { query, artist: expectedArtist, title: expectedTitle, threshold: searchThreshold, offset }),
                   signal: request.controller.signal,
             });
             const payload = await response.json();
-            if (handleAuthenticationRequired(response, payload)) return;
+            if (await handleAuthenticationRequired(response, payload)) return;
             if (!response.ok) throw new Error(payload.error || 'Search failed');
                 if (!isCurrentRequest()) return;
             const results = payload.results || [];
@@ -1566,8 +1773,9 @@
               offset,
               candidateCount: results.length,
               hasMore: payload.hasMore === true,
+                  provider: spotifySearch ? 'spotify' : 'youtube',
             });
-            showManualSearchThreshold(thresholdDisplay, searchThreshold, offset, results.length);
+            showManualSearchThreshold(thresholdDisplay, searchThreshold, offset, results.length, false, spotifySearch ? 'spotify' : 'youtube');
             renderManualCandidates(trackId, results, [], candidateList);
           } catch (error) {
             if (error && error.name === 'AbortError') return;
@@ -1598,7 +1806,7 @@
           }
           manualReviewSection.classList.add('visible');
           manualReviewDescription.textContent = lastPlaylistId
-            ? t('chooseSuggestion')
+            ? t(lastConversionProvider === 'spotify' ? 'chooseSuggestionSpotify' : 'chooseSuggestion')
             : t('chooseBeforeAdding');
 
           lastConversionResults.forEach((track, index) => {
@@ -1644,7 +1852,7 @@
             } else {
               const prompt = document.createElement('div');
               prompt.className = 'manual-result-artist';
-              prompt.textContent = t('noSuggestedMatch');
+              prompt.textContent = t(lastConversionProvider === 'spotify' ? 'noSuggestedMatchSpotify' : 'noSuggestedMatch');
               candidates.appendChild(prompt);
             }
             button.addEventListener('click', () => searchManualTrack(
@@ -1677,20 +1885,23 @@
         }
 
         addManualBtn.addEventListener('click', async () => {
-          if (!lastPlaylistId || !manualSelections.size) return;
+          if (lastConversionDryRun || !lastPlaylistId || !manualSelections.size) return;
           const tracks = [...new Map(
-            [...manualSelections.values()].map((track) => [track.videoId, track])
+            [...manualSelections.values()]
+              .map((track) => [getManualCandidateId(track), track])
+              .filter(([candidateId]) => candidateId)
           ).values()];
+          if (!tracks.length) return;
               manualAddStatus.style.display = 'none';
           addManualBtn.disabled = true;
           try {
-            const response = await fetch('/api/add-to-playlist', {
+            const response = await fetch(lastConversionProvider === 'spotify' ? '/api/spotify/add-to-playlist' : '/api/add-to-playlist', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ playlistId: lastPlaylistId, tracks }),
             });
             const payload = await response.json();
-            if (handleAuthenticationRequired(response, payload)) {
+            if (await handleAuthenticationRequired(response, payload)) {
               updateManualAddButton();
               return;
             }
@@ -1718,7 +1929,40 @@
           }
         });
 
-        const startConversion = async () => {
+        async function ensureConversionReady(destination) {
+              try {
+                const response = await fetch('/api/conversion-preflight', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ destination }),
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (response.ok && payload?.status === 'ready') return true;
+                const spotifyAuthorizationRequired = destination === 'spotify'
+                  && response.ok
+                  && payload?.status === 'not_ready'
+                  && payload?.code === 'AUTHORIZATION_REQUIRED';
+                if (spotifyAuthorizationRequired) {
+                  await disconnectSpotify();
+                  showToast(t('spotifyAuthorizationRequired'), 'error');
+                } else if (payload?.code === 'AUTHENTICATION_REQUIRED') {
+                  if (destination === 'spotify') {
+                    await disconnectSpotify();
+                    showToast(spotifyConversionErrorMessage(payload), 'error');
+                  } else {
+                    await disconnectYtMusic();
+                    showToast(t('authConversionRequired'), 'error');
+                  }
+                } else {
+                  showToast(destination === 'spotify' ? spotifyConversionErrorMessage(payload) : t('conversionError'));
+                }
+              } catch {
+                showToast(t('conversionError'));
+              }
+              return false;
+            }
+
+            const startConversion = async () => {
       if (!window.parsedTracks || window.parsedTracks.length === 0) {
         showToast(t('noTracks'));
         return;
@@ -1729,6 +1973,17 @@
         showToast(t('playlistRequired'));
         return;
       }
+
+      const conversionDryRun = dryRun.checked;
+          const conversionDestination = selectedDestination;
+          const conversionRun = { destination: conversionDestination, eventSource: null, settled: false };
+          const settleConversionRun = () => {
+            if (conversionRun.settled) return;
+            conversionRun.settled = true;
+            conversionRun.eventSource?.close();
+            if (eventSource === conversionRun.eventSource) eventSource = null;
+          };
+              if (!await ensureConversionReady(conversionDestination)) return;
 
       // Deshabilitar el botón durante la conversión
       startBtn.disabled = true;
@@ -1761,9 +2016,11 @@
 
       try {
         // Crear EventSource para recibir actualizaciones de progreso
-        eventSource = new EventSource(`/api/convert-progress?playlistName=${encodeURIComponent(playlistNameValue)}&dryRun=${dryRun.checked}&threshold=${threshold.value}`);
+        conversionRun.eventSource = new EventSource(`/api/convert-progress?playlistName=${encodeURIComponent(playlistNameValue)}&dryRun=${conversionDryRun}&threshold=${threshold.value}`);
+            eventSource = conversionRun.eventSource;
 
-        eventSource.onmessage = (event) => {
+        conversionRun.eventSource.onmessage = (event) => {
+              if (conversionRun.settled) return;
           const data = JSON.parse(event.data);
           if (data.type === "progress") {
             const added = Number(data.added);
@@ -1792,9 +2049,18 @@
             progressPercent.textContent = "100%";
             progressLabel.textContent = t('completed');
             progressBar.parentElement.setAttribute("aria-valuenow", "100");
-            backendStatus.lastElementChild.textContent = t('conversionCompleted');
+            const matchedCount = Number(data.matched);
+                const insertedCount = Number(data.sideEffects?.inserted);
+                const hasPartialInsertion = Boolean(data.playlistId)
+                  && Number.isInteger(insertedCount)
+                  && insertedCount >= 0
+                  && Number.isFinite(matchedCount)
+                  && insertedCount < matchedCount;
+                backendStatus.lastElementChild.textContent = hasPartialInsertion
+                  ? t('partialInsertion', { inserted: insertedCount, matched: matchedCount })
+                  : t('conversionCompleted');
             backendStatus.firstElementChild.className = "backend-dot available";
-            eventSource.close();
+            settleConversionRun();
             startBtn.disabled = false;
             startBtn.textContent = "[ EXECUTE ]";
 
@@ -1814,7 +2080,17 @@
               summaryGrid.appendChild(item);
             });
 
-            if (data.playlistUrl) {
+            if (hasPartialInsertion) {
+                  const item = document.createElement('div');
+                  item.className = 'summary-item summary-ambiguous';
+                  const label = document.createElement('div');
+                  label.className = 'summary-label';
+                  label.textContent = t('partialInsertion', { inserted: insertedCount, matched: matchedCount });
+                  item.appendChild(label);
+                  summaryGrid.appendChild(item);
+                }
+
+                if (data.playlistUrl) {
               playlistUrl.replaceChildren(`${t('playlistUrl')} `);
               const link = document.createElement('a');
               link.href = data.playlistUrl;
@@ -1825,9 +2101,16 @@
               playlistUrl.style.display = "block";
             }
 
-            // Guardar resultados para revisión manual
+            // Save provider-specific results for manual review.
+            lastConversionProvider = data.provider || conversionDestination;
+            lastConversionDryRun = conversionDryRun;
             lastPlaylistId = data.playlistId || null;
-                lastConversionResults = data.manualReviewTracks || [
+                lastConversionResults = data.manualReviewTracks || data.outcomes?.filter((outcome) => outcome.status === 'unmatched' || outcome.status === 'ambiguous').map((outcome) => ({
+                  ...outcome.source,
+                  status: outcome.status,
+                  bestMatch: outcome.candidate,
+                  alternatives: outcome.alternatives,
+                })) || [
                   ...(data.unmatchedTracks || []),
                   ...(data.ambiguousTracks || []),
                 ];
@@ -1837,9 +2120,10 @@
           }
         };
 
-        eventSource.onerror = (err) => {
+        conversionRun.eventSource.onerror = (err) => {
+              if (conversionRun.settled) return;
           console.error("EventSource failed:", err);
-          eventSource.close();
+          settleConversionRun();
 
           // Rehabilitar el botón
           startBtn.disabled = false;
@@ -1850,7 +2134,7 @@
 
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => reject(new Error('Progress stream timed out')), 5000);
-          eventSource.onopen = () => {
+          conversionRun.eventSource.onopen = () => {
             clearTimeout(timeout);
             backendStatus.lastElementChild.textContent = t('backendConnected');
             backendStatus.firstElementChild.className = 'backend-dot available';
@@ -1865,15 +2149,32 @@
           body: JSON.stringify({
             tracks: window.parsedTracks,
             playlistName: playlistNameValue,
-            dryRun: dryRun.checked,
-            threshold: parseInt(threshold.value)
+            dryRun: conversionDryRun,
+            threshold: parseInt(threshold.value),
+            destination: conversionDestination
           })
         });
 
         if (!response.ok) {
           const error = await response.json().catch(() => ({}));
-          if (handleAuthenticationRequired(response, error)) {
-            eventSource?.close();
+          const isSpotifyRun = conversionDestination === 'spotify';
+          const spotifyAuthenticationRequired = isSpotifyRun && response.status === 401
+            && error?.code === 'SPOTIFY_AUTHENTICATION_REQUIRED';
+          const spotifyAuthorizationRequired = isSpotifyRun && response.status === 403
+            && error?.code === 'SPOTIFY_AUTHORIZATION_REQUIRED';
+          const youtubeAuthenticationRequired = !isSpotifyRun && response.status === 401
+            && error?.code === 'AUTHENTICATION_REQUIRED';
+          const authenticationRequired = spotifyAuthenticationRequired || youtubeAuthenticationRequired;
+          const authorizationRequired = spotifyAuthorizationRequired;
+          const classifiedFailure = authenticationRequired || authorizationRequired
+            || (isSpotifyRun && (error?.code === 'SPOTIFY_RATE_LIMITED' || error?.code === 'SPOTIFY_PROVIDER_UNAVAILABLE'));
+          if (classifiedFailure) {
+            settleConversionRun();
+            if (authenticationRequired || authorizationRequired) {
+              await handleAuthenticationRequired(response, error);
+            } else if (isSpotifyRun) {
+              showToast(spotifyConversionErrorMessage(error));
+            }
             startBtn.disabled = false;
             startBtn.textContent = "[ EXECUTE ]";
             return;
@@ -1882,7 +2183,9 @@
         }
 
       } catch (err) {
+        if (conversionRun.settled) return;
         console.error("Error durante la conversión:", err);
+        settleConversionRun();
         showToast(t('conversionError'));
 
         // Rehabilitar el botón
@@ -1934,6 +2237,20 @@
       }
     };
 
+    window.addEventListener('message', async (event) => {
+      const spotifyCallback = event.data;
+      if (!spotifyCallback || typeof spotifyCallback !== 'object' || Array.isArray(spotifyCallback)) return;
+          if (spotifyCallback.type !== 'spotify-auth-complete') return;
+      if (event.origin !== window.location.origin && event.origin !== spotifyLoopbackCallbackOrigin) return;
+          if (!spotifyAuthPopup || event.source !== spotifyAuthPopup) return;
+      if (!['connected', 'error'].includes(spotifyCallback.status)) return;
+      if ((spotifyCallback.status === 'connected' && spotifyCallback.reason !== null)
+        || (spotifyCallback.status === 'error' && spotifyCallback.reason !== 'authentication_failed')) return;
+          if (spotifyCallback.status === 'connected') selectedDestination = 'spotify';
+          spotifyAuthPopup = null;
+      await refreshProviderStates();
+    });
+
     // Escuchar mensajes del popup de autenticación
     window.addEventListener('message', async (event) => {
       console.info('[auth] Window message received');
@@ -1967,10 +2284,8 @@
              }
              const isAuthenticated = await checkAuthStatus();
 
-             // Habilitar el botón [EXECUTE] si hay un archivo cargado
-             if (isAuthenticated && dropZone.classList.contains('has-file')) {
-               startBtn.disabled = false;
-             }
+             // Refresh the active destination's eligibility after authentication.
+             updateStartButton();
            } else {
              console.error('[auth] Token validation rejected');
            }
@@ -1985,9 +2300,11 @@
       }
     });
 
-    // Llamar a checkAuthStatus al cargar la página
+    dryRun.addEventListener('change', updateManualAddButton);
+
+    // Refresh both provider states together so persisted sessions and fallback remain ordered.
     document.addEventListener('DOMContentLoaded', () => {
-      checkAuthStatus();
+      refreshProviderStates();
 
       // Verificar si hay un parámetro de autenticación
       const urlParams = new URLSearchParams(window.location.search);
