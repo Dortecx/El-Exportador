@@ -47,6 +47,13 @@ set "SPOTIFY_CLIENT_ID_B64="
 set "NODE_ENV=production"
 set "PORT=3000"
 
+rem Spotify's registered loopback callback is fixed to this port: never open a browser to an unknown listener.
+netstat -ano -p tcp | findstr /r /c:":%PORT% .*LISTENING" >nul
+if not errorlevel 1 (
+  echo [ERROR] Port %PORT% is already in use. Close the other local process, then run start.cmd again.
+  exit /b 1
+)
+
 echo Starting El Exportador at http://localhost:%PORT%
 echo Logs: "%LOG_DIR%\server.log"
 start "" /b "%ComSpec%" /d /c ""node" "%ROOT%app\node_modules\tsx\dist\cli.mjs" "%ROOT%app\src\web\server.ts" >> "%LOG_DIR%\server.log" 2>&1"

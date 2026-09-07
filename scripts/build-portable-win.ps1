@@ -69,6 +69,9 @@ $runtimeSources = @(
   "src\spotify\tokenStore.ts",
   "src\spotify\types.ts",
   "src\spotify\oauth.ts",
+  "src\spotify\api.ts",
+  "src\spotify\converter.ts",
+  "src\spotify\matcher.ts",
   "src\ytmusic\client.ts",
   "src\parser.ts",
   "src\services\session.service.ts"
