@@ -246,6 +246,12 @@ describe("Parser", () => {
       expect(tracks[0]).toMatchObject({ artist: "Artist", title: "track" });
     });
 
+    it("should retain the pre-slash artist when ED and EP are slash-side metadata", () => {
+      const tracks = parseM3U("milet - Anytime Anywhere／Sousou no Frieren ED EP FLAC (24bit-48kHz)/01 - Anytime Anywhere.flac", false);
+
+      expect(tracks[0]).toMatchObject({ artist: "milet", title: "Anytime Anywhere" });
+    });
+
     it("should never use anime or quality suffixes as slash-path artists", () => {
       const tracks = parseM3U("Artist - Title／TVアニメ 24bit 96kHz/track.flac", false);
 

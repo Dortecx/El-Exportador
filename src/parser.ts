@@ -63,7 +63,7 @@ const JAP_SLASH_REGEX = /^(.+?)\s*[\uff0f/]\s*(.+)$/;
 // Matches Japanese corner bracket title
 const CORNER_BRACKET_REGEX = /^\u300c([^\u300d]+)\u300d/;
 const JAPANESE_PARENTHESIS_TITLE_REGEX = /\(([\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]+)\)/u;
-const SLASH_METADATA_REGEX = /(?:\b(?:anime|tv|season|series|episode|cour|ost|soundtrack|flac|hi-res|mp3|aac|\d+\s*bit|\d+\s*k(?:hz)?|blu-?ray|op|theme)\b|アニメ|シーズン|画質|品質)/i;
+const SLASH_METADATA_REGEX = /(?:\b(?:anime|tv|season|series|episode|cour|ost|soundtrack|flac|hi-res|mp3|aac|\d+\s*bit|\d+\s*k(?:hz)?|blu-?ray|op|ed|ep|theme)\b|アニメ|シーズン|画質|品質)/i;
 const LIBRARY_FOLDER_REGEX = /^(?:home|music|audio|downloads?|library|media)$/i;
 const TRACK_NUMBER_FOLDER_REGEX = /^(?:\d+\.?|CD\s*\d+|Disc\s*\d+)$/i;
 
