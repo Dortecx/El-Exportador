@@ -262,8 +262,11 @@ describe("provider status and destination UI", () => {
     it("renders bounded Spotify rate-limit and provider failures without disconnecting", () => {
       expect(html).toContain("function spotifyConversionErrorMessage(payload)");
       expect(html).toContain("payload?.code === 'SPOTIFY_RATE_LIMITED'");
+      expect(html).toContain("payload?.code === 'SPOTIFY_REQUEST_REJECTED'");
+      expect(html).toContain("payload?.error || t('spotifyRequestRejected')");
       expect(html).toContain("payload?.code === 'SPOTIFY_PROVIDER_UNAVAILABLE'");
       expect(html).toContain("spotifyRateLimited: 'Spotify is rate limited. Please try again shortly.'");
+      expect(html).toContain("spotifyRequestRejected: 'Spotify rejected the request. Check the playlist details and selected tracks, then try again.'");
       expect(html).toContain("spotifyProviderUnavailable: 'Spotify is unavailable. Please try again shortly.'");
     });
 

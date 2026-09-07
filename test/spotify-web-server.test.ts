@@ -511,6 +511,47 @@ describe("Spotify web backend", () => {
     expect(JSON.stringify(response.body)).not.toContain("test-access");
   });
 
+  it("classifies fake non-dry-run Spotify create and insert rejections without leaking provider content", async () => {
+    const config = () => ({ clientId: "test-client", enabled: true, reason: null, redirectUri: "http://localhost/callback", supported: true });
+    const token = () => ({ accessToken: "test-access", expiresAtEpochMs: 1, refreshToken: "test-refresh", scope: "", tokenType: "Bearer" });
+    const providerDetail = "provider-response-body-must-not-leak";
+
+    for (const [operation, status, phase] of [["create", 400, "playlist_create"], ["insert", 404, "playlist_insert"]] as const) {
+      setSpotifyWebDependenciesForTest({
+        convert: async (api) => {
+          if (operation === "create") await api.createPrivatePlaylist("playlist-id-must-not-leak", "My playlist");
+          else await api.addTracks("playlist-id-must-not-leak", ["spotify:track:track-1"]);
+          throw new Error("unreachable");
+        },
+        createApi: () => ({
+          addTracks: vi.fn(async () => { throw Object.assign(new SpotifyApiError(status), { message: providerDetail }); }),
+          createPrivatePlaylist: vi.fn(async () => { throw Object.assign(new SpotifyApiError(status), { message: providerDetail }); }),
+          getProfile: vi.fn(),
+          searchTracks: vi.fn(),
+        }),
+        getClientConfig: config,
+        getTokenState: token,
+      });
+
+      const runId = `${operation[0]!.repeat(32)}`;
+      const progress = await progressStream(runId);
+      const response = await request("/api/convert", { destination: "spotify", dryRun: false, playlistName: "My playlist", runId, tracks: [{ artist: "Artist", title: "Song" }] });
+      await progress.body?.cancel();
+
+      expect(response).toEqual({
+        body: {
+          code: "SPOTIFY_REQUEST_REJECTED",
+          error: "Spotify rejected the request. Check the playlist details and selected tracks, then try again.",
+          phase,
+        },
+        status,
+      });
+      expect(JSON.stringify(response.body)).not.toContain(providerDetail);
+      expect(JSON.stringify(response.body)).not.toContain("playlist-id-must-not-leak");
+      expect(JSON.stringify(response.body)).not.toContain("test-access");
+    }
+  });
+
   it("returns only normalized conversion-preflight readiness for both providers", async () => {
         const getProfile = vi.fn(async () => ({ accessToken: "must-not-leak", id: "profile-must-not-leak" }));
         setSpotifyWebDependenciesForTest({

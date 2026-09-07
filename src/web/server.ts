@@ -191,7 +191,7 @@ function spotifyConnectionError(res: express.Response, connection: { code?: stri
   return res.status(connection.status).json({ error: authorizationRequired ? "Authorization required" : code === "SPOTIFY_AUTHENTICATION_REQUIRED" ? "Authentication required" : "Spotify is unavailable", code });
 }
 
-type SpotifyErrorPhase = "preflight_profile" | "matching" | "playlist_create";
+type SpotifyErrorPhase = "preflight_profile" | "matching" | "playlist_create" | "playlist_insert";
 type SpotifyManualReviewOutcome = SpotifyTrackMatch;
 type ConversionPreflightCode = "AUTHENTICATION_REQUIRED" | "AUTHORIZATION_REQUIRED" | "RATE_LIMITED" | "PROVIDER_UNAVAILABLE";
 type ConversionPreflightResult =
@@ -200,7 +200,7 @@ type ConversionPreflightResult =
 
 type PhasedSpotifyApiError = SpotifyApiError & { spotifyErrorPhase?: SpotifyErrorPhase };
 
-function spotifyConversionError(error: unknown, fallbackPhase: SpotifyErrorPhase = "matching"): { code: "SPOTIFY_AUTHENTICATION_REQUIRED" | "SPOTIFY_AUTHORIZATION_REQUIRED" | "SPOTIFY_RATE_LIMITED" | "SPOTIFY_PROVIDER_UNAVAILABLE"; error: string; phase?: SpotifyErrorPhase; status: number } {
+function spotifyConversionError(error: unknown, fallbackPhase: SpotifyErrorPhase = "matching"): { code: "SPOTIFY_AUTHENTICATION_REQUIRED" | "SPOTIFY_AUTHORIZATION_REQUIRED" | "SPOTIFY_RATE_LIMITED" | "SPOTIFY_REQUEST_REJECTED" | "SPOTIFY_PROVIDER_UNAVAILABLE"; error: string; phase: SpotifyErrorPhase; status: number } {
   const phase = error instanceof SpotifyApiError ? (error as PhasedSpotifyApiError).spotifyErrorPhase ?? fallbackPhase : fallbackPhase;
   if (error instanceof SpotifyApiError && error.status === 401) {
     return { code: "SPOTIFY_AUTHENTICATION_REQUIRED", error: "Authentication required", phase, status: 401 };
@@ -209,9 +209,12 @@ function spotifyConversionError(error: unknown, fallbackPhase: SpotifyErrorPhase
     return { code: "SPOTIFY_AUTHORIZATION_REQUIRED", error: "Authorization required", phase, status: 403 };
   }
   if (error instanceof SpotifyApiError && error.status === 429) {
-    return { code: "SPOTIFY_RATE_LIMITED", error: "Spotify is rate limited", status: 429 };
+    return { code: "SPOTIFY_RATE_LIMITED", error: "Spotify is rate limited", phase, status: 429 };
   }
-  return { code: "SPOTIFY_PROVIDER_UNAVAILABLE", error: "Spotify is unavailable", status: 503 };
+  if (error instanceof SpotifyApiError && error.status >= 400 && error.status < 500) {
+    return { code: "SPOTIFY_REQUEST_REJECTED", error: "Spotify rejected the request. Check the playlist details and selected tracks, then try again.", phase, status: error.status };
+  }
+  return { code: "SPOTIFY_PROVIDER_UNAVAILABLE", error: "Spotify is unavailable", phase, status: 503 };
 }
 
 function spotifyApiWithErrorPhases(api: SpotifyConversionApi): SpotifyConversionApi {
@@ -227,9 +230,9 @@ function spotifyApiWithErrorPhases(api: SpotifyConversionApi): SpotifyConversion
       : withPhase("matching", () => api.searchTracks(query, limitOrShouldCancel));
   }
   return {
-    addTracks: (playlistId, uris, shouldCancel) => withPhase("playlist_create", () => api.addTracks(playlistId, uris, shouldCancel)),
+    addTracks: (playlistId, uris, shouldCancel) => withPhase("playlist_insert", () => api.addTracks(playlistId, uris, shouldCancel)),
     createPrivatePlaylist: (userId, name, shouldCancel) => withPhase("playlist_create", () => api.createPrivatePlaylist(userId, name, shouldCancel)),
-    getProfile: (shouldCancel) => withPhase("playlist_create", () => api.getProfile(shouldCancel)),
+    getProfile: (shouldCancel) => withPhase("preflight_profile", () => api.getProfile(shouldCancel)),
     searchTracks,
   };
 }
@@ -566,8 +569,8 @@ app.post("/api/spotify/add-to-playlist", async (req, res) => {
     }
     return res.json({ success: true, count: result.insertedUris.length });
   } catch (error) {
-    const failure = spotifyConversionError(error, "playlist_create");
-    if (failure.code === "SPOTIFY_AUTHENTICATION_REQUIRED" || failure.code === "SPOTIFY_AUTHORIZATION_REQUIRED") {
+    const failure = spotifyConversionError(error, "playlist_insert");
+    if (failure.code !== "SPOTIFY_PROVIDER_UNAVAILABLE") {
       return res.status(failure.status).json({ error: failure.error, code: failure.code, phase: failure.phase });
     }
     return res.status(502).json({ error: "Could not add selected tracks", code: "SPOTIFY_PLAYLIST_FAILED" });
