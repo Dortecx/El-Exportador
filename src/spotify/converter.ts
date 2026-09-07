@@ -1,13 +1,17 @@
+import { SpotifyPlaylistCreationIndeterminateError } from "./api";
 import { buildSpotifySearchQuery, matchSpotifyTrack } from "./matcher";
-import type { SpotifyAddTracksResult, SpotifyConversionOutcome, SpotifyConversionResult, SpotifyPlaylist, SpotifyProfile, SpotifyProgressCallback, SpotifySourceTrack, SpotifyTrackCandidate } from "./types";
+import type { SpotifyAddTracksResult, SpotifyCancellationCheck, SpotifyConversionOutcome, SpotifyConversionResult, SpotifyPlaylist, SpotifyProfile, SpotifyProgressCallback, SpotifySourceTrack, SpotifyTrackCandidate } from "./types";
 
 const MAX_CONCURRENT_SPOTIFY_SEARCHES = 15;
 
 export type SpotifyConversionApi = {
-  addTracks(playlistId: string, uris: string[], shouldCancel?: () => boolean): Promise<SpotifyAddTracksResult>;
-  createPrivatePlaylist(userId: string, name: string): Promise<SpotifyPlaylist>;
-  getProfile(): Promise<SpotifyProfile>;
-  searchTracks(query: string): Promise<SpotifyTrackCandidate[]>;
+  addTracks(playlistId: string, uris: string[], shouldCancel?: SpotifyCancellationCheck): Promise<SpotifyAddTracksResult>;
+  createPrivatePlaylist(userId: string, name: string, shouldCancel?: SpotifyCancellationCheck): Promise<SpotifyPlaylist>;
+  getProfile(shouldCancel?: SpotifyCancellationCheck): Promise<SpotifyProfile>;
+  searchTracks: {
+    (query: string, shouldCancel?: SpotifyCancellationCheck): Promise<SpotifyTrackCandidate[]>;
+    (query: string, limit?: number, offset?: number, shouldCancel?: SpotifyCancellationCheck): Promise<SpotifyTrackCandidate[]>;
+  };
 };
 
 export type SpotifyConversionOptions = {
@@ -41,8 +45,24 @@ export async function convertSpotifyTracks(
         continue;
       }
       options.onProgress?.(index + 1, tracks.length, track.artist, track.title, "searching");
-      const candidates = await api.searchTracks(buildSpotifySearchQuery(track));
-      outcomesByIndex[index] = matchSpotifyTrack(track, candidates);
+      if (options.shouldCancel?.(index, track)) {
+        cancelled = true;
+        return;
+      }
+      try {
+        const candidates = await api.searchTracks(buildSpotifySearchQuery(track), () => options.shouldCancel?.(index, track) ?? false);
+        if (options.shouldCancel?.(index, track)) {
+          cancelled = true;
+          return;
+        }
+        outcomesByIndex[index] = matchSpotifyTrack(track, candidates);
+      } catch (error) {
+        if (options.shouldCancel?.(index, track) || error instanceof DOMException && error.name === "AbortError") {
+          cancelled = true;
+          return;
+        }
+        throw error;
+      }
     }
   }
 
@@ -55,11 +75,25 @@ export async function convertSpotifyTracks(
     return { cancelled: cancelled || cancelledBeforeCreation, outcomes, remotePlaylist: { status: "not-created" } };
   }
 
-  const profile = await api.getProfile();
+  const profile = await api.getProfile(() => lastTrack ? options.shouldCancel?.(tracks.length, lastTrack) ?? false : false);
   if (lastTrack && options.shouldCancel?.(tracks.length, lastTrack)) {
     return { cancelled: true, outcomes, remotePlaylist: { status: "not-created" } };
   }
-  const playlist = await api.createPrivatePlaylist(profile.id, options.playlistName);
+  let playlist: SpotifyPlaylist;
+  try {
+    playlist = await api.createPrivatePlaylist(profile.id, options.playlistName, () => lastTrack ? options.shouldCancel?.(tracks.length, lastTrack) ?? false : false);
+  } catch (error) {
+    if (error instanceof SpotifyPlaylistCreationIndeterminateError) {
+      return { cancelled: true, outcomes, remotePlaylist: { status: "indeterminate" } };
+    }
+    if (lastTrack && (options.shouldCancel?.(tracks.length, lastTrack) || error instanceof DOMException && error.name === "AbortError")) {
+      return { cancelled: true, outcomes, remotePlaylist: { status: "not-created" } };
+    }
+    throw error;
+  }
+  if (lastTrack && options.shouldCancel?.(tracks.length, lastTrack)) {
+    return { cancelled: true, outcomes, remotePlaylist: { id: playlist.id, insertedUris: [], status: "partial", ...(playlist.url ? { url: playlist.url } : {}) } };
+  }
   try {
     const added = await api.addTracks(playlist.id, uris, () => lastTrack ? options.shouldCancel?.(tracks.length, lastTrack) ?? false : false);
     const conversionCancelled = cancelled || added.cancelled;
@@ -72,7 +106,16 @@ export async function convertSpotifyTracks(
     return {
       cancelled,
       outcomes,
-      remotePlaylist: { id: playlist.id, insertedUris, insertionError: "SPOTIFY_INSERT_FAILED", status: "partial", ...(playlist.url ? { url: playlist.url } : {}) },
+      remotePlaylist: {
+          id: playlist.id,
+          insertedUris,
+          ...(error instanceof Error && "indeterminateUris" in error && Array.isArray(error.indeterminateUris)
+            ? { indeterminateUris: error.indeterminateUris.filter((uri): uri is string => typeof uri === "string").slice(0, 100) }
+            : {}),
+          insertionError: "SPOTIFY_INSERT_INDETERMINATE",
+          status: "partial",
+          ...(playlist.url ? { url: playlist.url } : {}),
+        },
     };
   }
 }

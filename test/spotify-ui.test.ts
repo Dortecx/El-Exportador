@@ -33,6 +33,15 @@ describe("provider status and destination UI", () => {
     expect(html).not.toContain('DESCONECTAR SPOTIFY');
   });
 
+  it("uses collision-resistant in-memory local UI and conversion run identifiers", () => {
+    expect(html).toContain("const localUiClientId = crypto.getRandomValues(new Uint8Array(32)).reduce((value, byte) => value + byte.toString(16).padStart(2, '0'), '');");
+    expect(html).toContain("const runId = crypto.getRandomValues(new Uint8Array(32)).reduce((value, byte) => value + byte.toString(16).padStart(2, '0'), '');");
+    expect(html).toContain("async function localMutationFetch(path, options = {})");
+    expect(html).toContain("headers.set('X-Local-UI-Capability', capability);");
+    expect(html).toContain("/api/convert-progress?clientId=${encodeURIComponent(localUiClientId)}&runId=${encodeURIComponent(runId)}&capability=${encodeURIComponent(capability)}");
+    expect(html).toMatch(/body: JSON\.stringify\(\{[\s\S]*?runId,\s*destination: conversionDestination/);
+  });
+
   it("preserves guarded Spotify callbacks and selected conversion destinations", () => {
     const callbackSelection = html.indexOf("if (spotifyCallback.status === 'connected') selectedDestination = 'spotify';");
     expect(callbackSelection).toBeGreaterThan(-1);
@@ -136,7 +145,7 @@ describe("provider status and destination UI", () => {
   it("preflights the selected provider before changing conversion state or opening SSE", () => {
       const readinessCheck = html.match(/async function ensureConversionReady\(destination\)[\s\S]*?(?=\n\s*const startConversion)/)?.[0] || "";
       const conversion = html.match(/const startConversion = async \(\) => \{[\s\S]*?(?=\n\s*\/\/ Asignar el evento)/)?.[0] || "";
-      expect(readinessCheck).toContain("fetch('/api/conversion-preflight'");
+      expect(readinessCheck).toContain("localMutationFetch('/api/conversion-preflight'");
       expect(readinessCheck).toContain("body: JSON.stringify({ destination })");
       expect(readinessCheck).toContain("payload?.status === 'ready'");
           expect(readinessCheck).toContain("payload?.status === 'not_ready'");
@@ -162,7 +171,7 @@ describe("provider status and destination UI", () => {
       const youtubeDisconnect = vi.fn(async () => {});
       const showToast = vi.fn();
       const ensureConversionReady = new Function(
-        "fetch", "disconnectSpotify", "disconnectYtMusic", "showToast", "t", `${readinessCheck}; return ensureConversionReady;`,
+        "localMutationFetch", "disconnectSpotify", "disconnectYtMusic", "showToast", "t", `${readinessCheck}; return ensureConversionReady;`,
       );
       const withPreflight = (payload: unknown, ok = false) => ensureConversionReady(
         vi.fn(async () => ({ ok, json: async () => payload })),
@@ -258,7 +267,18 @@ describe("provider status and destination UI", () => {
       expect(html).toContain("spotifyProviderUnavailable: 'Spotify is unavailable. Please try again shortly.'");
     });
 
-    it("falls back after either provider disconnects and remains neutral when neither is connected", () => {
+    it("localizes manual actions, associates upload inputs with labels, and exposes intermediate progress to assistive technology", () => {
+        expect(html).toContain('label class="file-upload" id="dropZone" for="fileInput" tabindex="0" role="button" aria-describedby="uploadHintText"');
+        expect(html).toContain('<label for="m3uContent" data-i18n="m3uContent">');
+        expect(html).toContain('<label for="playlistName" data-i18n="playlistName">');
+        expect(html).toContain("search: '[ BUSCAR ]'");
+        expect(html).toContain("button.textContent = t('search');");
+        expect(html).toContain('aria-valuenow="0" role="progressbar"');
+        expect(html).toContain('progressTrack.setAttribute("aria-valuenow", String(percent));');
+        expect(html).toContain('progressBar.parentElement.setAttribute("aria-valuenow", "100");');
+      });
+
+      it("falls back after either provider disconnects and remains neutral when neither is connected", () => {
     expect(html).toContain("if (selectedDestination === 'spotify' && youtubeAuthenticated) selectedDestination = 'youtube';");
     expect(html).toContain("else if (selectedDestination === 'youtube' && spotifyDestination.connected) selectedDestination = 'spotify';");
     expect(html).toContain("void refreshProviderStates();");

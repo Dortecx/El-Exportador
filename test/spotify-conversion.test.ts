@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { SpotifyApi } from "../src/spotify/api.js";
+import { SpotifyApi, SpotifyPlaylistCreationIndeterminateError } from "../src/spotify/api.js";
 import { convertSpotifyTracks } from "../src/spotify/converter.js";
 import { matchSpotifyTrack } from "../src/spotify/matcher.js";
 import type { SpotifyFetch } from "../src/spotify/types.js";
@@ -43,6 +43,32 @@ describe("Spotify conversion core", () => {
     });
     const api = new SpotifyApi({ accessToken: "test-token", fetch });
     await expect(api.createPrivatePlaylist("profile-must-not-appear-in-route", "My playlist")).resolves.toMatchObject({ id: "playlist-1", isPrivate: true });
+  });
+
+  it("reports an in-flight cancelled create POST as indeterminate while preserving before-POST cancellation", async () => {
+    let cancelled = false;
+    const fetch = vi.fn(async () => {
+      cancelled = true;
+      throw new DOMException("Spotify operation cancelled", "AbortError");
+    });
+    const api = new SpotifyApi({ accessToken: "test-token", fetch });
+
+    await expect(api.createPrivatePlaylist("user-1", "My playlist", () => cancelled)).rejects.toBeInstanceOf(SpotifyPlaylistCreationIndeterminateError);
+    const beforePostFetch = vi.fn();
+    const beforePost = new SpotifyApi({ accessToken: "test-token", fetch: beforePostFetch });
+    await expect(beforePost.createPrivatePlaylist("user-1", "My playlist", () => true)).rejects.toMatchObject({ name: "AbortError" });
+    expect(beforePostFetch).not.toHaveBeenCalled();
+
+    const conversionApi = {
+      addTracks: vi.fn(),
+      createPrivatePlaylist: vi.fn(async () => { throw new SpotifyPlaylistCreationIndeterminateError(); }),
+      getProfile: vi.fn(async () => ({ id: "user-1" })),
+      searchTracks: vi.fn(async () => [matchingCandidate]),
+    };
+    await expect(convertSpotifyTracks(conversionApi, [source], { playlistName: "My playlist" })).resolves.toMatchObject({
+      cancelled: true,
+      remotePlaylist: { status: "indeterminate" },
+    });
   });
 
   it("uses injected fetch for profile, private playlist creation, track search, URI batch insertion, and bounded Retry-After", async () => {
@@ -89,15 +115,17 @@ describe("Spotify conversion core", () => {
     expect(fetch.mock.calls.every(([input]) => String(input).includes("/items"))).toBe(true);
   });
 
-  it("caps Retry-After delays at one minute", async () => {
+  it("caps Retry-After delays at one minute without rescheduling an immediately settled sleep", async () => {
     const sleep = vi.fn(async () => undefined);
     const fetch = fakeFetch([
       response({}, 429, { "retry-after": "999999999" }),
       response({ id: "user-1" }),
     ]);
-    const api = new SpotifyApi({ accessToken: "test-token", fetch, maxRetries: 1, sleep });
+    // A fixed clock makes an immediately settled sleep unable to advance time.
+    const api = new SpotifyApi({ accessToken: "test-token", fetch, maxRetries: 1, now: () => 0, sleep });
 
     await expect(api.getProfile()).resolves.toEqual({ id: "user-1" });
+    expect(sleep).toHaveBeenCalledTimes(1);
     expect(sleep).toHaveBeenCalledWith(60_000);
   });
 
@@ -155,6 +183,28 @@ describe("Spotify conversion core", () => {
     expect(onProgress).toHaveBeenNthCalledWith(2, 2, 2, "The Artist", "Second Song", "searching");
   });
 
+  it("passes each search a cancellation check that reflects converter cancellation", async () => {
+    let cancelled = false;
+    const searchTracks = vi.fn(async (_query: string, limitOrShouldCancel?: number | (() => boolean)) => {
+      const shouldCancel = typeof limitOrShouldCancel === "function" ? limitOrShouldCancel : undefined;
+      expect(shouldCancel?.()).toBe(false);
+      cancelled = true;
+      expect(shouldCancel?.()).toBe(true);
+      return [];
+    });
+    const api = {
+      addTracks: vi.fn(),
+      createPrivatePlaylist: vi.fn(),
+      getProfile: vi.fn(),
+      searchTracks,
+    };
+
+    const result = await convertSpotifyTracks(api, [source], { dryRun: true, playlistName: "My playlist", shouldCancel: () => cancelled });
+
+    expect(searchTracks).toHaveBeenCalledWith(expect.any(String), expect.any(Function));
+    expect(result).toMatchObject({ cancelled: true, remotePlaylist: { status: "not-created" } });
+  });
+
   it("stops before playlist creation when cancellation is observed after matching", async () => {
     const api = {
       addTracks: vi.fn(async () => ({ cancelled: false, insertedUris: ["spotify:track:track-1"] })),
@@ -182,7 +232,7 @@ describe("Spotify conversion core", () => {
 
     const result = await convertSpotifyTracks(api, [source], { playlistName: "My playlist" });
 
-    expect(result.remotePlaylist).toMatchObject({ insertedUris, insertionError: "SPOTIFY_INSERT_FAILED", status: "partial" });
+    expect(result.remotePlaylist).toMatchObject({ insertedUris, insertionError: "SPOTIFY_INSERT_INDETERMINATE", status: "partial" });
   });
 
   it("uses a 15-worker pool and keeps outcomes in source order despite out-of-order searches", async () => {
@@ -203,14 +253,35 @@ describe("Spotify conversion core", () => {
 
     const conversion = convertSpotifyTracks(api, tracks, { dryRun: true, playlistName: "My playlist" });
     await vi.waitFor(() => expect(api.searchTracks).toHaveBeenCalledTimes(15));
-    while (resolvers.length) {
+    while (api.searchTracks.mock.calls.length < tracks.length) {
+      await vi.waitFor(() => expect(resolvers.length).toBeGreaterThan(0));
       resolvers.shift()!();
       await Promise.resolve();
     }
+    while (resolvers.length) resolvers.shift()!();
     const result = await conversion;
 
     expect(maxActive).toBe(15);
     expect(result.outcomes.map((outcome) => outcome.source.title)).toEqual(tracks.map((track) => track.title));
+  });
+
+  it("uses cancellation separately from manual search pagination and cleans the request cancellation watch", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+        expect(url.searchParams.get("limit")).toBe(fetch.mock.calls.length === 1 ? "5" : "8");
+        expect(url.searchParams.get("offset")).toBe(fetch.mock.calls.length === 1 ? "0" : "16");
+        return response({ tracks: { items: [] } });
+      });
+      const api = new SpotifyApi({ accessToken: "test-token", fetch });
+
+      await expect(api.searchTracks("The Artist A Song", () => false)).resolves.toEqual([]);
+      await expect(api.searchTracks("The Artist A Song", 8, 16)).resolves.toEqual([]);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("shares a single Retry-After cooldown across concurrent searches", async () => {
@@ -232,18 +303,99 @@ describe("Spotify conversion core", () => {
     await expect(Promise.all([first, second])).resolves.toEqual([[], []]);
   });
 
-  it("preserves completed batches on insertion failure and checks cancellation before each batch", async () => {
+  it("extends a shared concurrent Retry-After cooldown to the longest deadline and settles all retries", async () => {
+    let now = 0;
+    const release: Array<() => void> = [];
+    const sleep = vi.fn((milliseconds: number) => new Promise<void>((resolve) => release.push(() => { now += milliseconds; resolve(); })));
+    const initialResponses = [Promise.withResolvers<Response>(), Promise.withResolvers<Response>()];
+    let initialResponseIndex = 0;
+    const fetch = vi.fn(() => initialResponses[initialResponseIndex++]?.promise ?? Promise.resolve(response({ tracks: { items: [] } })));
+    const api = new SpotifyApi({ accessToken: "test-token", fetch, maxRetries: 1, now: () => now, sleep });
+    const searches = Promise.all([api.searchTracks("first"), api.searchTracks("second")]);
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    initialResponses[0]?.resolve(response({}, 429, { "retry-after": "1" }));
+    initialResponses[1]?.resolve(response({}, 429, { "retry-after": "3" }));
+    await Promise.resolve();
+
+    // Both 429s have extended the shared deadline before either sleep is released.
+    expect(sleep).toHaveBeenCalledTimes(1);
+    expect(sleep).toHaveBeenLastCalledWith(1_000);
+    release.shift()!();
+    await Promise.resolve();
+    expect(sleep).toHaveBeenLastCalledWith(2_000);
+    release.shift()!();
+    await expect(searches).resolves.toEqual([[], []]);
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(release).toHaveLength(0);
+  });
+
+  it("distinguishes cancelled POST requests from indeterminate provider failures and checks cancellation before each batch", async () => {
     const uris = Array.from({ length: 101 }, (_, index) => `spotify:track:${index}`);
     const failingApi = new SpotifyApi({
       accessToken: "test-token",
       fetch: fakeFetch([response({ snapshot_id: "snapshot-1" }), response({}, 500)]),
     });
-    await expect(failingApi.addTracks("playlist-1", uris)).rejects.toMatchObject({ insertedUris: uris.slice(0, 100) });
+    await expect(failingApi.addTracks("playlist-1", uris)).rejects.toMatchObject({ insertedUris: uris.slice(0, 100), indeterminateUris: uris.slice(100) });
 
-    const fetch = fakeFetch([response({ snapshot_id: "snapshot-1" })]);
+    let cancelledPostCalls = 0;
+    const cancelledApi = new SpotifyApi({
+      accessToken: "test-token",
+      fetch: vi.fn(async () => {
+        cancelledPostCalls += 1;
+        if (cancelledPostCalls === 1) return response({ snapshot_id: "snapshot-1" });
+        throw new DOMException("Spotify operation cancelled", "AbortError");
+      }),
+    });
+    await expect(cancelledApi.addTracks("playlist-1", uris)).resolves.toEqual({
+      cancelled: true,
+      insertedUris: uris.slice(0, 100),
+      snapshotId: "snapshot-1",
+    });
+
+    let cancelledBeforeSecondBatch = false;
+    const fetch = vi.fn(async () => {
+      cancelledBeforeSecondBatch = true;
+      return response({ snapshot_id: "snapshot-1" });
+    });
     const api = new SpotifyApi({ accessToken: "test-token", fetch });
-    const shouldCancel = vi.fn(() => shouldCancel.mock.calls.length > 1);
-    await expect(api.addTracks("playlist-1", uris, shouldCancel)).resolves.toMatchObject({ cancelled: true, insertedUris: uris.slice(0, 100) });
+    await expect(api.addTracks("playlist-1", uris, () => cancelledBeforeSecondBatch)).resolves.toMatchObject({ cancelled: true, insertedUris: uris.slice(0, 100) });
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not create a playlist when cancellation occurs during a search, and preserves a created playlist when cancellation follows creation", async () => {
+    let cancelled = false;
+    const searchGate = Promise.withResolvers<Array<typeof matchingCandidate>>();
+    const api = {
+      addTracks: vi.fn(),
+      createPrivatePlaylist: vi.fn(async () => ({ id: "playlist-1", isPrivate: true as const, name: "My playlist" })),
+      getProfile: vi.fn(async () => ({ id: "user-1" })),
+      searchTracks: vi.fn(async () => searchGate.promise),
+    };
+    const searching = convertSpotifyTracks(api, [source], { playlistName: "My playlist", shouldCancel: () => cancelled });
+    await vi.waitFor(() => expect(api.searchTracks).toHaveBeenCalledOnce());
+    cancelled = true;
+    searchGate.resolve([matchingCandidate]);
+    await expect(searching).resolves.toMatchObject({ cancelled: true, remotePlaylist: { status: "not-created" } });
+    expect(api.createPrivatePlaylist).not.toHaveBeenCalled();
+
+    let cancelledAfterCreation = false;
+    const createdApi = {
+      addTracks: vi.fn(),
+      createPrivatePlaylist: vi.fn(async () => {
+        cancelledAfterCreation = true;
+        return { id: "playlist-1", isPrivate: true as const, name: "My playlist" };
+      }),
+      getProfile: vi.fn(async () => ({ id: "user-1" })),
+      searchTracks: vi.fn(async () => [matchingCandidate]),
+    };
+    const afterCreation = await convertSpotifyTracks(createdApi, [source], {
+      playlistName: "My playlist",
+      shouldCancel: () => cancelledAfterCreation,
+    });
+    expect(afterCreation).toMatchObject({ cancelled: true, remotePlaylist: { id: "playlist-1", insertedUris: [], status: "partial" } });
+    expect(createdApi.addTracks).not.toHaveBeenCalled();
   });
 });

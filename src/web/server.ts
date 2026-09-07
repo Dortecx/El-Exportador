@@ -2,46 +2,99 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { randomBytes, timingSafeEqual } from "crypto";
 import cookieParser from "cookie-parser";
 import { fileURLToPath } from "url";
 import { parseFile } from "../parser";
 import { SessionService } from "../services/session.service";
-import { addToPlaylistOnYtMusic, checkYtMusicAvailable, configureYtMusicBrowserAuth, searchSingleOnYtMusic, validateYtMusicAuth } from "../ytmusic/client";
+import { addToPlaylistOnYtMusic, checkYtMusicAvailable, configureYtMusicBrowserAuth, searchSingleOnYtMusic, validateYtMusicAuth, type YTMusicManualSearchResult } from "../ytmusic/client";
 import { GuidedBrowserAuth } from "./guidedBrowserAuth";
 import { getSpotifyClientConfig } from "../spotify/config";
 import { createSpotifyOAuthManager, exchangeSpotifyAuthorizationCode, hasSpotifyPlaylistModifyPrivateScope, refreshSpotifyAccessToken } from "../spotify/oauth";
 import { deleteSpotifyTokenState, readSpotifyTokenState, writeSpotifyTokenState } from "../spotify/tokenStore";
 import { SpotifyApi, SpotifyApiError } from "../spotify/api";
 import { convertSpotifyTracks, type SpotifyConversionApi, type SpotifyConversionOptions } from "../spotify/converter";
-import type { SpotifyClientConfig, SpotifyConversionResult, SpotifySourceTrack, SpotifyTokenState } from "../spotify/types";
+import type { SpotifyClientConfig, SpotifyConversionResult, SpotifySourceTrack, SpotifyTokenState, SpotifyTrackMatch } from "../spotify/types";
 
 // Obtener la ruta del directorio actual usando import.meta.url
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// SSE setup
-type SseClient = { id: string; res: express.Response };
-const clients = new Set<SseClient>();
+// Local UI capabilities and SSE runs are intentionally process-local and never persisted.
+type SseClient = { req: express.Request; res: express.Response; onClose: () => void };
+type LocalUiCapability = { capability: string; origin: string };
+type ConversionRun = { capability: string; clientId: string; claimed: boolean; cancelled: boolean; clients: Set<SseClient> };
+const localUiCapabilities = new Map<string, LocalUiCapability>();
+const conversionRuns = new Map<string, ConversionRun>();
+const OPAQUE_ID_PATTERN = /^[A-Za-z0-9_-]{32,}$/;
 
-function addClient(clientId: string, res: express.Response) {
-  clients.add({ id: clientId, res });
+function createOpaqueId(): string {
+  return randomBytes(32).toString("base64url");
 }
 
-function removeClient(clientId: string) {
-  clients.forEach(client => {
-    if (client.id === clientId) {
-      clients.delete(client);
-    }
-  });
+function localAppOrigin(req: express.Request): string | null {
+  const host = req.get("host");
+  if (!host || !/^(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(host)) return null;
+  return `http://${host}`;
 }
 
-function broadcastToAllClients(event: { type: string; [key: string]: unknown }) {
-  clients.forEach(client => {
+function hasSameLocalOrigin(req: express.Request): boolean {
+  const origin = req.get("origin");
+  const expectedOrigin = localAppOrigin(req);
+  return Boolean(origin && expectedOrigin && origin === expectedOrigin);
+}
+
+function hasCapability(provided: unknown, expected: string): boolean {
+  if (typeof provided !== "string") return false;
+  const actual = Buffer.from(provided);
+  const expectedBuffer = Buffer.from(expected);
+  return actual.length === expectedBuffer.length && timingSafeEqual(actual, expectedBuffer);
+}
+
+function requireLocalUiMutation(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  const clientId = req.get("x-local-ui-client");
+  const capability = req.get("x-local-ui-capability");
+  const origin = localAppOrigin(req);
+  const registered = typeof clientId === "string" ? localUiCapabilities.get(clientId) : undefined;
+  if (!hasSameLocalOrigin(req) || !origin || !registered || registered.origin !== origin || !hasCapability(capability, registered.capability)) {
+    res.status(403).json({ error: "Local UI authorization required" });
+    return;
+  }
+  next();
+}
+
+function conversionRunForRequest(req: express.Request): { runId: string; run: ConversionRun } | null {
+  const runId = typeof req.body?.runId === "string" ? req.body.runId : "";
+  const clientId = req.get("x-local-ui-client");
+  const capability = req.get("x-local-ui-capability");
+  const registered = typeof clientId === "string" ? localUiCapabilities.get(clientId) : undefined;
+  if (!OPAQUE_ID_PATTERN.test(runId) || typeof clientId !== "string" || !registered || !hasCapability(capability, registered.capability)) return null;
+  const run = conversionRuns.get(runId) ?? { capability: registered.capability, clientId, claimed: false, cancelled: false, clients: new Set<SseClient>() };
+  if (run.clientId !== clientId || !hasCapability(capability, run.capability)) return null;
+  conversionRuns.set(runId, run);
+  return { runId, run };
+}
+
+function sendToRun(runId: string, event: { type: string; [key: string]: unknown }): void {
+  const run = conversionRuns.get(runId);
+  run?.clients.forEach((client) => {
     try {
       client.res.write(`data: ${JSON.stringify(event)}\n\n`);
     } catch (err) {
-      console.error('Error broadcasting to client:', err);
+      console.error("Error sending conversion event:", err);
     }
   });
+}
+
+function cancelDisconnectedRun(runId: string, run: ConversionRun): void {
+  if (conversionRuns.get(runId) !== run) return;
+  run.cancelled = true;
+  conversionRuns.delete(runId);
+  for (const client of run.clients) {
+    client.req.removeListener("close", client.onClose);
+    client.res.removeListener("close", client.onClose);
+    if (!client.res.destroyed && !client.res.writableEnded) client.res.end();
+  }
+  run.clients.clear();
 }
 
 export const app = express();
@@ -80,6 +133,13 @@ export function setSpotifyWebDependenciesForTest(overrides: Partial<SpotifyWebDe
 
 export function resetSpotifyWebDependenciesForTest(): void {
   spotifyWebDependencies = defaultSpotifyWebDependencies;
+  localUiCapabilities.clear();
+  conversionRuns.clear();
+}
+
+/** Test-only visibility into process-local SSE run cleanup. */
+export function conversionRunCountForTest(): number {
+  return conversionRuns.size;
 }
 
 /** Returns a callback page that exposes only the local auth outcome to its opener. */
@@ -132,6 +192,7 @@ function spotifyConnectionError(res: express.Response, connection: { code?: stri
 }
 
 type SpotifyErrorPhase = "preflight_profile" | "matching" | "playlist_create";
+type SpotifyManualReviewOutcome = SpotifyTrackMatch;
 type ConversionPreflightCode = "AUTHENTICATION_REQUIRED" | "AUTHORIZATION_REQUIRED" | "RATE_LIMITED" | "PROVIDER_UNAVAILABLE";
 type ConversionPreflightResult =
   | { status: "ready" }
@@ -158,11 +219,18 @@ function spotifyApiWithErrorPhases(api: SpotifyConversionApi): SpotifyConversion
     if (error instanceof SpotifyApiError) Object.defineProperty(error, "spotifyErrorPhase", { value: phase });
     throw error;
   });
+  function searchTracks(query: string, shouldCancel?: () => boolean): ReturnType<SpotifyConversionApi["searchTracks"]>;
+  function searchTracks(query: string, limit?: number, offset?: number, shouldCancel?: () => boolean): ReturnType<SpotifyConversionApi["searchTracks"]>;
+  function searchTracks(query: string, limitOrShouldCancel?: number | (() => boolean), offset?: number, shouldCancel?: () => boolean): ReturnType<SpotifyConversionApi["searchTracks"]> {
+    return typeof limitOrShouldCancel === "number"
+      ? withPhase("matching", () => api.searchTracks(query, limitOrShouldCancel, offset, shouldCancel))
+      : withPhase("matching", () => api.searchTracks(query, limitOrShouldCancel));
+  }
   return {
     addTracks: (playlistId, uris, shouldCancel) => withPhase("playlist_create", () => api.addTracks(playlistId, uris, shouldCancel)),
-    createPrivatePlaylist: (userId, name) => withPhase("playlist_create", () => api.createPrivatePlaylist(userId, name)),
-    getProfile: () => withPhase("playlist_create", () => api.getProfile()),
-    searchTracks: (query) => withPhase("matching", () => api.searchTracks(query)),
+    createPrivatePlaylist: (userId, name, shouldCancel) => withPhase("playlist_create", () => api.createPrivatePlaylist(userId, name, shouldCancel)),
+    getProfile: (shouldCancel) => withPhase("playlist_create", () => api.getProfile(shouldCancel)),
+    searchTracks,
   };
 }
 
@@ -224,8 +292,8 @@ type ManualSearchJob = {
   threshold: number;
   offset: number;
   callers: Set<symbol>;
-  promise: Promise<any>;
-  resolve: (result: any) => void;
+  promise: Promise<YTMusicManualSearchResult>;
+  resolve: (result: YTMusicManualSearchResult) => void;
   reject: (error: unknown) => void;
   queued: boolean;
 };
@@ -252,7 +320,7 @@ function waitForManualSearchRetry(retry: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, exponentialDelay + jitter));
 }
 
-async function searchManualTrackWithRetry(query: string, artist: string, title: string, threshold: number, offset: number): Promise<any> {
+async function searchManualTrackWithRetry(query: string, artist: string, title: string, threshold: number, offset: number): Promise<YTMusicManualSearchResult> {
   for (let retry = 0; ; retry += 1) {
     try {
       return await searchSingleOnYtMusic(query, artist, title, threshold, offset);
@@ -286,7 +354,7 @@ function drainManualSearchQueue(): void {
 }
 
 function enqueueManualSearch(query: string, artist: string, title: string, threshold: number, offset: number): {
-  promise: Promise<any>;
+  promise: Promise<YTMusicManualSearchResult>;
   abandon: () => void;
 } | null {
   const key = manualSearchKey(query, artist, title, threshold, offset);
@@ -296,9 +364,9 @@ function enqueueManualSearch(query: string, artist: string, title: string, thres
   let queued = false;
   if (!job) {
     if (manualSearchQueue.length >= MANUAL_SEARCH_QUEUE_LIMIT) return null;
-    let resolve!: (result: any) => void;
+    let resolve!: (result: YTMusicManualSearchResult) => void;
     let reject!: (error: unknown) => void;
-    const promise = new Promise<any>((resolvePromise, rejectPromise) => {
+    const promise = new Promise<YTMusicManualSearchResult>((resolvePromise, rejectPromise) => {
       resolve = resolvePromise;
       reject = rejectPromise;
     });
@@ -337,12 +405,36 @@ if (!fs.existsSync(publicDir)) {
 }
 app.use(express.static(publicDir));
 
-// Configurar CORS para permitir comunicación entre popup y página principal
+// Local-only browser control: never grant wildcard or LAN CORS access.
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  const origin = req.get("origin");
+  if (origin && hasSameLocalOrigin(req)) {
+    res.header("Access-Control-Allow-Origin", origin);
+    res.header("Vary", "Origin");
+    res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, X-Local-UI-Client, X-Local-UI-Capability");
+  }
+  if (req.method === "OPTIONS") {
+    res.sendStatus(origin && hasSameLocalOrigin(req) ? 204 : 403);
+    return;
+  }
   next();
+});
+
+app.get("/api/ui-capability", (req, res) => {
+  const clientId = typeof req.query.clientId === "string" ? req.query.clientId : "";
+  const origin = localAppOrigin(req);
+  if (!OPAQUE_ID_PATTERN.test(clientId) || !origin || (req.get("origin") && !hasSameLocalOrigin(req))) {
+    return res.status(403).json({ error: "Local UI authorization required" });
+  }
+  const capability = createOpaqueId();
+  localUiCapabilities.set(clientId, { capability, origin });
+  return res.json({ capability });
+});
+
+app.use("/api", (req, res, next) => {
+  if (req.method !== "POST") return next();
+  requireLocalUiMutation(req, res, next);
 });
 
 app.post("/api/ytmusic-auth/browser/start", async (_req, res) => {
@@ -400,6 +492,13 @@ app.get("/api/auth-status", async (req, res) => {
     res.clearCookie("ytmusic_session");
   }
   res.json({ authenticated });
+});
+
+app.post("/api/convert/cancel", (req, res) => {
+  const boundRun = conversionRunForRequest(req);
+  if (!boundRun) return res.status(403).json({ error: "Conversion run authorization required" });
+  boundRun.run.cancelled = true;
+  return res.json({ cancelled: true });
 });
 
 app.post("/api/conversion-preflight", async (req, res) => {
@@ -546,12 +645,14 @@ app.post("/api/search-single", async (req, res) => {
     if (result.error) {
       return res.status(502).json({ error: "YouTube Music search failed" });
     }
+    const pageCount = result.pageCount;
+    const resultCount = result.resultCount;
     return res.json({
-          results: result.results || [],
-          hasMore: result.hasMore === true,
-          pageCount: Number.isInteger(result.pageCount) && result.pageCount >= 0 ? result.pageCount : 0,
-          resultCount: Number.isInteger(result.resultCount) && result.resultCount >= 0 ? result.resultCount : 0,
-        });
+      results: result.results || [],
+      hasMore: result.hasMore === true,
+      pageCount: typeof pageCount === "number" && Number.isInteger(pageCount) && pageCount >= 0 ? pageCount : 0,
+      resultCount: typeof resultCount === "number" && Number.isInteger(resultCount) && resultCount >= 0 ? resultCount : 0,
+    });
   } catch (err) {
     if (abandoned) return;
     responseComplete = true;
@@ -559,7 +660,10 @@ app.post("/api/search-single", async (req, res) => {
       return res.status(401).json({ error: "Authentication required", code: "AUTHENTICATION_REQUIRED" });
     }
     return res.status(502).json({ error: "YouTube Music search failed" });
-  }
+      } finally {
+        req.removeListener("aborted", abandon);
+        res.removeListener("close", abandon);
+      }
 });
 
 // Endpoint para parsear contenido M3U
@@ -592,8 +696,20 @@ app.post("/api/parse-m3u", async (req, res) => {
 
 // Endpoint para convertir la playlist
 app.post("/api/convert", async (req, res) => {
+  const boundRun = conversionRunForRequest(req);
+  if (!boundRun || boundRun.run.claimed) return res.status(403).json({ error: "Conversion run authorization required" });
+  const { runId, run } = boundRun;
+  run.claimed = true;
+  // Keep the admitted run's cancellation state after SSE cleanup removes it from delivery.
+  const shouldCancel = () => run.cancelled;
+  // A run is one-shot. Its buffered SSE terminal event is sent before this response finishes.
+  res.once("finish", () => {
+    if (conversionRuns.get(runId) === run) conversionRuns.delete(runId);
+  });
   try {
-    const { tracks, playlistName, dryRun, threshold } = req.body;
+      const { tracks, playlistName, dryRun } = req.body;
+      const suppliedThreshold = req.body?.threshold;
+      const threshold = suppliedThreshold === undefined ? 0.6 : suppliedThreshold;
     const requestedDestination = typeof req.body?.destination === "string" ? req.body.destination.trim().toLocaleLowerCase() : "youtube";
     const destination = requestedDestination === "ytmusic" ? "youtube" : requestedDestination;
     if (!tracks || !playlistName) {
@@ -602,21 +718,25 @@ app.post("/api/convert", async (req, res) => {
     if (destination !== "youtube" && destination !== "spotify") {
       return res.status(400).json({ error: "Destination must be youtube or spotify" });
     }
-    if (destination === "spotify") {
+    if (destination === "youtube" && (!Number.isFinite(threshold) || threshold < 0 || threshold > 1)) {
+          return res.status(400).json({ error: "Conversion threshold must be a finite number from 0 to 1" });
+        }
+        if (shouldCancel()) return res.json({ success: true, cancelled: true, sideEffects: { inserted: 0, playlist: "not-created" } });
+        if (destination === "spotify") {
       if (!Array.isArray(tracks)) return res.status(400).json({ error: "Tracks and playlistName are required" });
       const connection = await spotifyConnection();
       if (!connection.api) return spotifyConnectionError(res, connection);
       try {
         const progressCallback = (current: number, total: number, artist: string, title: string, status: string) => {
-          broadcastToAllClients({ type: "progress", added: current, total, artist, title, status });
+          sendToRun(runId, { type: "progress", added: current, total, artist, title, status });
         };
-        const result = await spotifyWebDependencies.convert(spotifyApiWithErrorPhases(connection.api), tracks as SpotifySourceTrack[], { dryRun, playlistName, onProgress: progressCallback });
+        const result = await spotifyWebDependencies.convert(spotifyApiWithErrorPhases(connection.api), tracks as SpotifySourceTrack[], { dryRun, playlistName, onProgress: progressCallback, shouldCancel });
         const matched = result.outcomes.filter((outcome) => outcome.status === "matched").length;
         const unmatched = result.outcomes.filter((outcome) => outcome.status === "unmatched").length;
         const ambiguous = result.outcomes.filter((outcome) => outcome.status === "ambiguous").length;
         const skipped = result.outcomes.filter((outcome) => outcome.status === "skipped").length;
         const manualReviewTracks = result.outcomes
-          .filter((outcome) => outcome.status === "unmatched" || outcome.status === "ambiguous")
+          .filter((outcome): outcome is SpotifyManualReviewOutcome => outcome.status === "unmatched" || outcome.status === "ambiguous")
           .map((outcome) => ({
             artist: outcome.source.artist,
             title: outcome.source.title,
@@ -635,13 +755,17 @@ app.post("/api/convert", async (req, res) => {
           cancelled: result.cancelled,
           manualReviewTracks,
           remotePlaylist,
-          sideEffects: { inserted: remotePlaylist.status === "not-created" ? 0 : remotePlaylist.insertedUris.length, playlist: remotePlaylist.status },
-          ...(remotePlaylist.status === "not-created" ? {} : { playlistId: remotePlaylist.id, playlistUrl: remotePlaylist.url }),
+          sideEffects: {
+            inserted: remotePlaylist.status === "indeterminate" ? "indeterminate" : remotePlaylist.status === "not-created" ? 0 : remotePlaylist.insertedUris.length,
+            playlist: remotePlaylist.status,
+          },
+          ...(remotePlaylist.status === "created" || remotePlaylist.status === "partial" ? { playlistId: remotePlaylist.id, playlistUrl: remotePlaylist.url } : {}),
         };
-        broadcastToAllClients({ type: "result", ...payload });
+        sendToRun(runId, { type: "result", ...payload });
         return res.json({ success: true, ...payload });
       } catch (error) {
         const failure = spotifyConversionError(error);
+        sendToRun(runId, { type: "error", code: failure.code });
         return res.status(failure.status).json({ error: failure.error, code: failure.code, ...(failure.phase ? { phase: failure.phase } : {}) });
       }
     }
@@ -652,7 +776,7 @@ app.post("/api/convert", async (req, res) => {
     // Configurar callback de progreso
     const progressCallback = (current: number, total: number, artist: string, title: string, status: string) => {
       // Enviar progreso al cliente (usando SSE)
-      broadcastToAllClients({
+      sendToRun(runId, {
         type: "progress",
         added: current,
         total,
@@ -663,14 +787,19 @@ app.post("/api/convert", async (req, res) => {
     };
     
     // Convertir la playlist
-    const result = await convertWithYtMusic(tracks, playlistName, { dryRun, threshold }, progressCallback);
+    const result = await convertWithYtMusic(tracks, playlistName, { dryRun, threshold }, progressCallback, shouldCancel);
+    if (shouldCancel()) {
+      const payload = { cancelled: true, sideEffects: { inserted: "indeterminate", playlist: "indeterminate" } };
+      sendToRun(runId, { type: "result", ...payload });
+      return res.json({ success: true, ...payload });
+    }
 
     const unmatchedTracks = result.unmatchedTracks || [];
     const ambiguousTracks = result.ambiguousTracks || [];
     const manualReviewTracks = result.manualReviewTracks || [...unmatchedTracks, ...ambiguousTracks];
 
     // Enviar resultado al cliente
-    broadcastToAllClients({
+    sendToRun(runId, {
       type: "result",
       total: tracks.length,
       matched: result.matched,
@@ -685,31 +814,58 @@ app.post("/api/convert", async (req, res) => {
     
     return res.json({ success: true });
   } catch (err) {
+    if (shouldCancel() || err instanceof DOMException && err.name === "AbortError") {
+      const payload = { cancelled: true, sideEffects: { inserted: "indeterminate", playlist: "indeterminate" } };
+      sendToRun(runId, { type: "result", ...payload });
+      return res.json({ success: true, ...payload });
+    }
     if ((err as { code?: unknown })?.code === "AUTHENTICATION_REQUIRED") {
       return res.status(401).json({ error: "Authentication required", code: "AUTHENTICATION_REQUIRED" });
     }
     console.error("Error al convertir la playlist:", err);
+    sendToRun(runId, { type: "error", code: "CONVERSION_FAILED" });
     return res.status(500).json({ error: "Failed to convert playlist" });
   }
 });
 
-// Endpoint para recibir actualizaciones de progreso (SSE)
+// An EventSource can only subscribe to the opaque run owned by its local UI capability.
 app.get("/api/convert-progress", (req, res) => {
+  const clientId = typeof req.query.clientId === "string" ? req.query.clientId : "";
+  const runId = typeof req.query.runId === "string" ? req.query.runId : "";
+  const capability = typeof req.query.capability === "string" ? req.query.capability : "";
+  const origin = localAppOrigin(req);
+  const registered = localUiCapabilities.get(clientId);
+  if (!OPAQUE_ID_PATTERN.test(clientId) || !OPAQUE_ID_PATTERN.test(runId) || !origin || (req.get("origin") && !hasSameLocalOrigin(req))
+    || !registered || registered.origin !== origin || !hasCapability(capability, registered.capability)) {
+    res.status(403).json({ error: "Local UI authorization required" });
+    return;
+  }
+  let run = conversionRuns.get(runId);
+  if (run && (run.clientId !== clientId || !hasCapability(capability, run.capability))) {
+    res.status(403).json({ error: "Conversion run authorization required" });
+    return;
+  }
+  if (!run) {
+    run = { capability, clientId, claimed: false, cancelled: false, clients: new Set() };
+    conversionRuns.set(runId, run);
+  }
+  const onClose = () => {
+    // A disconnected local UI cannot safely confirm downstream side effects.
+    // Cancel, detach, and remove this run before any later delivery can occur.
+    cancelDisconnectedRun(runId, run!);
+  };
+  const client: SseClient = { req, res, onClose };
+  run.clients.add(client);
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders();
-  
-  const clientId = Date.now().toString();
-  addClient(clientId, res);
-  
-  req.on("close", () => {
-    removeClient(clientId);
-  });
+  req.once("close", onClose);
+  res.once("close", onClose);
 });
 
 // Endpoint para limpiar localStorage
-app.get("/clear-localstorage", (req, res) => {
+app.get("/clear-localstorage", (_req, res) => {
   res.send(
     `<script>
       localStorage.removeItem('m3uState');
@@ -720,18 +876,18 @@ app.get("/clear-localstorage", (req, res) => {
 });
 
 // Servir index.html en la ruta raíz
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
 });
 
 // Redirigir todas las demás solicitudes a index.html para manejar rutas del frontend
-app.get('*', (req, res) => {
+app.get(/.*/, (_req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
 });
 
 if (process.env.NODE_ENV !== "test") {
   console.log(`Iniciando servidor en el puerto ${PORT}...`);
-  app.listen(PORT, () => {
+  app.listen(PORT, "127.0.0.1", () => {
     console.log(`Servidor corriendo en http://localhost:${PORT}`);
   }).on('error', (err) => {
     console.error('Error al iniciar el servidor:', err);

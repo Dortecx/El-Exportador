@@ -31,7 +31,10 @@ export type SpotifyFetch = (input: RequestInfo | URL, init?: RequestInit) => Pro
 
 export type SpotifyAddTracksResult = {
   cancelled: boolean;
+  /** Batches confirmed by Spotify before this result was produced. */
   insertedUris: string[];
+  /** A failed POST may have been applied; these URIs must not be retried automatically. */
+  indeterminateUris?: string[];
   snapshotId?: string;
 };
 
@@ -64,6 +67,9 @@ export type SpotifyPlaylist = {
   url?: string;
 };
 
+/** A callback owned by one local conversion run; it must never be reused across runs. */
+export type SpotifyCancellationCheck = () => boolean;
+
 export type SpotifyProgressCallback = (current: number, total: number, artist: string, title: string, status: string) => void;
 
 export type SpotifyConversionOutcome = SpotifyTrackMatch | {
@@ -73,10 +79,15 @@ export type SpotifyConversionOutcome = SpotifyTrackMatch | {
 
 export type SpotifyRemotePlaylistState =
   | { status: "not-created" }
+  /** A create POST was dispatched but cancellation prevented confirmation; no playlist ID is exposed. */
+  | { status: "indeterminate" }
   | {
       id: string;
+      /** Only Spotify-confirmed additions. */
       insertedUris: string[];
-      insertionError?: "SPOTIFY_INSERT_FAILED";
+      /** A bounded batch whose POST outcome could not be confirmed. */
+      indeterminateUris?: string[];
+      insertionError?: "SPOTIFY_INSERT_INDETERMINATE";
       status: "created" | "partial";
       url?: string;
     };

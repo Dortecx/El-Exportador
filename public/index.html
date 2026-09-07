@@ -1027,22 +1027,22 @@
     <p class="subtitle" data-i18n="subtitle">Import your music library to YouTube Music</p>
 
     <div class="card">
-      <div class="file-upload" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <label class="file-upload" id="dropZone" for="fileInput" tabindex="0" role="button" aria-describedby="uploadHintText">
         <div class="icon">[FILE]</div>
         <div id="uploadText" data-i18n="uploadDrop">Drop .m3u file here</div>
-        <div class="hint" data-i18n="uploadHint">or paste M3U content below</div>
+        <div class="hint" id="uploadHintText" data-i18n="uploadHint">or paste M3U content below</div>
         <input type="file" id="fileInput" accept=".m3u,.m3u8" onchange="handleFileFromInput(this)">
       </div>
       <div class="track-count" id="trackCount"></div>
 
       <div style="margin-top: 1rem;">
-        <label data-i18n="m3uContent">M3U Content</label>
+        <label for="m3uContent" data-i18n="m3uContent">M3U Content</label>
         <textarea id="m3uContent" rows="7"></textarea>
       </div>
 
       <div class="config-row">
         <div>
-          <label data-i18n="playlistName">Playlist Name</label>
+          <label for="playlistName" data-i18n="playlistName">Playlist Name</label>
           <input type="text" id="playlistName" placeholder="MY_PLAYLIST" data-i18n-placeholder="playlistPlaceholder">
         </div>
         <div>
@@ -1104,6 +1104,7 @@
 
       <div style="margin-top: 0.75rem;">
         <button class="btn" id="startBtn" disabled>[ EXECUTE ]</button>
+            <button class="btn" id="cancelBtn" type="button" hidden data-i18n="cancelConversion">[ CANCEL ]</button>
       </div>
     </div>
 
@@ -1151,7 +1152,7 @@
       const reader = new FileReader();
        reader.onload = async function(e) {
          document.getElementById('m3uContent').value = e.target.result;
-         const res = await fetch('/api/parse-m3u', {
+         const res = await localMutationFetch('/api/parse-m3u', {
            method: 'POST',
            headers: { 'Content-Type': 'application/json' },
            body: JSON.stringify({ content: e.target.result })
@@ -1188,7 +1189,7 @@
   </script>
 
   <script>
-    const translations = { en: { subtitle: 'Import your music library to YouTube Music', uploadDrop: 'Drop .m3u file here', uploadHint: 'or paste M3U content below', m3uContent: 'M3U Content', playlistName: 'Playlist Name', playlistPlaceholder: 'MY_PLAYLIST', matchThreshold: 'Match Threshold', thresholdHelp: 'Minimum similarity percentage to consider a song as found. 60% works well for most cases.', dryRun: 'Dry Run Mode (no playlist creation)', destination: 'Destination', destinationYoutube: 'YouTube Music', destinationSpotify: 'Spotify', spotifyConnect: '[ CONNECT SPOTIFY ]', spotifyDisconnect: '[ DISCONNECT ]', spotifyUnavailable: 'Spotify is unavailable: {reason}', spotifyNotConnected: 'NOT CONNECTED', spotifyConnecting: 'CONNECTING', spotifyConnected: 'CONNECTED', spotifyAuthFailed: 'Spotify connection failed: {reason}', connect: '[ CONNECT YOUTUBE MUSIC ]', disconnect: '[ DISCONNECT ]', authUnauthenticated: 'NOT CONNECTED', authWaiting: 'CONNECTING', authConnected: 'CONNECTED', authCancelled: 'STATUS: AUTHENTICATION CANCELLED', authTimedOut: 'STATUS: AUTHENTICATION TIMED OUT', authFailed: 'STATUS: AUTHENTICATION FAILED', authRequired: 'STATUS: AUTHENTICATION REQUIRED', guidedAuthWindowsOnly: 'Guided browser authentication is available on Windows only.', guidedAuthBrowserUnavailable: 'No supported browser was found for guided authentication.', progressLog: 'Progress Log', idle: 'Idle', conversionProgress: 'Conversion progress', checkingBackend: 'Checking backend...', manualReview: 'Manual Review', manualReviewDescription: 'Unmatched or ambiguous tracks detected. Search manually or choose a suggested match.', addSelected: '[ ADD SELECTED ]', summary: 'Summary', tracksLoaded: '[{count}] tracks loaded', manualAdditions: 'Manual additions:', tracksAdded: '{count} track{plural} added to the playlist.', manualAdditionsUnavailable: 'Manual additions require a playlist created by a non-dry-run conversion.', unknownArtist: 'Unknown artist', unknownAlbum: 'Unknown album', untitledTrack: 'Untitled track', verifyCandidate: 'Verify artist/version before adding', recommendedResults: 'Recommended results', otherResults: 'Other results — verify artist/version', noMatches: 'No matches found. Try a different query.', searchThreshold: 'Search threshold: {threshold} · {range}{more}', resultsRange: 'Results {from}–{to}', noMoreResults: ' · No more results at this threshold.', searching: '[ SEARCHING... ]', searchFailed: 'Search failed. Please try again.', chooseSuggestion: 'Choose a suggestion or search YouTube Music for each unmatched or ambiguous track.', chooseSuggestionSpotify: 'Choose a suggestion or search Spotify for each unmatched or ambiguous track.', chooseBeforeAdding: 'Choose or search for matches now. Adding selections requires a playlist from a non-dry-run conversion.', searchMatch: 'Search match for {title}', search: '[ SEARCH ]', noSuggestedMatch: 'No suggested match. Search YouTube Music to choose one.', noSuggestedMatchSpotify: 'No suggested match. Search Spotify to choose one.', searchResults: 'Results {from}–{to}{more}', noMoreSpotifyResults: ' · No more Spotify results.', couldNotAdd: 'Could not add selected tracks. Please try again.', noTracks: 'No tracks to convert. Load an .m3u file first.', playlistRequired: 'Enter a playlist name.', processing: '[ PROCESSING... ]', starting: 'Starting conversion...', searchingTrack: 'Searching {artist} — {title}', processedTracks: 'Processed {added} of {total} tracks', backendSearching: 'Backend is searching...', completed: 'Completed', conversionCompleted: 'Conversion completed', partialInsertion: 'Playlist created with partial insertion: {inserted} of {matched} matched tracks added.', matched: 'Matched:', unmatched: 'Unmatched:', ambiguous: 'Ambiguous:', trackStatusUnmatched: 'unmatched', trackStatusAmbiguous: 'ambiguous', trackStatusManualReview: 'manual review', trackStatusUnknown: 'needs review', playlistUrl: 'Playlist URL:', conversionError: 'Error during conversion. Check the logs.', authConversionRequired: 'YouTube Music authentication is required. Please reconnect.', spotifyAuthenticationRequired: 'Spotify authentication is required. Please reconnect.', spotifyAuthorizationRequired: 'Spotify authorization is required to create playlists. Please reconnect and approve playlist access.', spotifyRateLimited: 'Spotify is rate limited. Please try again shortly.', spotifyProviderUnavailable: 'Spotify is unavailable. Please try again shortly.', backendConnected: 'Backend connected' }, es: { subtitle: 'Importa tu biblioteca musical a YouTube Music', uploadDrop: 'Suelta el archivo .m3u aquí', uploadHint: 'o pega el contenido M3U abajo', m3uContent: 'Contenido M3U', playlistName: 'Nombre de la playlist', playlistPlaceholder: 'MI_PLAYLIST', matchThreshold: 'Umbral de coincidencia', thresholdHelp: 'Porcentaje mínimo de similitud para considerar una canción encontrada. El 60 % funciona bien en la mayoría de los casos.', dryRun: 'Modo de prueba (no crea la playlist)', destination: 'Destino', destinationYoutube: 'YouTube Music', destinationSpotify: 'Spotify', spotifyConnect: '[ CONECTAR SPOTIFY ]', spotifyDisconnect: '[ DESCONECTAR ]', spotifyUnavailable: 'Spotify no está disponible: {reason}', spotifyNotConnected: 'SIN CONEXIÓN', spotifyConnecting: 'CONECTANDO', spotifyConnected: 'CONECTADO', spotifyAuthFailed: 'Falló la conexión con Spotify: {reason}', connect: '[ CONECTAR YOUTUBE MUSIC ]', disconnect: '[ DESCONECTAR ]', authUnauthenticated: 'SIN CONEXIÓN', authWaiting: 'CONECTANDO', authConnected: 'CONECTADO', authCancelled: 'ESTADO: AUTENTICACIÓN CANCELADA', authTimedOut: 'ESTADO: AUTENTICACIÓN AGOTADA', authFailed: 'ESTADO: AUTENTICACIÓN FALLIDA', authRequired: 'ESTADO: AUTENTICACIÓN REQUERIDA', guidedAuthWindowsOnly: 'La autenticación guiada por navegador sólo está disponible en Windows.', guidedAuthBrowserUnavailable: 'No se encontró un navegador compatible para la autenticación guiada.', progressLog: 'Registro de progreso', idle: 'Inactivo', conversionProgress: 'Progreso de conversión', checkingBackend: 'Comprobando el servidor...', manualReview: 'Revisión manual', manualReviewDescription: 'Se detectaron pistas sin coincidencia o ambiguas. Busca manualmente o elige una coincidencia sugerida.', addSelected: '[ ADD SELECTED ]', summary: 'Resumen', tracksLoaded: '[{count}] pistas cargadas', manualAdditions: 'Añadidos manualmente:', tracksAdded: '{count} pista{plural} añadida{plural} a la playlist.', manualAdditionsUnavailable: 'Los añadidos manuales requieren una playlist creada en una conversión sin modo de prueba.', unknownArtist: 'Artista desconocido', unknownAlbum: 'Álbum desconocido', untitledTrack: 'Pista sin título', verifyCandidate: 'Verifica el artista/la versión antes de añadir', recommendedResults: 'Resultados recomendados', otherResults: 'Otros resultados — verifica el artista/la versión', noMatches: 'No se encontraron coincidencias. Prueba otra búsqueda.', searchThreshold: 'Umbral de búsqueda: {threshold} · {range}{more}', resultsRange: 'Resultados {from}–{to}', noMoreResults: ' · No hay más resultados con este umbral.', searching: '[ BUSCANDO... ]', searchFailed: 'La búsqueda falló. Inténtalo de nuevo.', chooseSuggestion: 'Elige una sugerencia o busca en YouTube Music para cada pista sin coincidencia o ambigua.', chooseSuggestionSpotify: 'Elige una sugerencia o busca en Spotify para cada pista sin coincidencia o ambigua.', chooseBeforeAdding: 'Elige o busca coincidencias ahora. Para añadir selecciones se requiere una playlist creada sin modo de prueba.', searchMatch: 'Buscar coincidencia para {title}', search: '[ SEARCH ]', noSuggestedMatch: 'No hay coincidencia sugerida. Busca en YouTube Music para elegir una.', noSuggestedMatchSpotify: 'No hay coincidencia sugerida. Busca en Spotify para elegir una.', searchResults: 'Resultados {from}–{to}{more}', noMoreSpotifyResults: ' · No hay más resultados de Spotify.', couldNotAdd: 'No se pudieron añadir las pistas seleccionadas. Inténtalo de nuevo.', noTracks: 'No hay pistas para convertir. Carga primero un archivo .m3u.', playlistRequired: 'Introduce un nombre para la playlist.', processing: '[ PROCESSING... ]', starting: 'Iniciando conversión...', searchingTrack: 'Buscando {artist} — {title}', processedTracks: 'Procesadas {added} de {total} pistas', backendSearching: 'El servidor está buscando...', completed: 'Completado', conversionCompleted: 'Conversión completada', partialInsertion: 'Playlist creada con inserción parcial: {inserted} de {matched} pistas coincidentes añadidas.', matched: 'Con coincidencia:', unmatched: 'Sin coincidencia:', ambiguous: 'Ambigua:', trackStatusUnmatched: 'sin coincidencia', trackStatusAmbiguous: 'ambigua', trackStatusManualReview: 'revisión manual', trackStatusUnknown: 'requiere revisión', playlistUrl: 'URL de la playlist:', conversionError: 'Error durante la conversión. Revisa los registros.', authConversionRequired: 'Se requiere autenticación de YouTube Music. Vuelve a conectar.', spotifyAuthenticationRequired: 'Se requiere autenticación de Spotify. Vuelve a conectar.', spotifyAuthorizationRequired: 'Se requiere autorización de Spotify para crear playlists. Vuelve a conectar y aprueba el acceso a playlists.', spotifyRateLimited: 'Spotify está limitando solicitudes. Inténtalo de nuevo pronto.', spotifyProviderUnavailable: 'Spotify no está disponible. Inténtalo de nuevo pronto.', backendConnected: 'Servidor conectado' } };
+    const translations = { en: { subtitle: 'Import your music library to YouTube Music', uploadDrop: 'Drop .m3u file here', uploadHint: 'or paste M3U content below', m3uContent: 'M3U Content', playlistName: 'Playlist Name', playlistPlaceholder: 'MY_PLAYLIST', matchThreshold: 'Match Threshold', thresholdHelp: 'Minimum similarity percentage to consider a song as found. 60% works well for most cases.', dryRun: 'Dry Run Mode (no playlist creation)', destination: 'Destination', destinationYoutube: 'YouTube Music', destinationSpotify: 'Spotify', spotifyConnect: '[ CONNECT SPOTIFY ]', spotifyDisconnect: '[ DISCONNECT ]', spotifyUnavailable: 'Spotify is unavailable: {reason}', spotifyNotConnected: 'NOT CONNECTED', spotifyConnecting: 'CONNECTING', spotifyConnected: 'CONNECTED', spotifyAuthFailed: 'Spotify connection failed: {reason}', connect: '[ CONNECT YOUTUBE MUSIC ]', disconnect: '[ DISCONNECT ]', authUnauthenticated: 'NOT CONNECTED', authWaiting: 'CONNECTING', authConnected: 'CONNECTED', authCancelled: 'STATUS: AUTHENTICATION CANCELLED', authTimedOut: 'STATUS: AUTHENTICATION TIMED OUT', authFailed: 'STATUS: AUTHENTICATION FAILED', authRequired: 'STATUS: AUTHENTICATION REQUIRED', guidedAuthWindowsOnly: 'Guided browser authentication is available on Windows only.', guidedAuthBrowserUnavailable: 'No supported browser was found for guided authentication.', progressLog: 'Progress Log', idle: 'Idle', conversionProgress: 'Conversion progress', checkingBackend: 'Checking backend...', manualReview: 'Manual Review', manualReviewDescription: 'Unmatched or ambiguous tracks detected. Search manually or choose a suggested match.', addSelected: '[ ADD SELECTED ]', summary: 'Summary', tracksLoaded: '[{count}] tracks loaded', manualAdditions: 'Manual additions:', tracksAdded: '{count} track{plural} added to the playlist.', manualAdditionsUnavailable: 'Manual additions require a playlist created by a non-dry-run conversion.', unknownArtist: 'Unknown artist', unknownAlbum: 'Unknown album', untitledTrack: 'Untitled track', verifyCandidate: 'Verify artist/version before adding', recommendedResults: 'Recommended results', otherResults: 'Other results — verify artist/version', noMatches: 'No matches found. Try a different query.', searchThreshold: 'Search threshold: {threshold} · {range}{more}', resultsRange: 'Results {from}–{to}', noMoreResults: ' · No more results at this threshold.', searching: '[ SEARCHING... ]', searchFailed: 'Search failed. Please try again.', chooseSuggestion: 'Choose a suggestion or search YouTube Music for each unmatched or ambiguous track.', chooseSuggestionSpotify: 'Choose a suggestion or search Spotify for each unmatched or ambiguous track.', chooseBeforeAdding: 'Choose or search for matches now. Adding selections requires a playlist from a non-dry-run conversion.', searchMatch: 'Search match for {title}', search: '[ SEARCH ]', noSuggestedMatch: 'No suggested match. Search YouTube Music to choose one.', noSuggestedMatchSpotify: 'No suggested match. Search Spotify to choose one.', searchResults: 'Results {from}–{to}{more}', noMoreSpotifyResults: ' · No more Spotify results.', couldNotAdd: 'Could not add selected tracks. Please try again.', noTracks: 'No tracks to convert. Load an .m3u file first.', playlistRequired: 'Enter a playlist name.', processing: '[ PROCESSING... ]', starting: 'Starting conversion...', searchingTrack: 'Searching {artist} — {title}', processedTracks: 'Processed {added} of {total} tracks', backendSearching: 'Backend is searching...', completed: 'Completed', conversionCompleted: 'Conversion completed', partialInsertion: 'Playlist created with partial insertion: {inserted} of {matched} matched tracks added.', matched: 'Matched:', unmatched: 'Unmatched:', ambiguous: 'Ambiguous:', trackStatusUnmatched: 'unmatched', trackStatusAmbiguous: 'ambiguous', trackStatusManualReview: 'manual review', trackStatusUnknown: 'needs review', playlistUrl: 'Playlist URL:', conversionError: 'Error during conversion. Check the logs.', authConversionRequired: 'YouTube Music authentication is required. Please reconnect.', spotifyAuthenticationRequired: 'Spotify authentication is required. Please reconnect.', spotifyAuthorizationRequired: 'Spotify authorization is required to create playlists. Please reconnect and approve playlist access.', spotifyRateLimited: 'Spotify is rate limited. Please try again shortly.', spotifyProviderUnavailable: 'Spotify is unavailable. Please try again shortly.', backendConnected: 'Backend connected', cancelConversion: '[ CANCEL ]', cancelling: 'Cancelling conversion…', cancelled: 'Conversion cancelled; confirmed partial effects are shown.' }, es: { subtitle: 'Importa tu biblioteca musical a YouTube Music', uploadDrop: 'Suelta el archivo .m3u aquí', uploadHint: 'o pega el contenido M3U abajo', m3uContent: 'Contenido M3U', playlistName: 'Nombre de la playlist', playlistPlaceholder: 'MI_PLAYLIST', matchThreshold: 'Umbral de coincidencia', thresholdHelp: 'Porcentaje mínimo de similitud para considerar una canción encontrada. El 60 % funciona bien en la mayoría de los casos.', dryRun: 'Modo de prueba (no crea la playlist)', destination: 'Destino', destinationYoutube: 'YouTube Music', destinationSpotify: 'Spotify', spotifyConnect: '[ CONECTAR SPOTIFY ]', spotifyDisconnect: '[ DESCONECTAR ]', spotifyUnavailable: 'Spotify no está disponible: {reason}', spotifyNotConnected: 'SIN CONEXIÓN', spotifyConnecting: 'CONECTANDO', spotifyConnected: 'CONECTADO', spotifyAuthFailed: 'Falló la conexión con Spotify: {reason}', connect: '[ CONECTAR YOUTUBE MUSIC ]', disconnect: '[ DESCONECTAR ]', authUnauthenticated: 'SIN CONEXIÓN', authWaiting: 'CONECTANDO', authConnected: 'CONECTADO', authCancelled: 'ESTADO: AUTENTICACIÓN CANCELADA', authTimedOut: 'ESTADO: AUTENTICACIÓN AGOTADA', authFailed: 'ESTADO: AUTENTICACIÓN FALLIDA', authRequired: 'ESTADO: AUTENTICACIÓN REQUERIDA', guidedAuthWindowsOnly: 'La autenticación guiada por navegador sólo está disponible en Windows.', guidedAuthBrowserUnavailable: 'No se encontró un navegador compatible para la autenticación guiada.', progressLog: 'Registro de progreso', idle: 'Inactivo', conversionProgress: 'Progreso de conversión', checkingBackend: 'Comprobando el servidor...', manualReview: 'Revisión manual', manualReviewDescription: 'Se detectaron pistas sin coincidencia o ambiguas. Busca manualmente o elige una coincidencia sugerida.', addSelected: '[ AÑADIR SELECCIONADAS ]', summary: 'Resumen', tracksLoaded: '[{count}] pistas cargadas', manualAdditions: 'Añadidos manualmente:', tracksAdded: '{count} pista{plural} añadida{plural} a la playlist.', manualAdditionsUnavailable: 'Los añadidos manuales requieren una playlist creada en una conversión sin modo de prueba.', unknownArtist: 'Artista desconocido', unknownAlbum: 'Álbum desconocido', untitledTrack: 'Pista sin título', verifyCandidate: 'Verifica el artista/la versión antes de añadir', recommendedResults: 'Resultados recomendados', otherResults: 'Otros resultados — verifica el artista/la versión', noMatches: 'No se encontraron coincidencias. Prueba otra búsqueda.', searchThreshold: 'Umbral de búsqueda: {threshold} · {range}{more}', resultsRange: 'Resultados {from}–{to}', noMoreResults: ' · No hay más resultados con este umbral.', searching: '[ BUSCANDO... ]', searchFailed: 'La búsqueda falló. Inténtalo de nuevo.', chooseSuggestion: 'Elige una sugerencia o busca en YouTube Music para cada pista sin coincidencia o ambigua.', chooseSuggestionSpotify: 'Elige una sugerencia o busca en Spotify para cada pista sin coincidencia o ambigua.', chooseBeforeAdding: 'Elige o busca coincidencias ahora. Para añadir selecciones se requiere una playlist creada sin modo de prueba.', searchMatch: 'Buscar coincidencia para {title}', search: '[ BUSCAR ]', noSuggestedMatch: 'No hay coincidencia sugerida. Busca en YouTube Music para elegir una.', noSuggestedMatchSpotify: 'No hay coincidencia sugerida. Busca en Spotify para elegir una.', searchResults: 'Resultados {from}–{to}{more}', noMoreSpotifyResults: ' · No hay más resultados de Spotify.', couldNotAdd: 'No se pudieron añadir las pistas seleccionadas. Inténtalo de nuevo.', noTracks: 'No hay pistas para convertir. Carga primero un archivo .m3u.', playlistRequired: 'Introduce un nombre para la playlist.', processing: '[ PROCESSING... ]', starting: 'Iniciando conversión...', searchingTrack: 'Buscando {artist} — {title}', processedTracks: 'Procesadas {added} de {total} pistas', backendSearching: 'El servidor está buscando...', completed: 'Completado', conversionCompleted: 'Conversión completada', partialInsertion: 'Playlist creada con inserción parcial: {inserted} de {matched} pistas coincidentes añadidas.', matched: 'Con coincidencia:', unmatched: 'Sin coincidencia:', ambiguous: 'Ambigua:', trackStatusUnmatched: 'sin coincidencia', trackStatusAmbiguous: 'ambigua', trackStatusManualReview: 'revisión manual', trackStatusUnknown: 'requiere revisión', playlistUrl: 'URL de la playlist:', conversionError: 'Error durante la conversión. Revisa los registros.', authConversionRequired: 'Se requiere autenticación de YouTube Music. Vuelve a conectar.', spotifyAuthenticationRequired: 'Se requiere autenticación de Spotify. Vuelve a conectar.', spotifyAuthorizationRequired: 'Se requiere autorización de Spotify para crear playlists. Vuelve a conectar y aprueba el acceso a playlists.', spotifyRateLimited: 'Spotify está limitando solicitudes. Inténtalo de nuevo pronto.', spotifyProviderUnavailable: 'Spotify no está disponible. Inténtalo de nuevo pronto.', backendConnected: 'Servidor conectado', cancelConversion: '[ CANCELAR ]', cancelling: 'Cancelando conversión…', cancelled: 'Conversión cancelada; se muestran los efectos parciales confirmados.' } };
         const localePreferences = [...(navigator.languages || []), navigator.language].filter((value) => typeof value === 'string' && value);
         const locale = localePreferences.some((value) => /^es(?:-|$)/i.test(value)) ? 'es' : 'en';
         function t(key, params = {}) { const value = translations[locale][key] || translations.en[key] || key; return value.replace(/\{(\w+)\}/g, (_, name) => params[name] ?? `{${name}}`); }
@@ -1197,6 +1198,12 @@
 
         // Variables globales
     const fileInput = document.getElementById('fileInput');
+        document.getElementById('dropZone').addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            fileInput.click();
+          }
+        });
     const dropZone = document.getElementById('dropZone');
     const uploadText = document.getElementById('uploadText');
     const m3uContent = document.getElementById('m3uContent');
@@ -1212,6 +1219,7 @@
     const spotifyAuthButtonLabel = document.getElementById('spotifyAuthButtonLabel');
     const youtubeAuthButtonLabel = document.getElementById('youtubeAuthButtonLabel');
     const startBtn = document.getElementById('startBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
 
     const summaryCard = document.getElementById('summaryCard');
     const summaryGrid = document.getElementById('summaryGrid');
@@ -1243,6 +1251,26 @@
     let lastConversionDryRun = true;
     let lastConversionResults = [];
     let eventSource = null;
+        let activeConversionRun = null;
+        const localUiClientId = crypto.getRandomValues(new Uint8Array(32)).reduce((value, byte) => value + byte.toString(16).padStart(2, '0'), '');
+        let localUiCapability = null;
+
+        async function ensureLocalUiCapability() {
+          if (localUiCapability) return localUiCapability;
+          const response = await fetch(`/api/ui-capability?clientId=${encodeURIComponent(localUiClientId)}`);
+          const payload = await response.json();
+          if (!response.ok || typeof payload?.capability !== 'string') throw new Error('Local UI authorization unavailable');
+          localUiCapability = payload.capability;
+          return localUiCapability;
+        }
+
+        async function localMutationFetch(path, options = {}) {
+          const capability = await ensureLocalUiCapability();
+          const headers = new Headers(options.headers || {});
+          headers.set('X-Local-UI-Client', localUiClientId);
+          headers.set('X-Local-UI-Capability', capability);
+          return fetch(path, { ...options, headers });
+        }
         let latestProcessedCount = 0;
         let latestProgressTotal = 0;
     const guidedBrowserAuthPanel = document.getElementById('browserAuthPanel');
@@ -1371,7 +1399,7 @@
     }
 
     async function disconnectSpotify() {
-      await fetch('/api/spotify-auth/disconnect', { method: 'POST' });
+      await localMutationFetch('/api/spotify-auth/disconnect', { method: 'POST' });
       await refreshProviderStates();
     }
 
@@ -1390,7 +1418,7 @@
       updateDestinationUi();
       setProviderAuthStatus('spotify', t('spotifyConnecting'), '#00AAFF', true);
       try {
-        const response = await fetch('/api/spotify-auth/start', { method: 'POST' });
+        const response = await localMutationFetch('/api/spotify-auth/start', { method: 'POST' });
         const result = await response.json();
         if (!response.ok || !result.authorizeUrl) throw new Error(result.reason || 'SPOTIFY_AUTH_START_FAILED');
         spotifyAuthPopup = window.open(result.authorizeUrl, 'spotify-auth', 'popup,width=520,height=720');
@@ -1402,7 +1430,7 @@
 
     async function saveBrowserAuth() {
       try {
-        const response = await fetch('/api/ytmusic-auth/browser', {
+        const response = await localMutationFetch('/api/ytmusic-auth/browser', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ headers: "" }),
@@ -1428,7 +1456,7 @@
 
     async function startGuidedAuth() {
       try {
-        const response = await fetch('/api/ytmusic-auth/browser/start', { method: 'POST' });
+        const response = await localMutationFetch('/api/ytmusic-auth/browser/start', { method: 'POST' });
         const result = await response.json();
         showGuidedAuthStatus(result.status);
         if (!response.ok) {
@@ -1467,7 +1495,7 @@
         }
 
     async function disconnectYtMusic() {
-      await fetch('/api/ytmusic-auth/browser/disconnect', { method: 'POST' });
+      await localMutationFetch('/api/ytmusic-auth/browser/disconnect', { method: 'POST' });
       showGuidedAuthStatus('idle');
       await refreshProviderStates();
     }
@@ -1475,7 +1503,7 @@
     async function startYtMusicAuthorization(popup) {
       setAuthStatus(t('authWaiting'), '#00AAFF');
       try {
-        const response = await fetch('/api/ytmusic-auth/start', { method: 'POST' });
+        const response = await localMutationFetch('/api/ytmusic-auth/start', { method: 'POST' });
         const authorization = await response.json();
         if (!response.ok) throw new Error(authorization.error || 'Unable to start authorization');
 
@@ -1485,7 +1513,7 @@
         popup.location.href = authorizationUrl.toString();
 
         const poll = async () => {
-          const pollResponse = await fetch('/api/ytmusic-auth/poll', {
+          const pollResponse = await localMutationFetch('/api/ytmusic-auth/poll', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ authorizationId: authorization.authorizationId }),
@@ -1754,7 +1782,7 @@
                 && Number(searchButton.dataset.searchVersion) === request.version;
           try {
             const spotifySearch = lastConversionProvider === 'spotify';
-            const response = await fetch(spotifySearch ? '/api/spotify/search-single' : '/api/search-single', {
+            const response = await localMutationFetch(spotifySearch ? '/api/spotify/search-single' : '/api/search-single', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(spotifySearch ? { query, limit: 5, offset } : { query, artist: expectedArtist, title: expectedTitle, threshold: searchThreshold, offset }),
@@ -1836,7 +1864,8 @@
             button.type = 'button';
             button.className = 'btn-small';
             button.textContent = '[ SEARCH ]';
-            const thresholdDisplay = document.createElement('div');
+            button.textContent = t('search');
+                const thresholdDisplay = document.createElement('div');
             thresholdDisplay.className = 'manual-search-threshold';
             showManualSearchThreshold(thresholdDisplay, 0);
             actions.append(input, button, thresholdDisplay);
@@ -1871,7 +1900,8 @@
               manualSearchStates.delete(trackId);
               showManualSearchThreshold(thresholdDisplay, 0);
             });
-            input.addEventListener('keydown', (event) => {
+            input.addEventListener('input', () => { button.textContent = t('search'); });
+                input.addEventListener('keydown', (event) => {
               if (event.key !== 'Enter') return;
                   event.preventDefault();
                   searchManualTrack(
@@ -1895,7 +1925,7 @@
               manualAddStatus.style.display = 'none';
           addManualBtn.disabled = true;
           try {
-            const response = await fetch(lastConversionProvider === 'spotify' ? '/api/spotify/add-to-playlist' : '/api/add-to-playlist', {
+            const response = await localMutationFetch(lastConversionProvider === 'spotify' ? '/api/spotify/add-to-playlist' : '/api/add-to-playlist', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ playlistId: lastPlaylistId, tracks }),
@@ -1931,7 +1961,7 @@
 
         async function ensureConversionReady(destination) {
               try {
-                const response = await fetch('/api/conversion-preflight', {
+                const response = await localMutationFetch('/api/conversion-preflight', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ destination }),
@@ -1976,7 +2006,8 @@
 
       const conversionDryRun = dryRun.checked;
           const conversionDestination = selectedDestination;
-          const conversionRun = { destination: conversionDestination, eventSource: null, settled: false };
+          const conversionRun = { destination: conversionDestination, eventSource: null, settled: false, runId: null };
+              activeConversionRun = conversionRun;
           const settleConversionRun = () => {
             if (conversionRun.settled) return;
             conversionRun.settled = true;
@@ -2016,7 +2047,11 @@
 
       try {
         // Crear EventSource para recibir actualizaciones de progreso
-        conversionRun.eventSource = new EventSource(`/api/convert-progress?playlistName=${encodeURIComponent(playlistNameValue)}&dryRun=${conversionDryRun}&threshold=${threshold.value}`);
+        const runId = crypto.getRandomValues(new Uint8Array(32)).reduce((value, byte) => value + byte.toString(16).padStart(2, '0'), '');
+                conversionRun.runId = runId;
+                cancelBtn.hidden = false;
+            const capability = await ensureLocalUiCapability();
+            conversionRun.eventSource = new EventSource(`/api/convert-progress?clientId=${encodeURIComponent(localUiClientId)}&runId=${encodeURIComponent(runId)}&capability=${encodeURIComponent(capability)}`);
             eventSource = conversionRun.eventSource;
 
         conversionRun.eventSource.onmessage = (event) => {
@@ -2038,6 +2073,7 @@
             const percent = Math.round((added / total) * 100);
             progressBar.style.width = `${percent}%`;
             progressPercent.textContent = `${percent}%`;
+                progressTrack.setAttribute("aria-valuenow", String(percent));
             // Progress events only move the bar. The label is reserved for the active search.
             if (data.artist && data.title) {
               progressLabel.textContent = t('searchingTrack', { artist: data.artist, title: data.title });
@@ -2143,14 +2179,15 @@
         });
 
         // Send tracks only after the progress stream is connected.
-        const response = await fetch('/api/convert', {
+        const response = await localMutationFetch('/api/convert', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             tracks: window.parsedTracks,
             playlistName: playlistNameValue,
             dryRun: conversionDryRun,
-            threshold: parseInt(threshold.value),
+            threshold: Number(threshold.value),
+                runId,
             destination: conversionDestination
           })
         });
@@ -2195,7 +2232,26 @@
     };
 
     // Asignar el evento onclick al botón [EXECUTE]
-    startBtn.onclick = startConversion;
+    cancelBtn.onclick = async () => {
+          const run = activeConversionRun;
+          if (!run?.runId || run.settled) return;
+          cancelBtn.disabled = true;
+          progressLabel.textContent = t('cancelling');
+          try {
+            await localMutationFetch('/api/convert/cancel', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId: run.runId }),
+            });
+            run.eventSource?.close();
+            run.settled = true;
+            progressLabel.textContent = t('cancelled');
+            startBtn.disabled = false;
+            startBtn.textContent = "[ EXECUTE ]";
+            cancelBtn.hidden = true;
+          } finally {
+            cancelBtn.disabled = false;
+          }
+        };
+        startBtn.onclick = startConversion;
 
     // Restaurar estado desde localStorage al cargar la página
     const restoreState = () => {

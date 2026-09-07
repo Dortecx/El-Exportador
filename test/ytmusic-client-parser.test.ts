@@ -35,7 +35,7 @@ describe("YTMusic stdout JSON parser", () => {
   it("buffers split frames, processes multiple frames per chunk, and flushes a trailing frame on close", async () => {
     mockProcess([
       '{"progress":{"current":1,"total":2,"artist":"First","title":"Song","status":"matched"}}\n{"progress":{"current":2,"total":2,"artist":"Second","title":"Song","status":"matched"}}\n{"status":"mat',
-      'ched","artist":"Final","title":"Result","videoId":"video-1"}',
+      'ched","artist":"Final","title":"Result","videoId":"video-1","bestMatch":null}',
     ]);
 
     const { convertWithYtMusic } = await import("../src/ytmusic/client.js");
@@ -47,13 +47,31 @@ describe("YTMusic stdout JSON parser", () => {
       { dryRun: true },
       onProgress,
     )).resolves.toEqual({
-      status: "matched",
-      artist: "Final",
-      title: "Result",
-      videoId: "video-1",
+      playlistId: null,
+      playlistUrl: null,
+      matched: 1,
+      results: [{
+        status: "matched",
+        artist: "Final",
+        title: "Result",
+        videoId: "video-1",
+        bestMatch: null,
+      }],
     });
     expect(onProgress).toHaveBeenNthCalledWith(1, 1, 2, "First", "Song", "matched");
     expect(onProgress).toHaveBeenNthCalledWith(2, 2, 2, "Second", "Song", "matched");
+  });
+
+  it("rejects malformed standalone results", async () => {
+    mockProcess(['{"status":"matched","artist":"Final","title":"Result","videoId":"video-1"}\n']);
+
+    const { convertWithYtMusic } = await import("../src/ytmusic/client.js");
+
+    await expect(convertWithYtMusic(
+      [{ artist: "artist", title: "title", file: "track.mp3" }],
+      "playlist",
+      { dryRun: true },
+    )).rejects.toThrow("YouTube Music returned an invalid conversion result");
   });
 
   it("resolves an add-to-playlist success result", async () => {
