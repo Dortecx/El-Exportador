@@ -290,20 +290,48 @@ describe("provider status and destination UI", () => {
     expect(html).toContain("setProviderAuthStatus('youtube', youtubeAuthenticated ? t('authConnected') : t('authUnauthenticated')");
   });
 
-  it("keeps the upload, connection status, and Execute control in one bounded panel without cancellation UI", () => {
-    const upperPanelStart = html.indexOf('<div class="card conversion-panel">');
-    const progressPanelStart = html.indexOf('<div class="card" style="margin-top: 1.5rem; max-width: 800px;');
-    const upperPanel = html.slice(upperPanelStart, progressPanelStart);
+  it("contains the complete conversion configuration in its own card before the panel-width Execute control", () => {
+    const configStart = html.indexOf('<div class="card conversion-config">');
+    const configEnd = html.indexOf('\n      </div>\n\n      <script>', configStart);
+    const executeStart = html.indexOf('id="startBtn" disabled>[ EXECUTE ]</button>');
+    const config = html.slice(configStart, configEnd);
 
-    expect(upperPanelStart).toBeGreaterThan(-1);
+    expect(configStart).toBeGreaterThan(-1);
+    expect(configEnd).toBeGreaterThan(configStart);
     expect(html).toContain('.conversion-panel {');
-    expect(upperPanel).toContain('<div class="icon">[FILE]</div>');
-    expect(upperPanel).toContain('data-i18n="uploadDrop">Drop .m3u file here</div>');
-    expect(upperPanel).toContain('id="providerAuthStatus"');
-    expect(upperPanel).toContain('id="startBtn" disabled>[ EXECUTE ]</button>');
+    expect(html).toContain('.conversion-config {');
+        const configCardRule = html.match(/\.conversion-config \{[\s\S]*?\n    \}/)?.[0] || "";
+        expect(configCardRule).toContain('background: #050f2e;');
+        expect(configCardRule).toContain('border: 1px solid #00AAFF;');
+        expect(html).toContain('border: 2px dashed #00AAFF;');
+        expect(html).toContain('.file-upload.has-file {');
+    expect(config).toContain('<div class="icon">[FILE]</div>');
+    expect(config).toContain('data-i18n="uploadDrop">Drop .m3u file here</div>');
+    expect(config).toContain('id="m3uContent"');
+    expect(config).toContain('id="playlistName"');
+    expect(config).toContain('id="threshold"');
+    expect(config).toContain('id="dryRun"');
+    expect(config).toContain('id="authenticationControls"');
+    expect(config).toContain('id="providerAuthStatus"');
+    expect(executeStart).toBeGreaterThan(configEnd);
     expect(html).toContain('filename.textContent = `[OK] ${file.name}`;');
     expect(html).not.toContain('file.name.toUpperCase');
     expect(html).not.toContain('id="cancelBtn"');
     expect(html).not.toContain('const cancelBtn');
+  });
+
+  it("limits sentence casing to the upload helper and fake uploaded filename presentation", () => {
+    const helperRule = html.match(/\.file-upload \.hint \{[\s\S]*?\n    \}/)?.[0] || "";
+
+    const filenameRule = html.match(/\.file-upload \.filename \{[\s\S]*?\n    \}/g)?.at(-1) || "";
+        const fakeUpload = { name: "NO.m3u" };
+        const renderedFilename = `[OK] ${fakeUpload.name}`;
+
+        expect(helperRule).toContain('text-transform: none;');
+        expect(filenameRule).toContain('text-transform: none;');
+    expect(html).toContain('<div class="icon">[FILE]</div>');
+    expect(html).toContain('data-i18n="uploadHint">or paste M3U content below</div>');
+        expect(renderedFilename).toBe("[OK] NO.m3u");
+    expect(html).toContain('filename.textContent = `[OK] ${file.name}`;');
   });
 });

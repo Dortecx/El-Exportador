@@ -212,6 +212,12 @@
       margin-right: auto;
     }
 
+    .conversion-config {
+      margin-bottom: 0.75rem;
+      background: #050f2e;
+      border: 1px solid #00AAFF;
+    }
+
     label {
       display: block;
       margin-bottom: 0.5rem;
@@ -381,6 +387,7 @@
     .file-upload .hint {
       color: #336699;
       font-size: 0.875rem;
+      text-transform: none;
     }
 
     .file-upload.has-file .hint {
@@ -407,6 +414,7 @@
     .file-upload .filename {
       color: #00FF88;
       font-weight: bold;
+      text-transform: none;
     }
 
     .btn {
@@ -1032,8 +1040,9 @@
     <h1>El Exportador</h1>
     <p class="subtitle" data-i18n="subtitle">Import your music library to YouTube Music</p>
 
-    <div class="card conversion-panel">
-      <label class="file-upload" id="dropZone" for="fileInput" tabindex="0" role="button" aria-describedby="uploadHintText">
+    <div class="conversion-panel">
+      <div class="card conversion-config">
+        <label class="file-upload" id="dropZone" for="fileInput" tabindex="0" role="button" aria-describedby="uploadHintText">
         <div class="icon">[FILE]</div>
         <div id="uploadText" data-i18n="uploadDrop">Drop .m3u file here</div>
         <div class="hint" id="uploadHintText" data-i18n="uploadHint">or paste M3U content below</div>
@@ -1091,7 +1100,8 @@
           <img id="providerAuthIcon" class="provider-icon" src="/icons/ytmusic.svg" alt="YouTube Music" hidden>
               <span id="providerAuthText" data-i18n="authUnauthenticated">STATUS: NOT AUTHENTICATED</span>
         </div>
-            <div id="browserAuthPanel" hidden style="margin-top: 0.75rem; font-family: 'Share Tech Mono', monospace; font-size: 0.8rem; color: #00AAFF;">
+              <div id="browserAuthPanel" hidden style="margin-top: 0.75rem; font-family: 'Share Tech Mono', monospace; font-size: 0.8rem; color: #00AAFF;">
+          </div>
         </div>
       </div>
 
