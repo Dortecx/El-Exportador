@@ -3,8 +3,25 @@ import { randomInt } from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import CDP from "chrome-remote-interface";
+import { createRequire } from "module";
 import { YTMusicAuthFile } from "../ytmusic/client";
+
+ type CdpTarget = { id: string; type: string; url: string };
+ type CdpClient = {
+  Network: {
+    enable: () => Promise<void>;
+    requestWillBeSent: (listener: (event: RequestWillBeSentEvent) => void) => void;
+    requestWillBeSentExtraInfo: (listener: (event: RequestWillBeSentExtraInfoEvent) => void) => void;
+  };
+  Browser: { close: () => Promise<void> };
+  close: () => Promise<void>;
+};
+type CdpFactory = ((options: { host: string; port: number; target: CdpTarget }) => Promise<CdpClient>) & {
+  List: (options: { host: string; port: number }) => Promise<CdpTarget[]>;
+  Close: (options: { host: string; port: number; id: string }) => Promise<void>;
+};
+
+const CDP = createRequire(import.meta.url)("chrome-remote-interface") as CdpFactory;
 
 const MUSIC_URL = "https://music.youtube.com";
 const STATE_ROOT = process.env.M3U_YTMUSIC_STATE_DIR?.trim() || os.homedir();
@@ -385,7 +402,8 @@ export class GuidedBrowserAuth {
     if (port !== undefined) await this.closeExtraPageTargets(port, activeTargetId);
     let gracefulCdp = cdp;
     if (!gracefulCdp && port !== undefined && activeTargetId) {
-      gracefulCdp = await CDP({ host: "127.0.0.1", port, target: activeTargetId }).catch(() => undefined);
+      const activeTarget = (await CDP.List({ host: "127.0.0.1", port })).find((target) => target.id === activeTargetId);
+      if (activeTarget) gracefulCdp = await CDP({ host: "127.0.0.1", port, target: activeTarget }).catch(() => undefined);
     }
     if (gracefulCdp) {
       await gracefulCdp.Browser.close().catch(() => undefined);

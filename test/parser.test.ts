@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { parseM3U, detectFormat, isValidM3UFile, validateFilePath, cleanTitle } from "../src/parser.js";
+import { parseM3U as parseM3UResult, detectFormat, isValidM3UFile, validateFilePath, cleanTitle } from "../src/parser.js";
 import * as path from "path";
 import * as fs from "fs";
 
 const FIXTURES_DIR = path.join(import.meta.dirname, "fixtures");
+const parseM3U = (content: string, isExtended: boolean) => parseM3UResult(content, isExtended).tracks;
 
 describe("Parser", () => {
   describe("cleanTitle", () => {
@@ -59,6 +60,15 @@ describe("Parser", () => {
   });
 
   describe("parseM3U - Extended Format", () => {
+    it("returns tracks and an optional playlist name", () => {
+      const result = parseM3UResult("#EXTM3U\n#PLAYLIST: Favorites\n#EXTINF:180,Artist - Song\n/song.mp3", true);
+
+      expect(result).toEqual({
+        playlistName: "Favorites",
+        tracks: [expect.objectContaining({ artist: "Artist", title: "Song" })],
+      });
+    });
+
     it("should parse extended M3U with artist and title", () => {
       const content = `#EXTM3U
 #EXTINF:245,Pink Floyd - Comfortably Numb

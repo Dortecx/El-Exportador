@@ -52,6 +52,20 @@ class SearchSingleThresholdTest(unittest.TestCase):
         self.assertIn('acoustic', [candidate['videoId'] for candidate in result['results']])
         self.assertNotIn('different', [candidate['videoId'] for candidate in result['results']])
 
+    def test_conversion_threshold_changes_fake_matching_and_rejects_invalid_values(self):
+        class ThresholdFakeYTMusic:
+            def search(self, *_args, **_kwargs):
+                return [{'videoId': 'near-match', 'title': 'Abcxyz', 'artists': [{'name': 'Artist'}]}]
+
+        self.searcher.get_ytmusic_thread = lambda: ThresholdFakeYTMusic()
+        self.searcher.get_ytmusic = lambda: ThresholdFakeYTMusic()
+        tracks = [{'artist': 'Artist', 'title': 'Abcdef'}]
+
+        self.assertEqual(self.searcher.search_tracks(tracks, 'playlist', False, max_workers=1)['results'][0]['status'], 'ambiguous')
+        self.assertEqual(self.searcher.search_tracks(tracks, 'playlist', False, max_workers=1, threshold=0.5)['results'][0]['status'], 'matched')
+        with self.assertRaises(ValueError):
+            self.searcher.search_tracks(tracks, 'playlist', False, max_workers=1, threshold=1.1)
+
 
 class PaginatedFakeYTMusic:
     def search(self, *_args, **_kwargs):

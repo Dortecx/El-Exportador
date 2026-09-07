@@ -18,7 +18,7 @@ describe("spotify slice 1A configuration", () => {
     vi.stubEnv("SPOTIFY_CLIENT_ID", "public-test-id");
     const { getSpotifyClientConfig } = await import("../src/spotify/config.js");
 
-    const config = getSpotifyClientConfig({ platform: "win32", port: 4312 }) satisfies SpotifyClientConfig;
+    const config = getSpotifyClientConfig({ env: { SPOTIFY_CLIENT_ID: "public-test-id" }, platform: "win32", port: 4312 }) satisfies SpotifyClientConfig;
 
     expect(config).toEqual({
       clientId: "public-test-id",
@@ -33,14 +33,15 @@ describe("spotify slice 1A configuration", () => {
     const { getSpotifyClientConfig, resolveSpotifyTokenPath } = await import("../src/spotify/config.js");
     const stateRoot = makeTempDir("state-root");
 
-    expect(getSpotifyClientConfig({ platform: "win32", port: 3000 })).toMatchObject({
+    expect(getSpotifyClientConfig({ env: {}, platform: "win32", port: 3000 })).toEqual({
       enabled: false,
       reason: "SPOTIFY_CONFIGURATION_REQUIRED",
+      redirectUri: "http://127.0.0.1:3000/api/spotify-auth/callback",
       supported: true,
     });
 
     vi.stubEnv("SPOTIFY_CLIENT_ID", "public-test-id");
-    expect(getSpotifyClientConfig({ platform: "linux", port: 3000 })).toMatchObject({
+    expect(getSpotifyClientConfig({ env: { SPOTIFY_CLIENT_ID: "public-test-id" }, platform: "linux", port: 3000 })).toMatchObject({
       enabled: false,
       reason: "SPOTIFY_WINDOWS_ONLY",
       supported: false,
@@ -69,7 +70,12 @@ describe("spotify slice 1A token storage", () => {
 
     expect(readSpotifyTokenState(tokenPath)).toEqual(tokenState);
     expect(readdirSync(path.dirname(tokenPath)).filter((entry) => entry.includes("spotify_tokens") && entry !== path.basename(tokenPath))).toEqual([]);
-    expect(statSync(tokenPath).mode & 0o777).toBe(0o600);
+    const tokenMode = statSync(tokenPath).mode & 0o777;
+    if (process.platform === "win32") {
+      expect(tokenMode & 0o200).toBe(0o200);
+    } else {
+      expect(tokenMode).toBe(0o600);
+    }
 
     deleteSpotifyTokenState(tokenPath);
     expect(existsSync(tokenPath)).toBe(false);

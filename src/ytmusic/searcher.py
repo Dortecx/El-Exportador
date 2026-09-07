@@ -4,6 +4,7 @@ import json
 import os
 import re
 import difflib
+import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
@@ -285,7 +286,7 @@ def artist_allows_videos(artist):
 def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alternatives=True):
     """
     Search with fallback logic. Returns (result, query, similarity, status).
-    Status: 'matched' (>=0.6), 'ambiguous' (>=0.3 and <0.6), 'unmatched' (<0.3)
+    Status: 'matched' (>=min_similarity), 'ambiguous' (>=0.3 below threshold), 'unmatched' (<0.3)
     If collect_alternatives=True, yields all candidates sorted by similarity.
     """
     primary_title = extract_series_name(title).strip()
@@ -358,8 +359,8 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
                 duration = get_duration_seconds(result)
                 print(f'DEBUG: {primary_title} vs {result_title} (by {result_artist}, {duration}s) = {similarity:.2f}', file=sys.stderr)
                 
-                # Determine status based on similarity
-                if similarity >= 0.6:
+                # Determine status based on the requested conversion threshold.
+                if similarity >= min_similarity:
                     status = 'matched'
                 elif similarity >= 0.3:
                     status = 'ambiguous'
@@ -403,7 +404,7 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
                 
                 similarity = title_similarity(primary_title, result_title)
                 
-                if similarity >= 0.6:
+                if similarity >= min_similarity:
                     status = 'matched'
                 elif similarity >= 0.3:
                     status = 'ambiguous'
@@ -436,7 +437,9 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
             yield candidate[0], candidate[1], candidate[2], candidate[3]
 
 
-def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15):
+def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15, threshold=0.6):
+    if isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or not math.isfinite(threshold) or threshold < 0 or threshold > 1:
+        raise ValueError('Conversion threshold must be a number from 0 to 1')
     results = []
     total = len(tracks)
     result_map = {}
@@ -451,7 +454,7 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15):
         alternatives = []
 
         for result, query_used, similarity, status in search_with_fallback(
-            ytmusic, artist, title, collect_alternatives=True
+            ytmusic, artist, title, min_similarity=threshold, collect_alternatives=True
         ):
             if best_result is None:
                 best_result = result
@@ -704,7 +707,8 @@ def main():
             output = search_tracks(
                 data.get('tracks', []),
                 data.get('playlistName', ''),
-                data.get('createPlaylist', True)
+                data.get('createPlaylist', True),
+                threshold=data.get('threshold', 0.6)
             )
             # Imprimir resultados para el cliente
             for result in output.get('results', []):

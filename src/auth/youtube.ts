@@ -1,8 +1,8 @@
-import { OAuth2Client } from "google-auth-library";
 import { google } from "googleapis";
+import type { Credentials } from "google-auth-library";
 import { ENV } from "../config/env";
 
-const youtubeOAuth2Client = new OAuth2Client(
+const youtubeOAuth2Client = new google.auth.OAuth2(
   ENV.YOUTUBE_CLIENT_ID,
   ENV.YOUTUBE_CLIENT_SECRET,
   ENV.YOUTUBE_REDIRECT_URI
@@ -28,7 +28,7 @@ export const getAuthUrl = (): string => {
 /**
  * Intercambia el código de autorización por tokens.
  */
-export const exchangeCodeForTokens = async (code: string) => {
+export const exchangeCodeForTokens = async (code: string): Promise<Credentials> => {
   const { tokens } = await youtubeOAuth2Client.getToken(code);
   return tokens;
 };

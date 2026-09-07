@@ -62,6 +62,7 @@ const DASH_REGEX = /^(.+?)\s+[-\u2013\u2014]\s+(.+)$/;
 const JAP_SLASH_REGEX = /^(.+?)\s*[\uff0f/]\s*(.+)$/;
 // Matches Japanese corner bracket title
 const CORNER_BRACKET_REGEX = /^\u300c([^\u300d]+)\u300d/;
+const JAPANESE_PARENTHESIS_TITLE_REGEX = /\(([\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]+)\)/u;
 
 function extractFromPath(filePath: string): { artist?: string; title: string } {
   const parts = filePath.replace(/\\/g, "/").split("/").filter((p) => p.length > 0);
@@ -77,36 +78,28 @@ function extractFromPath(filePath: string): { artist?: string; title: string } {
 
   const folder = cleanFolderName(folderName);
 
-  // Pattern: "Text／Artist" or "「Title」TVアニメ／Artist"
+  // Pattern: "Text／Artist" or "「Title」TVアニメ／Artist". The post-slash
+  // segment identifies the artist; the pre-slash segment supplies title context.
   const japSlashMatch = folder.match(JAP_SLASH_REGEX);
   if (japSlashMatch) {
     const beforeSlash = japSlashMatch[1].trim();
     const afterSlash = japSlashMatch[2].trim();
-
-    // "「Title」TVアニメ／Artist" — extract title from brackets
-    const bracketMatch = afterSlash.match(CORNER_BRACKET_REGEX);
-    if (bracketMatch) {
-      return { artist: cleanTrailingBracket(beforeSlash), title: fileTitle || bracketMatch[1] };
-    }
-
-    // "Artist - Title／Series Info" — afterSlash is metadata, beforeSlash has "Artist - Title"
-    // OR "Artist／Series Info" — artist is beforeSlash
+    const bracketMatch = beforeSlash.match(CORNER_BRACKET_REGEX);
     const beforeDashMatch = beforeSlash.match(DASH_REGEX);
-    if (beforeDashMatch) {
-      // beforeSlash is "Artist - Title", use fileTitle for cleaner result
-      return { artist: cleanTrailingBracket(beforeDashMatch[1].trim()), title: fileTitle || beforeDashMatch[2].trim() };
-    }
-    
-    // beforeSlash has no dash, it's just the artist
-    return { artist: cleanTrailingBracket(beforeSlash), title: fileTitle };
+    return {
+      artist: cleanTrailingBracket(afterSlash),
+      title: fileTitle || bracketMatch?.[1] || beforeDashMatch?.[2].trim() || beforeSlash,
+    };
   }
 
+  // Prefer a Japanese title in folder parentheses over a generic filename.
+  const japaneseParenthesisTitle = folderName.match(JAPANESE_PARENTHESIS_TITLE_REGEX)?.[1];
   // Pattern: "Artist - FolderTitle" with any dash variant
   const dashMatch = folder.match(DASH_REGEX);
   if (dashMatch) {
     const artist = cleanTrailingBracket(dashMatch[1].trim());
     const cleanedTitle = removeDuplicateArtistFromTitle(artist, fileTitle);
-    return { artist, title: cleanedTitle || fileTitle };
+    return { artist, title: japaneseParenthesisTitle || cleanedTitle || fileTitle };
   }
 
   // Fallback: try extracting from fileTitle itself

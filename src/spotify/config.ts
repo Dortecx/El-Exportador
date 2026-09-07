@@ -29,7 +29,7 @@ export function getSpotifyClientConfig(options: {
 } = {}): SpotifyClientConfig {
   const env = options.env ?? process.env;
   const supported = isSpotifyRuntimeSupported(options.platform);
-  const clientId = env.SPOTIFY_CLIENT_ID?.trim() || ENV.SPOTIFY_CLIENT_ID.trim();
+  const clientId = env.SPOTIFY_CLIENT_ID?.trim() || (options.env === undefined ? ENV.SPOTIFY_CLIENT_ID.trim() : "");
   const redirectUri = resolveSpotifyRedirectUri(options.port ?? env.PORT ?? ENV.PORT);
 
   if (!supported) {
