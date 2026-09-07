@@ -204,6 +204,24 @@ describe("Parser", () => {
       expect(tracks[0].title).toBe("晴る");
     });
 
+    it("should retain the pre-slash artist when title folders end in series metadata", () => {
+      const tracks = parseM3U("Artist - Title／TV Anime Season 2/track.flac", false);
+
+      expect(tracks[0]).toMatchObject({ artist: "Artist", title: "track" });
+    });
+
+    it("should retain the pre-slash artist when artist folders end in series metadata", () => {
+      const tracks = parseM3U("Artist／TV Anime Season 2/track.flac", false);
+
+      expect(tracks[0]).toMatchObject({ artist: "Artist", title: "track" });
+    });
+
+    it("should never use anime or quality suffixes as slash-path artists", () => {
+      const tracks = parseM3U("Artist - Title／TVアニメ 24bit 96kHz/track.flac", false);
+
+      expect(tracks[0].artist).toBe("Artist");
+    });
+
     it("should handle em dash as separator", () => {
       const content = "amazarashi – Sayonaragokko/Sayonaragokko.flac";
 

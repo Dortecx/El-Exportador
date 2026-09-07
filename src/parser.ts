@@ -63,6 +63,12 @@ const JAP_SLASH_REGEX = /^(.+?)\s*[\uff0f/]\s*(.+)$/;
 // Matches Japanese corner bracket title
 const CORNER_BRACKET_REGEX = /^\u300c([^\u300d]+)\u300d/;
 const JAPANESE_PARENTHESIS_TITLE_REGEX = /\(([\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]+)\)/u;
+const SLASH_METADATA_REGEX = /(?:\b(?:anime|tv|season|series|episode|cour|ost|soundtrack|flac|hi-res|mp3|aac|\d+\s*bit|\d+\s*k(?:hz)?|blu-?ray)\b|アニメ|シーズン|画質|品質)/i;
+
+function isCrediblePostSlashArtist(beforeSlash: string, afterSlash: string): boolean {
+  if (SLASH_METADATA_REGEX.test(afterSlash)) return false;
+  return DASH_REGEX.test(beforeSlash) || CORNER_BRACKET_REGEX.test(beforeSlash);
+}
 
 function extractFromPath(filePath: string): { artist?: string; title: string } {
   const parts = filePath.replace(/\\/g, "/").split("/").filter((p) => p.length > 0);
@@ -78,17 +84,25 @@ function extractFromPath(filePath: string): { artist?: string; title: string } {
 
   const folder = cleanFolderName(folderName);
 
-  // Pattern: "Text／Artist" or "「Title」TVアニメ／Artist". The post-slash
-  // segment identifies the artist; the pre-slash segment supplies title context.
+  // Keep the pre-slash artist unless the folder structure clearly identifies a
+  // post-slash artist. Series, season, anime, and quality suffixes are metadata.
   const japSlashMatch = folder.match(JAP_SLASH_REGEX);
   if (japSlashMatch) {
     const beforeSlash = japSlashMatch[1].trim();
     const afterSlash = japSlashMatch[2].trim();
     const bracketMatch = beforeSlash.match(CORNER_BRACKET_REGEX);
     const beforeDashMatch = beforeSlash.match(DASH_REGEX);
+
+    if (isCrediblePostSlashArtist(beforeSlash, afterSlash)) {
+      return {
+        artist: cleanTrailingBracket(afterSlash),
+        title: fileTitle || bracketMatch?.[1] || beforeDashMatch?.[2].trim() || beforeSlash,
+      };
+    }
+
     return {
-      artist: cleanTrailingBracket(afterSlash),
-      title: fileTitle || bracketMatch?.[1] || beforeDashMatch?.[2].trim() || beforeSlash,
+      artist: cleanTrailingBracket(beforeDashMatch?.[1].trim() || beforeSlash),
+      title: fileTitle || beforeDashMatch?.[2].trim() || bracketMatch?.[1] || beforeSlash,
     };
   }
 

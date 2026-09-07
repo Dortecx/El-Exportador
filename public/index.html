@@ -206,6 +206,12 @@
       animation: card-border-glitch 6s infinite;
     }
 
+    .conversion-panel {
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
     label {
       display: block;
       margin-bottom: 0.5rem;
@@ -1026,7 +1032,7 @@
     <h1>El Exportador</h1>
     <p class="subtitle" data-i18n="subtitle">Import your music library to YouTube Music</p>
 
-    <div class="card">
+    <div class="card conversion-panel">
       <label class="file-upload" id="dropZone" for="fileInput" tabindex="0" role="button" aria-describedby="uploadHintText">
         <div class="icon">[FILE]</div>
         <div id="uploadText" data-i18n="uploadDrop">Drop .m3u file here</div>
@@ -1100,11 +1106,9 @@
           await startGuidedAuth();
         };
       </script>
-      </div>
 
       <div style="margin-top: 0.75rem;">
         <button class="btn" id="startBtn" disabled>[ EXECUTE ]</button>
-            <button class="btn" id="cancelBtn" type="button" hidden data-i18n="cancelConversion">[ CANCEL ]</button>
       </div>
     </div>
 
@@ -1219,7 +1223,6 @@
     const spotifyAuthButtonLabel = document.getElementById('spotifyAuthButtonLabel');
     const youtubeAuthButtonLabel = document.getElementById('youtubeAuthButtonLabel');
     const startBtn = document.getElementById('startBtn');
-        const cancelBtn = document.getElementById('cancelBtn');
 
     const summaryCard = document.getElementById('summaryCard');
     const summaryGrid = document.getElementById('summaryGrid');
@@ -2050,7 +2053,6 @@
         // Crear EventSource para recibir actualizaciones de progreso
         const runId = crypto.getRandomValues(new Uint8Array(32)).reduce((value, byte) => value + byte.toString(16).padStart(2, '0'), '');
                 conversionRun.runId = runId;
-                cancelBtn.hidden = false;
             const capability = await ensureLocalUiCapability();
             conversionRun.eventSource = new EventSource(`/api/convert-progress?clientId=${encodeURIComponent(localUiClientId)}&runId=${encodeURIComponent(runId)}&capability=${encodeURIComponent(capability)}`);
             eventSource = conversionRun.eventSource;
@@ -2233,26 +2235,7 @@
     };
 
     // Asignar el evento onclick al botón [EXECUTE]
-    cancelBtn.onclick = async () => {
-          const run = activeConversionRun;
-          if (!run?.runId || run.settled) return;
-          cancelBtn.disabled = true;
-          progressLabel.textContent = t('cancelling');
-          try {
-            await localMutationFetch('/api/convert/cancel', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ runId: run.runId }),
-            });
-            run.eventSource?.close();
-            run.settled = true;
-            progressLabel.textContent = t('cancelled');
-            startBtn.disabled = false;
-            startBtn.textContent = "[ EXECUTE ]";
-            cancelBtn.hidden = true;
-          } finally {
-            cancelBtn.disabled = false;
-          }
-        };
-        startBtn.onclick = startConversion;
+    startBtn.onclick = startConversion;
 
     // Restaurar estado desde localStorage al cargar la página
     const restoreState = () => {

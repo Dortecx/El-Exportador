@@ -289,4 +289,21 @@ describe("provider status and destination UI", () => {
     expect(html).toContain("await refreshProviderStates();");
     expect(html).toContain("setProviderAuthStatus('youtube', youtubeAuthenticated ? t('authConnected') : t('authUnauthenticated')");
   });
+
+  it("keeps the upload, connection status, and Execute control in one bounded panel without cancellation UI", () => {
+    const upperPanelStart = html.indexOf('<div class="card conversion-panel">');
+    const progressPanelStart = html.indexOf('<div class="card" style="margin-top: 1.5rem; max-width: 800px;');
+    const upperPanel = html.slice(upperPanelStart, progressPanelStart);
+
+    expect(upperPanelStart).toBeGreaterThan(-1);
+    expect(html).toContain('.conversion-panel {');
+    expect(upperPanel).toContain('<div class="icon">[FILE]</div>');
+    expect(upperPanel).toContain('data-i18n="uploadDrop">Drop .m3u file here</div>');
+    expect(upperPanel).toContain('id="providerAuthStatus"');
+    expect(upperPanel).toContain('id="startBtn" disabled>[ EXECUTE ]</button>');
+    expect(html).toContain('filename.textContent = `[OK] ${file.name}`;');
+    expect(html).not.toContain('file.name.toUpperCase');
+    expect(html).not.toContain('id="cancelBtn"');
+    expect(html).not.toContain('const cancelBtn');
+  });
 });
