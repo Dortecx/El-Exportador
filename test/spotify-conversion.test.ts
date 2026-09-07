@@ -351,6 +351,7 @@ describe("Spotify conversion core", () => {
     });
     await expect(cancelledApi.addTracks("playlist-1", uris)).resolves.toEqual({
       cancelled: true,
+      indeterminateUris: uris.slice(100),
       insertedUris: uris.slice(0, 100),
       snapshotId: "snapshot-1",
     });
@@ -361,7 +362,11 @@ describe("Spotify conversion core", () => {
       return response({ snapshot_id: "snapshot-1" });
     });
     const api = new SpotifyApi({ accessToken: "test-token", fetch });
-    await expect(api.addTracks("playlist-1", uris, () => cancelledBeforeSecondBatch)).resolves.toMatchObject({ cancelled: true, insertedUris: uris.slice(0, 100) });
+    await expect(api.addTracks("playlist-1", uris, () => cancelledBeforeSecondBatch)).resolves.toEqual({
+      cancelled: true,
+      insertedUris: uris.slice(0, 100),
+      snapshotId: "snapshot-1",
+    });
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -397,5 +402,45 @@ describe("Spotify conversion core", () => {
     });
     expect(afterCreation).toMatchObject({ cancelled: true, remotePlaylist: { id: "playlist-1", insertedUris: [], status: "partial" } });
     expect(createdApi.addTracks).not.toHaveBeenCalled();
+  });
+
+  it("keeps confirmed additions separate from a cancelled in-flight add POST through conversion", async () => {
+    const uris = Array.from({ length: 101 }, (_, index) => `spotify:track:${index}`);
+    let requests = 0;
+    const api = new SpotifyApi({
+      accessToken: "test-token",
+      fetch: vi.fn(async () => {
+        requests += 1;
+        if (requests === 1) return response({ snapshot_id: "snapshot-1" });
+        throw new DOMException("Spotify operation cancelled", "AbortError");
+      }),
+    });
+    await expect(api.addTracks("playlist-1", uris, () => requests === 2)).resolves.toEqual({
+      cancelled: true,
+      indeterminateUris: uris.slice(100),
+      insertedUris: uris.slice(0, 100),
+      snapshotId: "snapshot-1",
+    });
+
+    const conversionApi = {
+      addTracks: vi.fn(async () => ({
+        cancelled: true,
+        indeterminateUris: ["spotify:track:track-2"],
+        insertedUris: ["spotify:track:track-1"],
+      })),
+      createPrivatePlaylist: vi.fn(async () => ({ id: "playlist-1", isPrivate: true as const, name: "My playlist" })),
+      getProfile: vi.fn(async () => ({ id: "user-1" })),
+      searchTracks: vi.fn(async () => [matchingCandidate]),
+    };
+    const converted = await convertSpotifyTracks(conversionApi, [source], { playlistName: "My playlist" });
+    expect(converted).toMatchObject({
+      cancelled: true,
+      remotePlaylist: {
+        id: "playlist-1",
+        indeterminateUris: ["spotify:track:track-2"],
+        insertedUris: ["spotify:track:track-1"],
+        status: "partial",
+      },
+    });
   });
 });

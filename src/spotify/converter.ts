@@ -98,7 +98,17 @@ export async function convertSpotifyTracks(
     const added = await api.addTracks(playlist.id, uris, () => lastTrack ? options.shouldCancel?.(tracks.length, lastTrack) ?? false : false);
     const conversionCancelled = cancelled || added.cancelled;
     const status = conversionCancelled || outcomes.some((outcome) => outcome.status !== "matched") ? "partial" : "created";
-    return { cancelled: conversionCancelled, outcomes, remotePlaylist: { id: playlist.id, insertedUris: added.insertedUris, status, ...(playlist.url ? { url: playlist.url } : {}) } };
+    return {
+      cancelled: conversionCancelled,
+      outcomes,
+      remotePlaylist: {
+        id: playlist.id,
+        insertedUris: added.insertedUris,
+        ...(added.indeterminateUris?.length ? { indeterminateUris: added.indeterminateUris } : {}),
+        status,
+        ...(playlist.url ? { url: playlist.url } : {}),
+      },
+    };
   } catch (error) {
     const insertedUris = error instanceof Error && "insertedUris" in error && Array.isArray(error.insertedUris)
       ? error.insertedUris.filter((uri): uri is string => typeof uri === "string")

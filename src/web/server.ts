@@ -756,7 +756,7 @@ app.post("/api/convert", async (req, res) => {
           manualReviewTracks,
           remotePlaylist,
           sideEffects: {
-            inserted: remotePlaylist.status === "indeterminate" ? "indeterminate" : remotePlaylist.status === "not-created" ? 0 : remotePlaylist.insertedUris.length,
+            inserted: remotePlaylist.status === "indeterminate" || (remotePlaylist.status !== "not-created" && remotePlaylist.indeterminateUris?.length) ? "indeterminate" : remotePlaylist.status === "not-created" ? 0 : remotePlaylist.insertedUris.length,
             playlist: remotePlaylist.status,
           },
           ...(remotePlaylist.status === "created" || remotePlaylist.status === "partial" ? { playlistId: remotePlaylist.id, playlistUrl: remotePlaylist.url } : {}),

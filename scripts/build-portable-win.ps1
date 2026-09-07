@@ -65,6 +65,7 @@ try {
 $runtimeSources = @(
   "src\web\server.ts",
   "src\web\guidedBrowserAuth.ts",
+  "src\config\env.ts",
   "src\spotify\config.ts",
   "src\spotify\tokenStore.ts",
   "src\spotify\types.ts",

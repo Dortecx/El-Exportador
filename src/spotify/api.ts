@@ -181,17 +181,20 @@ export class SpotifyApi {
     for (let offset = 0; offset < uris.length; offset += 100) {
       if (shouldCancel?.()) return { cancelled: true, insertedUris, snapshotId };
       const batch = uris.slice(offset, offset + 100);
+      let postDispatched = false;
       try {
         const body = await (await this.request(`/playlists/${encodeURIComponent(playlistId)}/items`, {
           body: JSON.stringify({ uris: batch }),
           headers: { "content-type": "application/json" },
           method: "POST",
-        }, shouldCancel)).json() as { snapshot_id?: string };
+        }, shouldCancel, () => { postDispatched = true; })).json() as { snapshot_id?: string };
         snapshotId = body.snapshot_id;
         insertedUris.push(...batch);
       } catch (error) {
         if (shouldCancel?.() || error instanceof DOMException && error.name === "AbortError") {
-          return { cancelled: true, insertedUris, snapshotId };
+          // A dispatched POST can have succeeded even though cancellation prevented
+          // confirmation. Keep only confirmed prior batches separate from this batch.
+          return { cancelled: true, insertedUris, ...(postDispatched ? { indeterminateUris: batch } : {}), snapshotId };
         }
         // Never represent the failed batch as absent: a transport/provider failure
         // after POST can still have added it remotely.

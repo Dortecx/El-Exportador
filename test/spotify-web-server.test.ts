@@ -210,6 +210,39 @@ describe("Spotify web backend", () => {
     expect(result.body).not.toHaveProperty("playlistUrl");
   });
 
+  it("reports an indeterminate Spotify add batch while retaining only confirmed additions", async () => {
+    setSpotifyWebDependenciesForTest({
+      convert: vi.fn(async () => ({
+        cancelled: true,
+        outcomes: [],
+        remotePlaylist: {
+          id: "playlist-1",
+          indeterminateUris: ["spotify:track:unconfirmed"],
+          insertedUris: ["spotify:track:confirmed"],
+          status: "partial" as const,
+        },
+      })),
+      getClientConfig: () => ({ clientId: "test-client", enabled: true, reason: null, redirectUri: "http://localhost/callback", supported: true }),
+      getTokenState: () => ({ accessToken: "test-access", expiresAtEpochMs: 1, refreshToken: "test-refresh", scope: "", tokenType: "Bearer" }),
+    });
+
+    const result = await request("/api/convert", { destination: "spotify", playlistName: "My playlist", tracks: [{ artist: "Artist", title: "Song" }] });
+    expect(result).toEqual({
+      body: expect.objectContaining({
+        cancelled: true,
+        remotePlaylist: {
+          id: "playlist-1",
+          indeterminateUris: ["spotify:track:unconfirmed"],
+          insertedUris: ["spotify:track:confirmed"],
+          status: "partial",
+        },
+        sideEffects: { inserted: "indeterminate", playlist: "partial" },
+        success: true,
+      }),
+      status: 200,
+    });
+  });
+
   it("streams fake Spotify search progress over SSE before its result", async () => {
     const convert = vi.fn(async (_api, tracks, options) => {
       options.onProgress?.(1, tracks.length, tracks[0].artist, tracks[0].title, "searching");

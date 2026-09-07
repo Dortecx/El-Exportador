@@ -23,6 +23,10 @@ describe("Spotify portable configuration", () => {
     for (const module of ["api.ts", "config.ts", "converter.ts", "matcher.ts", "oauth.ts", "tokenStore.ts", "types.ts"]) {
       expect(portableBuildScript).toContain(`src\\spotify\\${module}`);
     }
+    // src/spotify/config.ts directly imports ../config/env, so the portable allowlist
+    // must stage that module and create its destination parent before copying it.
+    expect(portableBuildScript).toContain("src\\config\\env.ts");
+    expect(portableBuildScript).toContain("New-Item -ItemType Directory -Path $toParent -Force");
     expect(portableBuildScript).not.toContain("SPOTIFY_CLIENT_SECRET");
     expect(launcherTemplate).not.toContain("SPOTIFY_CLIENT_SECRET");
   });
