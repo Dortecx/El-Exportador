@@ -335,4 +335,19 @@ describe("provider status and destination UI", () => {
         expect(renderedFilename).toBe("[OK] NO.m3u");
     expect(html).toContain('filename.textContent = `[OK] ${file.name}`;');
   });
+
+  it("scopes prominent sentence-case styling to the upload instruction", () => {
+    const uploadTextRule = html.match(/\.file-upload #uploadText \{[\s\S]*?\n    \}/)?.[0] || "";
+    const hintRule = html.match(/\.file-upload \.hint \{[\s\S]*?\n    \}/)?.[0] || "";
+
+    expect(uploadTextRule).toContain('font-size: 1rem;');
+    expect(uploadTextRule).toContain('font-weight: bold;');
+    expect(uploadTextRule).toContain('text-transform: none;');
+    expect(uploadTextRule).toContain('opacity: 1;');
+    expect(html).not.toMatch(/^\s*#uploadText\s*\{/m);
+    expect(hintRule).toContain('color: #336699;');
+    expect(hintRule).toContain('font-size: 0.875rem;');
+    expect(hintRule).toContain('text-transform: none;');
+    expect(hintRule).not.toContain('opacity:');
+  });
 });
