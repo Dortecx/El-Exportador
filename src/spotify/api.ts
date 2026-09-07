@@ -44,6 +44,7 @@ function retryAfterMilliseconds(response: Response): number {
 }
 
 function candidate(item: {
+  album?: { name?: string };
   artists?: { name?: string }[];
   duration_ms?: number;
   id?: string;
@@ -52,6 +53,7 @@ function candidate(item: {
 }): SpotifyTrackCandidate | null {
   if (!item.id || !item.name || !item.uri) return null;
   return {
+    ...(item.album?.name ? { albumName: item.album.name } : {}),
     artists: (item.artists ?? []).flatMap((artist) => artist.name ? [{ name: artist.name }] : []),
     durationMs: item.duration_ms,
     id: item.id,

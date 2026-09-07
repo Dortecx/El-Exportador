@@ -40,8 +40,9 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-oauth-popup": "^1.0.5",
-    "zustand": "^5.0.13",
-    "tsx": "^4.21.0"
+    "tsx": "^4.21.0",
+    "wanakana": "^5.3.1",
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",

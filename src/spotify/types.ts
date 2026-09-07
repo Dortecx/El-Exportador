@@ -45,6 +45,7 @@ export type SpotifySourceTrack = {
 };
 
 export type SpotifyTrackCandidate = {
+  albumName?: string;
   artists: { name: string }[];
   durationMs?: number;
   id: string;

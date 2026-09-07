@@ -118,7 +118,8 @@ describe("provider status and destination UI", () => {
     expect(html).toContain("noSuggestedMatch: 'No suggested match. Search YouTube Music");
   });
 
-  it("renders and selects Spotify candidates exclusively by URI", () => {
+  it("renders Spotify albumName when supplied and selects candidates exclusively by URI", () => {
+    expect(html).toContain("const album = candidate.albumName || candidate.album?.name || candidate.album || t('unknownAlbum');");
     expect(html).toContain("function getManualCandidateId(candidate)");
     expect(html).toContain("lastConversionProvider === 'spotify' ? candidate?.uri : candidate?.videoId");
     expect(html).toContain("option.dataset.candidateId = candidateId;");

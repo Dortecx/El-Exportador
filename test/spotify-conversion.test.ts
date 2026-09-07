@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { SpotifyApi, SpotifyPlaylistCreationIndeterminateError } from "../src/spotify/api.js";
 import { convertSpotifyTracks } from "../src/spotify/converter.js";
-import { matchSpotifyTrack } from "../src/spotify/matcher.js";
+import { buildSpotifySearchQueries, matchSpotifyTrack } from "../src/spotify/matcher.js";
 import type { SpotifyFetch } from "../src/spotify/types.js";
 
 function response(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
@@ -19,6 +19,7 @@ function fakeFetch(responses: Response[]): SpotifyFetch {
 const source = { artist: "The Artist", durationMs: 180_000, title: "A Song" };
 
 const matchingItem = {
+  album: { name: "The Album" },
   artists: [{ name: "The Artist" }],
   duration_ms: 180_500,
   id: "track-1",
@@ -84,7 +85,7 @@ describe("Spotify conversion core", () => {
 
     await expect(api.getProfile()).resolves.toEqual({ displayName: "Test User", id: "user-1" });
     await expect(api.createPrivatePlaylist("user-1", "My playlist")).resolves.toMatchObject({ id: "playlist-1", isPrivate: true });
-    await expect(api.searchTracks("The Artist A Song")).resolves.toEqual([expect.objectContaining({ uri: "spotify:track:track-1" })]);
+    await expect(api.searchTracks("The Artist A Song")).resolves.toEqual([expect.objectContaining({ albumName: "The Album", uri: "spotify:track:track-1" })]);
     await expect(api.addTracks("playlist-1", ["spotify:track:track-1"])).resolves.toEqual({ cancelled: false, insertedUris: ["spotify:track:track-1"], snapshotId: "snapshot-1" });
     expect(sleep).toHaveBeenCalledWith(2_000);
     expect(fetch).toHaveBeenCalledTimes(5);
@@ -138,6 +139,41 @@ describe("Spotify conversion core", () => {
     expect(matchSpotifyTrack(source, [{ ...matchingCandidate, artists: [{ name: "Another Artist" }] }])).toMatchObject({ status: "unmatched" });
   });
 
+  it("matches a unique kana/rōmaji title and artist pair but never infers a Kanji reading", () => {
+    const kanaSource = { artist: "ヨルシカ", durationMs: 180_000, title: "タダキミニハレ" };
+    const kanaCandidate = { ...matchingCandidate, artists: [{ name: "Yorushika" }], title: "Tada Kimi ni Hare" };
+    expect(matchSpotifyTrack(kanaSource, [kanaCandidate])).toMatchObject({ status: "matched", candidate: { uri: "spotify:track:track-1" } });
+
+    const kanjiSource = { ...kanaSource, title: "ただ君に晴れ" };
+    const romajiCandidate = { ...matchingCandidate, artists: [{ name: "Yorushika" }], title: "Tada Kimi ni Hare" };
+    expect(matchSpotifyTrack(kanjiSource, [romajiCandidate])).toMatchObject({ status: "unmatched" });
+  });
+
+  it("orders sequential search variants and caps unique URI candidates at 15", async () => {
+    const track = { artist: "The Artist", title: "A Song (Live)" };
+    const candidates = Array.from({ length: 18 }, (_, index) => ({
+      ...matchingCandidate,
+      id: `track-${index}`,
+      title: "A Song (Live)",
+      uri: `spotify:track:${String(index).padStart(2, "0")}`,
+    }));
+    const searchTracks = vi.fn(async (query: string) => query === "The Artist A Song (Live)"
+      ? candidates.slice(0, 10)
+      : [candidates[0]!, ...candidates.slice(10)]);
+    const api = { addTracks: vi.fn(), createPrivatePlaylist: vi.fn(), getProfile: vi.fn(), searchTracks };
+
+    const result = await convertSpotifyTracks(api, [track], { dryRun: true, playlistName: "My playlist" });
+
+    expect(buildSpotifySearchQueries(track)).toEqual([
+      "The Artist A Song (Live)",
+      'track:"A Song (Live)" artist:"The Artist"',
+      "The Artist A Song",
+    ]);
+    expect(searchTracks.mock.calls.map(([query]) => query)).toEqual(buildSpotifySearchQueries(track).slice(0, 2));
+    expect(result.outcomes[0]).toMatchObject({ alternatives: expect.any(Array), status: "ambiguous" });
+    expect((result.outcomes[0] as { alternatives: unknown[] }).alternatives).toHaveLength(15);
+  });
+
   it("dry-runs without creating a playlist and only inserts matched URIs while reporting ambiguous, unmatched, skipped, cancelled, and partial remote state", async () => {
     const api = {
       addTracks: vi.fn(async () => ({ cancelled: false, insertedUris: ["spotify:track:track-1"], snapshotId: "snapshot-1" })),
@@ -183,7 +219,7 @@ describe("Spotify conversion core", () => {
     expect(onProgress).toHaveBeenNthCalledWith(2, 2, 2, "The Artist", "Second Song", "searching");
   });
 
-  it("passes each search a cancellation check that reflects converter cancellation", async () => {
+  it("stops sequential query variants when their cancellation check reflects converter cancellation", async () => {
     let cancelled = false;
     const searchTracks = vi.fn(async (_query: string, limitOrShouldCancel?: number | (() => boolean)) => {
       const shouldCancel = typeof limitOrShouldCancel === "function" ? limitOrShouldCancel : undefined;
@@ -202,6 +238,7 @@ describe("Spotify conversion core", () => {
     const result = await convertSpotifyTracks(api, [source], { dryRun: true, playlistName: "My playlist", shouldCancel: () => cancelled });
 
     expect(searchTracks).toHaveBeenCalledWith(expect.any(String), expect.any(Function));
+    expect(searchTracks).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ cancelled: true, remotePlaylist: { status: "not-created" } });
   });
 
@@ -253,7 +290,7 @@ describe("Spotify conversion core", () => {
 
     const conversion = convertSpotifyTracks(api, tracks, { dryRun: true, playlistName: "My playlist" });
     await vi.waitFor(() => expect(api.searchTracks).toHaveBeenCalledTimes(15));
-    while (api.searchTracks.mock.calls.length < tracks.length) {
+    while (api.searchTracks.mock.calls.length < tracks.length * 2) {
       await vi.waitFor(() => expect(resolvers.length).toBeGreaterThan(0));
       resolvers.shift()!();
       await Promise.resolve();
@@ -285,21 +322,22 @@ describe("Spotify conversion core", () => {
   });
 
   it("shares a single Retry-After cooldown across concurrent searches", async () => {
-    let releaseCooldown!: () => void;
-    const sleep = vi.fn(() => new Promise<void>((resolve) => { releaseCooldown = resolve; }));
-    const fetch = fakeFetch([
-      response({}, 429, { "retry-after": "1" }),
-      response({}, 429, { "retry-after": "1" }),
-      response({ tracks: { items: [] } }),
-      response({ tracks: { items: [] } }),
-    ]);
-    const api = new SpotifyApi({ accessToken: "test-token", fetch, maxRetries: 1, sleep });
+    const cooldown = Promise.withResolvers<void>();
+    const sleep = vi.fn(() => cooldown.promise);
+    const initialResponses = [Promise.withResolvers<Response>(), Promise.withResolvers<Response>()];
+    let initialResponseIndex = 0;
+    const fetch = vi.fn(() => initialResponses[initialResponseIndex++]?.promise ?? Promise.resolve(response({ tracks: { items: [] } })));
+    const now = vi.fn(() => 0);
+    const api = new SpotifyApi({ accessToken: "test-token", fetch, maxRetries: 1, now, sleep });
     const first = api.searchTracks("first");
     const second = api.searchTracks("second");
 
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    initialResponses[0]?.resolve(response({}, 429, { "retry-after": "1" }));
+    initialResponses[1]?.resolve(response({}, 429, { "retry-after": "1" }));
+    await vi.waitFor(() => expect(now).toHaveBeenCalledTimes(3));
     expect(sleep).toHaveBeenCalledOnce();
-    releaseCooldown();
+    cooldown.resolve();
     await expect(Promise.all([first, second])).resolves.toEqual([[], []]);
   });
 

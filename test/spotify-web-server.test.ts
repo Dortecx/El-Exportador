@@ -272,7 +272,7 @@ describe("Spotify web backend", () => {
   });
 
   it("streams normalized Spotify manual-review tracks for ambiguous and unmatched outcomes", async () => {
-    const ambiguousCandidate = { artists: [{ name: "Candidate Artist" }], id: "candidate-1", title: "Candidate Song", uri: "spotify:track:candidate-1" };
+    const ambiguousCandidate = { albumName: "Candidate Album", artists: [{ name: "Candidate Artist" }], id: "candidate-1", title: "Candidate Song", uri: "spotify:track:candidate-1" };
     const alternative = { artists: [{ name: "Alternative Artist" }], id: "candidate-2", title: "Alternative Song", uri: "spotify:track:candidate-2" };
     setSpotifyWebDependenciesForTest({
       convert: vi.fn(async () => ({

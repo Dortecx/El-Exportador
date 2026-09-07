@@ -1,5 +1,5 @@
 import { SpotifyPlaylistCreationIndeterminateError } from "./api";
-import { buildSpotifySearchQuery, matchSpotifyTrack } from "./matcher";
+import { buildSpotifySearchQueries, matchSpotifyTrack } from "./matcher";
 import type { SpotifyAddTracksResult, SpotifyCancellationCheck, SpotifyConversionOutcome, SpotifyConversionResult, SpotifyPlaylist, SpotifyProfile, SpotifyProgressCallback, SpotifySourceTrack, SpotifyTrackCandidate } from "./types";
 
 const MAX_CONCURRENT_SPOTIFY_SEARCHES = 15;
@@ -50,10 +50,26 @@ export async function convertSpotifyTracks(
         return;
       }
       try {
-        const candidates = await api.searchTracks(buildSpotifySearchQuery(track), () => options.shouldCancel?.(index, track) ?? false);
-        if (options.shouldCancel?.(index, track)) {
-          cancelled = true;
-          return;
+        const candidates: SpotifyTrackCandidate[] = [];
+        const seenUris = new Set<string>();
+        const shouldCancel = () => options.shouldCancel?.(index, track) ?? false;
+        for (const query of buildSpotifySearchQueries(track)) {
+          if (shouldCancel()) {
+            cancelled = true;
+            return;
+          }
+          const results = await api.searchTracks(query, shouldCancel);
+          if (shouldCancel()) {
+            cancelled = true;
+            return;
+          }
+          for (const candidate of results) {
+            if (seenUris.has(candidate.uri)) continue;
+            seenUris.add(candidate.uri);
+            candidates.push(candidate);
+            if (candidates.length === 15) break;
+          }
+          if (candidates.length === 15) break;
         }
         outcomesByIndex[index] = matchSpotifyTrack(track, candidates);
       } catch (error) {

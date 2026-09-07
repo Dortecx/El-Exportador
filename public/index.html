@@ -1678,7 +1678,7 @@
           if (lastConversionProvider === 'spotify') {
             const details = document.createElement('div');
             details.className = 'manual-result-artist';
-            const album = candidate.album?.name || candidate.album || t('unknownAlbum');
+            const album = candidate.albumName || candidate.album?.name || candidate.album || t('unknownAlbum');
             const durationMs = Number(candidate.durationMs ?? candidate.duration_ms);
             const duration = Number.isFinite(durationMs) ? `${Math.floor(durationMs / 60000)}:${String(Math.floor(durationMs / 1000) % 60).padStart(2, '0')}` : '';
             details.textContent = [album, duration].filter(Boolean).join(' · ');
