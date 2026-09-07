@@ -307,6 +307,7 @@ describe("provider status and destination UI", () => {
         expect(html).toContain('.file-upload.has-file {');
     expect(config).toContain('<div class="icon">[FILE]</div>');
     expect(config).toContain('data-i18n="uploadDrop">Drop .m3u file here</div>');
+    expect(config).toContain('id="fileInput" accept=".m3u,.m3u8" onchange="handleFileFromInput(this)">\n      </label>\n      <div class="track-count"');
     expect(config).toContain('id="m3uContent"');
     expect(config).toContain('id="playlistName"');
     expect(config).toContain('id="threshold"');
