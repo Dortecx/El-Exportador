@@ -7,7 +7,6 @@ El Exportador convierte listas de reproducción `.m3u` en listas de YouTube Musi
 ## Funciones
 
 - Sube una lista `.m3u` y crea la lista correspondiente en YouTube Music o Spotify.
-- Consulta el progreso, cancela una ejecución y revisa los efectos parciales confirmados sin asumir que una inserción interrumpida no ocurrió.
 - Empieza en Modo de prueba para revisar pistas coincidentes, no encontradas y ambiguas sin crear una lista; desactívalo solo cuando quieras crearla.
 - Revisa manualmente las pistas no encontradas o ambiguas antes de añadir selecciones a una lista creada sin modo de prueba.
 
