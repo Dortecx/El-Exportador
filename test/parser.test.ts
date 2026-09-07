@@ -204,6 +204,36 @@ describe("Parser", () => {
       expect(tracks[0].title).toBe("晴る");
     });
 
+    it("walks past metadata parents to use an artist-title ancestor while keeping the filename title", () => {
+      const tracks = parseM3U("Yorushika - Haru / Sousou no Frieren OP Theme FLAC / 01 - 晴る.flac", false);
+
+      expect(tracks[0]).toMatchObject({ artist: "Yorushika", title: "晴る" });
+    });
+
+    it("uses a simple artist ancestor after skipping nested metadata folders", () => {
+      const tracks = parseM3U("SIX LOUNGE / metadata / 01 - title.flac", false);
+
+      expect(tracks[0]).toMatchObject({ artist: "SIX LOUNGE", title: "title" });
+    });
+
+    it.each(["01", "02", "1.", "CD1", "Disc 2"])("skips track-number-only ancestor folder %s", (trackFolder) => {
+      const tracks = parseM3U(`Artist Name / ${trackFolder} / metadata / 01 - Track.flac`, false);
+
+      expect(tracks[0]).toMatchObject({ artist: "Artist Name", title: "Track" });
+    });
+
+    it("skips series and quality ancestors rather than treating them as artists", () => {
+      const tracks = parseM3U("Artist Name / TV Anime Season 2 / FLAC / 01 - Track.flac", false);
+
+      expect(tracks[0]).toMatchObject({ artist: "Artist Name", title: "Track" });
+    });
+
+    it("should prioritize a track-number-cleaned filename artist-title pair over slash folder metadata", () => {
+      const tracks = parseM3U("Sousou no Frieren OP Theme - Haru／Yorushika/01. Artist Name - Song Name.flac", false);
+
+      expect(tracks[0]).toMatchObject({ artist: "Artist Name", title: "Song Name" });
+    });
+
     it("should retain the pre-slash artist when title folders end in series metadata", () => {
       const tracks = parseM3U("Artist - Title／TV Anime Season 2/track.flac", false);
 

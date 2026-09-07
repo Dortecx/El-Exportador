@@ -63,24 +63,70 @@ const JAP_SLASH_REGEX = /^(.+?)\s*[\uff0f/]\s*(.+)$/;
 // Matches Japanese corner bracket title
 const CORNER_BRACKET_REGEX = /^\u300c([^\u300d]+)\u300d/;
 const JAPANESE_PARENTHESIS_TITLE_REGEX = /\(([\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]+)\)/u;
-const SLASH_METADATA_REGEX = /(?:\b(?:anime|tv|season|series|episode|cour|ost|soundtrack|flac|hi-res|mp3|aac|\d+\s*bit|\d+\s*k(?:hz)?|blu-?ray)\b|アニメ|シーズン|画質|品質)/i;
+const SLASH_METADATA_REGEX = /(?:\b(?:anime|tv|season|series|episode|cour|ost|soundtrack|flac|hi-res|mp3|aac|\d+\s*bit|\d+\s*k(?:hz)?|blu-?ray|op|theme)\b|アニメ|シーズン|画質|品質)/i;
+const LIBRARY_FOLDER_REGEX = /^(?:home|music|audio|downloads?|library|media)$/i;
+const TRACK_NUMBER_FOLDER_REGEX = /^(?:\d+\.?|CD\s*\d+|Disc\s*\d+)$/i;
+
+function isTrackNumberOnlyFolder(folder: string): boolean {
+  return TRACK_NUMBER_FOLDER_REGEX.test(folder.trim());
+}
 
 function isCrediblePostSlashArtist(beforeSlash: string, afterSlash: string): boolean {
   if (SLASH_METADATA_REGEX.test(afterSlash)) return false;
   return DASH_REGEX.test(beforeSlash) || CORNER_BRACKET_REGEX.test(beforeSlash);
 }
 
+function findAncestorArtist(folders: string[]): string | undefined {
+  // The immediate parent commonly carries release, series, or quality metadata.
+  // Search older folders from nearest to farthest for an actual artist segment.
+  for (let index = folders.length - 2; index >= 0; index--) {
+    const rawFolder = folders[index];
+    const folder = cleanFolderName(rawFolder);
+    if (
+      !folder
+      || isTrackNumberOnlyFolder(folder)
+      || SLASH_METADATA_REGEX.test(rawFolder)
+      || LIBRARY_FOLDER_REGEX.test(folder)
+    ) continue;
+
+    const dashMatch = folder.match(DASH_REGEX);
+    if (dashMatch) return cleanTrailingBracket(dashMatch[1].trim());
+
+    const slashMatch = folder.match(JAP_SLASH_REGEX);
+    if (slashMatch) {
+      const beforeSlash = slashMatch[1].trim();
+      const afterSlash = slashMatch[2].trim();
+      if (isCrediblePostSlashArtist(beforeSlash, afterSlash)) return cleanTrailingBracket(afterSlash);
+      if (!SLASH_METADATA_REGEX.test(beforeSlash)) {
+        return cleanTrailingBracket(beforeSlash.match(DASH_REGEX)?.[1].trim() || beforeSlash);
+      }
+      continue;
+    }
+
+    return cleanTrailingBracket(folder);
+  }
+
+  return undefined;
+}
+
 function extractFromPath(filePath: string): { artist?: string; title: string } {
   const parts = filePath.replace(/\\/g, "/").split("/").filter((p) => p.length > 0);
   const fileName = parts[parts.length - 1].replace(/\.[^.]+$/, "");
   const folderName = parts.length > 1 ? parts[parts.length - 2] : "";
-  const fileTitle = cleanTrailingBracket(fileName.replace(/^\d+[\s\-\.]+\s*/, "").trim());
+  const fileTitle = cleanTrailingBracket(fileName.trim().replace(/^\d+[\s\-\.]+\s*/, "").trim());
+  const filenameDashMatch = fileTitle.match(DASH_REGEX);
+
+  // A filename's explicit artist-title pair is more specific than its parent folder.
+  if (filenameDashMatch) {
+    return { artist: filenameDashMatch[1].trim(), title: filenameDashMatch[2].trim() };
+  }
 
   if (!folderName) {
-    const m = fileTitle.match(DASH_REGEX);
-    if (m) return { artist: m[1].trim(), title: m[2].trim() };
     return { title: fileTitle || fileName };
   }
+
+  const ancestorArtist = findAncestorArtist(parts.slice(0, -1));
+  if (ancestorArtist) return { artist: ancestorArtist, title: fileTitle || fileName };
 
   const folder = cleanFolderName(folderName);
 
