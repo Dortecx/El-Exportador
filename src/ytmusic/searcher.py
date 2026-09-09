@@ -360,7 +360,6 @@ def search_songs_with_retry(ytmusic, query, limit):
             if is_authentication_error(error):
                 raise AuthenticationRequiredError() from error
             if attempt == SEARCH_RETRY_ATTEMPTS - 1:
-                print(f'DEBUG: Search error after retries: {error}', file=sys.stderr)
                 return False, []
             time.sleep(SEARCH_RETRY_BASE_SECONDS * (2 ** attempt))
     return False, []
@@ -384,9 +383,6 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
     target_channel_id = None
     if artist and is_japanese:
         target_channel_id, found_artist_name = find_artist_channel_id(ytmusic, artist)
-        if target_channel_id:
-            print(f'DEBUG: Found artist {found_artist_name} with channelId: {target_channel_id}', file=sys.stderr)
-    
     queries = []
         # Add kana-to-rōmaji query forms without replacing source text.
     for query_title in scoring_titles:
@@ -411,13 +407,11 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
             continue
         
         try:
-            print(f'DEBUG: Searching query: {query} (is_japanese={is_japanese})', file=sys.stderr)
             attempted_searches += 1
             search_succeeded, search_results = search_songs_with_retry(ytmusic, query, 15)
             if not search_succeeded:
                 continue
             successful_searches += 1
-            print(f'DEBUG: Got {len(search_results)} results', file=sys.stderr)
             
             for result in search_results:
                 video_id = result.get('videoId')
@@ -441,11 +435,9 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
                 
                 excluded_penalty = penalize_excluded(result_title, primary_title)
                 if excluded_penalty is not None:
-                    print(f'DEBUG: EXCLUDED KEYWORD: {result_title} - penalized to 0.00', file=sys.stderr)
                     similarity = 0.0
                 
-                duration = get_duration_seconds(result)
-                print(f'DEBUG: {primary_title} vs {result_title} (by {result_artist}, {duration}s) = {similarity:.2f}', file=sys.stderr)
+                get_duration_seconds(result)
                 
                 # Determine status based on the requested conversion threshold.
                 if similarity >= min_similarity:
@@ -459,17 +451,14 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
         except Exception as e:
             if isinstance(e, AuthenticationRequiredError) or is_authentication_error(e):
                 raise AuthenticationRequiredError() from e
-            print(f'DEBUG: Search error: {e}', file=sys.stderr)
             continue
     
     if artist and is_japanese and not target_channel_id:
-        print(f'DEBUG: Trying artist channel search for {artist}...', file=sys.stderr)
         channel_id, _ = find_artist_channel_id(ytmusic, artist)
         if channel_id:
             target_channel_id = channel_id
     
     if artist:
-        print(f'DEBUG: Trying artist-only search: {artist}...', file=sys.stderr)
         try:
             attempted_searches += 1
             search_succeeded, search_results = search_songs_with_retry(ytmusic, artist, 10)
@@ -508,29 +497,24 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
         except Exception as e:
             if isinstance(e, AuthenticationRequiredError) or is_authentication_error(e):
                 raise AuthenticationRequiredError() from e
-            print(f'DEBUG: Artist-only search failed: {e}', file=sys.stderr)
     
     # Sort by similarity descending and yield
     all_candidates.sort(key=lambda x: x[2], reverse=True)
     
     if not all_candidates:
         if attempted_searches and successful_searches == 0:
-            print(f'DEBUG: All searches failed for {artist} - {title}', file=sys.stderr)
             yield None, '', 0.0, 'search_error'
             return
-        print(f'DEBUG: No match found for {artist} - {title}, marking as unmatched', file=sys.stderr)
         yield None, '', 0.0, 'unmatched'
         return
     
     # Always yield best match first
     best = all_candidates[0]
-    print(f'DEBUG: BEST: {best[3]} - {best[2]:.2f} for {artist} - {title}', file=sys.stderr)
     yield best[0], best[1], best[2], best[3]
     
     # If collecting alternatives and we have more, yield top 2 more
     if collect_alternatives:
         for i, candidate in enumerate(all_candidates[1:3], start=1):
-            print(f'DEBUG: ALTERNATIVE {i}: {candidate[3]} - {candidate[2]:.2f}', file=sys.stderr)
             yield candidate[0], candidate[1], candidate[2], candidate[3]
 
 
@@ -588,7 +572,6 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15, t
             except Exception as error:
                 if isinstance(error, AuthenticationRequiredError) or is_authentication_error(error):
                     raise AuthenticationRequiredError() from error
-                print(f'DEBUG: Error processing track: {error}', file=sys.stderr)
                 result = {
                     'idx': idx,
                     'artist': track.get('artist', ''),
@@ -618,10 +601,6 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15, t
         alternatives = result['alternatives']
 
         if status in ('unmatched', 'search_error') or matched_result is None:
-            print(
-                f"DEBUG: No match found for {result['artist']} - {result['title']}",
-                file=sys.stderr,
-            )
             results.append({
                 'status': status,
                 'artist': result['artist'],
@@ -654,34 +633,20 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15, t
         if result['status'] == 'matched' and result.get('videoId')
     ))
 
-    print(f'DEBUG: Found {len(video_ids)} unique videoIds to add: {video_ids}', file=sys.stderr)
-
     if create_playlist and video_ids:
         try:
-            print(f'DEBUG: Creating playlist {playlist_name}...', file=sys.stderr)
             playlist_id = ytmusic.create_playlist(
                 playlist_name,
                 'Created by m3u-to-ytmusic',
                 video_ids=video_ids,
             )
-            print(
-                f'DEBUG: Playlist created with ID: {playlist_id} '
-                f'and {len(video_ids)} initial songs '
-                f'(type: {type(playlist_id).__name__})',
-                file=sys.stderr,
-            )
             playlist_url = f'https://music.youtube.com/playlist?list={playlist_id}'
         except Exception as error:
             if is_authentication_error(error):
                 raise AuthenticationRequiredError() from error
-            print(f'DEBUG ERROR creating playlist: {error}', file=sys.stderr)
             playlist_id = None
             playlist_url = None
     else:
-        if not create_playlist:
-            print('DEBUG: Dry run enabled, skipping playlist creation', file=sys.stderr)
-        else:
-            print('DEBUG: No videoIds found, skipping playlist creation', file=sys.stderr)
         playlist_id = None
         playlist_url = None
 
@@ -761,30 +726,22 @@ def search_single(query, artist='', title='', threshold=0.0, offset=0):
 def add_to_playlist(playlist_id, video_ids):
     ytmusic = get_ytmusic()
     try:
-        print(f'DEBUG add_to_playlist: playlistId={playlist_id}, videoIds={video_ids}', file=sys.stderr)
         add_result = ytmusic.add_playlist_items(playlist_id, video_ids)
-        print(f'DEBUG add_to_playlist response: {add_result}', file=sys.stderr)
         return {'success': True, 'added': len(video_ids)}
     except Exception as e:
         if is_authentication_error(e):
             return {'error': 'Authentication required', 'code': 'AUTHENTICATION_REQUIRED'}
-        print(f'DEBUG ERROR add_to_playlist: {e}', file=sys.stderr)
         return {'error': 'Could not add selected tracks'}
 
 
 def main():
     try:
-        print('DEBUG: Script started', file=sys.stderr)
         # Leer el input desde los argumentos
         if len(sys.argv) > 1:
-            print('DEBUG: Reading input from args', file=sys.stderr)
             data = json.loads(sys.argv[-1])
         else:
-            print('DEBUG: Reading input from stdin', file=sys.stderr)
             data = json.loads(sys.stdin.read())
-        print('DEBUG: Parsed request', file=sys.stderr)
         action = data.get('action', 'search')
-        print(f'DEBUG: Action: {action}', file=sys.stderr)
         
         if action == 'browser-auth':
             print(json.dumps(configure_browser_auth(data.get('headers', ''))))

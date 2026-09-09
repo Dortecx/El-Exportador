@@ -88,7 +88,7 @@ class SearchSingleThresholdTest(unittest.TestCase):
         self.assertEqual(result['results'][0]['title'], source_title)
         self.assertEqual(result['results'][0]['bestMatch']['title'], 'Bye Bye Bye')
 
-    def test_automatic_search_does_not_emit_noisy_per_candidate_debug_checks(self):
+    def test_automatic_search_does_not_emit_debug_stderr(self):
         class CandidateDebugFakeYTMusic:
             def search(self, *_args, **_kwargs):
                 return [
@@ -111,8 +111,7 @@ class SearchSingleThresholdTest(unittest.TestCase):
 
         self.assertEqual(result['results'][0]['status'], 'matched')
         self.assertEqual(result['results'][0]['videoId'], 'match')
-        self.assertNotIn('DEBUG: SUBSTRING CHECK', stderr.getvalue())
-        self.assertNotIn('DEBUG: Artist mismatch', stderr.getvalue())
+        self.assertNotIn('DEBUG', stderr.getvalue())
 
     def test_conversion_threshold_changes_fake_matching_and_rejects_invalid_values(self):
         class ThresholdFakeYTMusic:
@@ -205,6 +204,38 @@ class SearchSingleThresholdTest(unittest.TestCase):
         with self.assertRaises(self.searcher.AuthenticationRequiredError):
             self.searcher.search_tracks([{'artist': 'Artist', 'title': 'Song'}], 'playlist', False, max_workers=1)
         self.assertEqual(fake.calls, 1)
+
+
+class AddToPlaylistNoDebugTest(unittest.TestCase):
+    def setUp(self):
+        self.searcher = load_searcher()
+
+    def test_add_to_playlist_success_and_failure_emit_no_debug_stderr(self):
+        class PlaylistFakeYTMusic:
+            def __init__(self, should_fail=False):
+                self.should_fail = should_fail
+
+            def add_playlist_items(self, *_args, **_kwargs):
+                if self.should_fail:
+                    raise RuntimeError('provider failed')
+                return {'status': 'ok'}
+
+        stderr = io.StringIO()
+        self.searcher.get_ytmusic = lambda: PlaylistFakeYTMusic()
+        with contextlib.redirect_stderr(stderr):
+            self.assertEqual(
+                self.searcher.add_to_playlist('playlist', ['video']),
+                {'success': True, 'added': 1},
+            )
+
+        self.searcher.get_ytmusic = lambda: PlaylistFakeYTMusic(should_fail=True)
+        with contextlib.redirect_stderr(stderr):
+            self.assertEqual(
+                self.searcher.add_to_playlist('playlist', ['video']),
+                {'error': 'Could not add selected tracks'},
+            )
+
+        self.assertNotIn('DEBUG', stderr.getvalue())
 
 
 class PaginatedFakeYTMusic:
