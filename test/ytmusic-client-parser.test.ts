@@ -101,6 +101,23 @@ describe("YTMusic stdout JSON parser", () => {
     expect(builder).toContain("--collect-data pykakasi");
   });
 
+  it("launches the backend without emitting the routine process-launch log", async () => {
+    mockProcess(['{"success":true,"added":1}\n']);
+    const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    try {
+      const { addToPlaylistOnYtMusic } = await import("../src/ytmusic/client.js");
+
+      await expect(addToPlaylistOnYtMusic("playlist-id", ["video-id"])).resolves.toEqual({
+        success: true,
+        added: 1,
+      });
+      expect(consoleLogSpy).not.toHaveBeenCalledWith(expect.stringContaining("🐍 Ejecutando:"));
+    } finally {
+      consoleLogSpy.mockRestore();
+    }
+  });
+
   it("resolves an add-to-playlist success result", async () => {
     mockProcess(['{"success":true,"added":1}\n']);
 

@@ -186,7 +186,6 @@ async function spawnJson(
       reject(new DOMException('YouTube Music operation cancelled', 'AbortError'));
       return;
     }
-    console.log(`🐍 Ejecutando: ${command} ${args.join(' ')}`);
     const proc = spawn(command, args, {
       env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' },
     });
