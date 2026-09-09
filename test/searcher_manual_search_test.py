@@ -266,6 +266,81 @@ class SearchSingleThresholdTest(unittest.TestCase):
         self.assertEqual(fake.calls, 1)
 
 
+class ValidateAuthRetryTest(unittest.TestCase):
+    def setUp(self):
+        self.searcher = load_searcher()
+        self.searcher.os.path.exists = lambda path: path == self.searcher.AUTH_FILE
+        self.searcher.time.sleep = lambda _: None
+
+    def test_transient_validation_failure_retries_without_diagnostic_stderr(self):
+        calls = []
+        retry_attempts = self.searcher.AUTH_VALIDATION_RETRY_ATTEMPTS
+
+        class TransientValidationYTMusic:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def get_library_playlists(self, *_args, **_kwargs):
+                calls.append('validate')
+                if len(calls) < retry_attempts:
+                    raise ValueError('temporary non-json response')
+                return []
+
+        self.searcher.YTMusic = TransientValidationYTMusic
+        stderr = io.StringIO()
+
+        with contextlib.redirect_stderr(stderr):
+            self.assertEqual(self.searcher.validate_auth(), {'status': 'valid'})
+
+        self.assertEqual(len(calls), self.searcher.AUTH_VALIDATION_RETRY_ATTEMPTS)
+        self.assertNotIn('AUTH_VALIDATION_DIAGNOSTIC', stderr.getvalue())
+        self.assertNotIn('ValueError', stderr.getvalue())
+
+    def test_authentication_validation_failure_is_not_retried(self):
+        calls = []
+
+        class AuthenticationFailingYTMusic:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def get_library_playlists(self, *_args, **_kwargs):
+                calls.append('validate')
+                error = RuntimeError('unauthorized')
+                error.response = type('Response', (), {'status_code': 401})()
+                raise error
+
+        self.searcher.YTMusic = AuthenticationFailingYTMusic
+        self.assertEqual(
+            self.searcher.validate_auth(),
+            {'status': 'invalid', 'reason': 'authentication_required'},
+        )
+        self.assertEqual(len(calls), 1)
+
+    def test_persistent_transient_validation_failure_returns_existing_structured_failure(self):
+        calls = []
+
+        class FailingValidationYTMusic:
+            def __init__(self, *_args, **_kwargs):
+                pass
+
+            def get_library_playlists(self, *_args, **_kwargs):
+                calls.append('validate')
+                raise ValueError('temporary non-json response')
+
+        self.searcher.YTMusic = FailingValidationYTMusic
+        stderr = io.StringIO()
+
+        with contextlib.redirect_stderr(stderr):
+            self.assertEqual(
+                self.searcher.validate_auth(),
+                {'status': 'unexpected_failure', 'reason': 'validation_failed'},
+            )
+
+        self.assertEqual(len(calls), self.searcher.AUTH_VALIDATION_RETRY_ATTEMPTS)
+        self.assertNotIn('AUTH_VALIDATION_DIAGNOSTIC', stderr.getvalue())
+        self.assertNotIn('ValueError', stderr.getvalue())
+
+
 class AddToPlaylistNoDebugTest(unittest.TestCase):
     def setUp(self):
         self.searcher = load_searcher()

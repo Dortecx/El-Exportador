@@ -1974,7 +1974,7 @@
                   : t('conversionCompleted');
             backendStatus.firstElementChild.className = "backend-dot available";
             settleConversionRun();
-            startBtn.disabled = false;
+            updateStartButton();
             startBtn.textContent = "[ EXECUTE ]";
 
             // Mostrar resumen solo al finalizar
@@ -2044,8 +2044,8 @@
           console.error("EventSource failed:", err);
           settleConversionRun();
 
-          // Rehabilitar el botón
-          startBtn.disabled = false;
+          // Refresh the button state after conversion cleanup.
+          updateStartButton();
           startBtn.textContent = "[ EXECUTE ]";
 
           showToast(t('conversionInterrupted'));
@@ -2081,7 +2081,7 @@
           if (youtubeAuthenticationRequired) {
             settleConversionRun();
             await handleAuthenticationRequired(response, error);
-            startBtn.disabled = false;
+            updateStartButton();
             startBtn.textContent = "[ EXECUTE ]";
             return;
           }
@@ -2094,8 +2094,8 @@
         settleConversionRun();
         showToast(t('conversionError'));
 
-        // Rehabilitar el botón
-        startBtn.disabled = false;
+        // Refresh the button state after conversion cleanup.
+        updateStartButton();
         startBtn.textContent = "[ EXECUTE ]";
       }
     };

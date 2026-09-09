@@ -41,17 +41,24 @@ def is_authentication_error(error):
     return status_code == 401 or bool(re.search(r'\b401\b|unauthorized', str(error), re.IGNORECASE))
 
 
+AUTH_VALIDATION_RETRY_ATTEMPTS = 3
+AUTH_VALIDATION_RETRY_BASE_SECONDS = 0.1
+
+
 def validate_auth():
     if not os.path.exists(AUTH_FILE):
         return {'status': 'missing', 'reason': 'missing'}
-    try:
-        YTMusic(AUTH_FILE).get_library_playlists(limit=1)
-        return {'status': 'valid'}
-    except Exception as error:
-        if is_authentication_error(error):
-            return {'status': 'invalid', 'reason': 'authentication_required'}
-        print(f'AUTH_VALIDATION_DIAGNOSTIC exception={type(error).__name__}', file=sys.stderr)
-        return {'status': 'unexpected_failure', 'reason': 'validation_failed'}
+    for attempt in range(AUTH_VALIDATION_RETRY_ATTEMPTS):
+        try:
+            YTMusic(AUTH_FILE).get_library_playlists(limit=1)
+            return {'status': 'valid'}
+        except Exception as error:
+            if is_authentication_error(error):
+                return {'status': 'invalid', 'reason': 'authentication_required'}
+            if attempt == AUTH_VALIDATION_RETRY_ATTEMPTS - 1:
+                return {'status': 'unexpected_failure', 'reason': 'validation_failed'}
+            time.sleep(AUTH_VALIDATION_RETRY_BASE_SECONDS * (2 ** attempt))
+    return {'status': 'unexpected_failure', 'reason': 'validation_failed'}
 
 
 def get_ytmusic():

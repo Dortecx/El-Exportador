@@ -58,4 +58,11 @@ describe("YouTube-only destination UI", () => {
     expect(html).not.toContain("/api/spotify-auth/status");
     expect(html).not.toContain("/api/spotify-auth/disconnect");
   });
+
+  it("recomputes Execute eligibility after conversion cleanup instead of force-enabling it", () => {
+    expect(html).not.toContain("startBtn.disabled = false");
+    expect(html).toContain("startBtn.disabled = true;");
+    expect(html).toContain("updateStartButton();\n            startBtn.textContent = \"[ EXECUTE ]\";");
+    expect(html).toContain("updateStartButton();\n          startBtn.textContent = \"[ EXECUTE ]\";");
+  });
 });
