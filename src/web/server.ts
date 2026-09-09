@@ -206,7 +206,7 @@ function logConversionStart(destination: ConversionLogDestination, total: number
   console.info("conversion.start", { destination, total, dryRun: dryRun === true });
 }
 
-function logConversionComplete(summary: ConversionCompletionSummary): void {
+function logConversionComplete({ searchErrors: _searchErrors, ...summary }: ConversionCompletionSummary): void {
   console.info("conversion.complete", summary);
 }
 

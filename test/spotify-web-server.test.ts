@@ -231,7 +231,7 @@ describe("Spotify web backend", () => {
 
       expect(logs.info.mock.calls).toEqual([
         ["conversion.start", { destination: "spotify", total: 1, dryRun: true }],
-        ["conversion.complete", { destination: "spotify", total: 1, matched: 1, unmatched: 1, ambiguous: 1, skipped: 1, searchErrors: 1 }],
+        ["conversion.complete", { destination: "spotify", total: 1, matched: 1, unmatched: 1, ambiguous: 1, skipped: 1 }],
       ]);
       expect(logs.error).not.toHaveBeenCalled();
       expect(logs.messages()).not.toContain("Secret Artist");
@@ -295,7 +295,7 @@ describe("Spotify web backend", () => {
 
       expect(logs.info.mock.calls).toEqual([
         ["conversion.start", { destination: "youtube", total: 1, dryRun: false }],
-        ["conversion.complete", { destination: "youtube", total: 1, matched: 1, unmatched: 1, ambiguous: 1, searchErrors: 1 }],
+        ["conversion.complete", { destination: "youtube", total: 1, matched: 1, unmatched: 1, ambiguous: 1 }],
       ]);
       expect(logs.error).not.toHaveBeenCalled();
       expect(logs.messages()).not.toContain("Secret Artist");
