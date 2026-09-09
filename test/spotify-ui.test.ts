@@ -43,6 +43,16 @@ describe("YouTube-only destination UI", () => {
     expect(html).not.toContain("lastConversionProvider === 'spotify'");
   });
 
+  it("keeps only the YouTube summary metrics visible", () => {
+    expect(html).toContain("['matched', data.matched]");
+    expect(html).toContain("['unmatched', data.unmatched]");
+    expect(html).toContain("['ambiguous', data.ambiguous]");
+    expect(html).not.toContain("['searchErrors', data.searchErrors]");
+    expect(html).not.toContain("searchErrors: 'Search retry needed:'");
+    expect(html).not.toContain("searchErrors: 'Reintento de búsqueda necesario:'");
+    expect(html).toContain("if (Number(data.searchErrors) > 0)");
+  });
+
   it("keeps backend-independent Spotify implementation outside this UI-only change", () => {
     expect(html).not.toContain("/api/spotify-auth/start");
     expect(html).not.toContain("/api/spotify-auth/status");

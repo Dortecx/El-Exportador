@@ -434,13 +434,7 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
                 result_artists = get_all_artists(result)
                 result_artist = result_artists[0] if result_artists else ''
                 
-                p1_lower = primary_title.lower()
-                r1_lower = result_title.lower()
-                is_substring = p1_lower in r1_lower or r1_lower in p1_lower
-                print(f'DEBUG: SUBSTRING CHECK: {primary_title} in {result_title} = {is_substring}', file=sys.stderr)
-                
                 if artist and not artist_has_correct_match(result_artists, artist, is_japanese):
-                    print(f'DEBUG: Artist mismatch {result_artist} vs {artist}, skipping', file=sys.stderr)
                     continue
                 
                 similarity = max(title_similarity(scoring_title, result_title) for scoring_title in scoring_titles)

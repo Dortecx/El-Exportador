@@ -1,4 +1,6 @@
+import contextlib
 import importlib.util
+import io
 import pathlib
 import sys
 import types
@@ -85,6 +87,32 @@ class SearchSingleThresholdTest(unittest.TestCase):
         self.assertIn('Nync Bye Bye Bye', fake_ytmusic.queries)
         self.assertEqual(result['results'][0]['title'], source_title)
         self.assertEqual(result['results'][0]['bestMatch']['title'], 'Bye Bye Bye')
+
+    def test_automatic_search_does_not_emit_noisy_per_candidate_debug_checks(self):
+        class CandidateDebugFakeYTMusic:
+            def search(self, *_args, **_kwargs):
+                return [
+                    {'videoId': 'wrong-artist', 'title': 'My Song', 'artists': [{'name': 'Other'}]},
+                    {'videoId': 'match', 'title': 'My Song', 'artists': [{'name': 'Artist'}]},
+                ]
+
+        fake = CandidateDebugFakeYTMusic()
+        self.searcher.get_ytmusic_thread = lambda: fake
+        self.searcher.get_ytmusic = lambda: fake
+        stderr = io.StringIO()
+
+        with contextlib.redirect_stderr(stderr):
+            result = self.searcher.search_tracks(
+                [{'artist': 'Artist', 'title': 'My Song'}],
+                'playlist',
+                False,
+                max_workers=1,
+            )
+
+        self.assertEqual(result['results'][0]['status'], 'matched')
+        self.assertEqual(result['results'][0]['videoId'], 'match')
+        self.assertNotIn('DEBUG: SUBSTRING CHECK', stderr.getvalue())
+        self.assertNotIn('DEBUG: Artist mismatch', stderr.getvalue())
 
     def test_conversion_threshold_changes_fake_matching_and_rejects_invalid_values(self):
         class ThresholdFakeYTMusic:
