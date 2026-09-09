@@ -211,6 +211,20 @@ def penalize_excluded(result_title, original_title):
     return None
 
 
+FIRST_TAKE_EDITION_REGEX = re.compile(
+    r'(?:\(\s*from\s+the\s+first\s+take\s*\)|(?:^|[\s\-–—:|])from\s+the\s+first\s+take\b)',
+    re.IGNORECASE,
+)
+
+
+def has_first_take_edition(title):
+    return bool(FIRST_TAKE_EDITION_REGEX.search(title or ''))
+
+
+def has_unrequested_first_take_edition(result_title, requested_title):
+    return has_first_take_edition(result_title) and not has_first_take_edition(requested_title)
+
+
 ARTIST_ALIASES = {
     '*NSYNC': ['*NSYNC', 'NSYNC', 'Nync'],
     '梅田サイファー': ['UMEDA CYPHER', '梅田サイファー', 'Umeda Cypher'],
@@ -431,6 +445,9 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
                 if artist and not artist_has_correct_match(result_artists, artist, is_japanese):
                     continue
                 
+                if has_unrequested_first_take_edition(result_title, title):
+                    continue
+
                 similarity = max(title_similarity(scoring_title, result_title) for scoring_title in scoring_titles)
                 
                 excluded_penalty = penalize_excluded(result_title, primary_title)
@@ -484,6 +501,9 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
                 if not artist_has_correct_match(result_artists, artist, is_japanese):
                     continue
                 
+                if has_unrequested_first_take_edition(result_title, title):
+                    continue
+
                 similarity = max(title_similarity(scoring_title, result_title) for scoring_title in scoring_titles)
                 
                 if similarity >= min_similarity:
@@ -660,7 +680,7 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15, t
 
 def has_unrequested_edition_keyword(result_title, requested_title):
     requested_lower = requested_title.lower()
-    return any(
+    return has_unrequested_first_take_edition(result_title, requested_title) or any(
         keyword in result_title.lower() and keyword not in requested_lower
         for keyword in EXCLUDED_KEYWORDS
     )

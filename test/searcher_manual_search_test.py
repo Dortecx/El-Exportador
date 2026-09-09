@@ -167,6 +167,66 @@ class SearchSingleThresholdTest(unittest.TestCase):
 
         self.assertEqual(result['results'][0]['status'], 'unmatched')
 
+    def test_unrequested_first_take_japanese_candidate_cannot_win_normal_title_match(self):
+        class FirstTakeFakeYTMusic:
+            def search(self, *_args, **_kwargs):
+                return [
+                    {'videoId': 'first-take', 'title': '朝が来る (From THE FIRST TAKE)', 'artists': [{'name': 'Artist'}]},
+                    {'videoId': 'ordinary', 'title': '朝が来る', 'artists': [{'name': 'Artist'}]},
+                ]
+
+        fake = FirstTakeFakeYTMusic()
+        self.searcher.get_ytmusic_thread = lambda: fake
+        self.searcher.get_ytmusic = lambda: fake
+        result = self.searcher.search_tracks([{'artist': 'Artist', 'title': '朝が来る'}], 'playlist', False, max_workers=1)
+
+        self.assertEqual(result['results'][0]['status'], 'matched')
+        self.assertEqual(result['results'][0]['videoId'], 'ordinary')
+        self.assertEqual(result['results'][0]['bestMatch']['title'], '朝が来る')
+
+    def test_requested_first_take_japanese_candidate_remains_eligible(self):
+        class FirstTakeFakeYTMusic:
+            def search(self, *_args, **_kwargs):
+                return [
+                    {'videoId': 'first-take', 'title': '朝が来る (From THE FIRST TAKE)', 'artists': [{'name': 'Artist'}]},
+                    {'videoId': 'ordinary', 'title': '朝が来る', 'artists': [{'name': 'Artist'}]},
+                ]
+
+        fake = FirstTakeFakeYTMusic()
+        self.searcher.get_ytmusic_thread = lambda: fake
+        self.searcher.get_ytmusic = lambda: fake
+        result = self.searcher.search_tracks(
+            [{'artist': 'Artist', 'title': '朝が来る - from the first take'}],
+            'playlist',
+            False,
+            max_workers=1,
+        )
+
+        self.assertEqual(result['results'][0]['status'], 'matched')
+        self.assertEqual(result['results'][0]['videoId'], 'first-take')
+        self.assertEqual(result['results'][0]['bestMatch']['title'], '朝が来る (From THE FIRST TAKE)')
+
+    def test_parenthetical_requested_first_take_japanese_candidate_remains_eligible(self):
+        class FirstTakeFakeYTMusic:
+            def search(self, *_args, **_kwargs):
+                return [
+                    {'videoId': 'first-take', 'title': '朝が来る (From THE FIRST TAKE)', 'artists': [{'name': 'Artist'}]},
+                    {'videoId': 'ordinary', 'title': '朝が来る', 'artists': [{'name': 'Artist'}]},
+                ]
+
+        fake = FirstTakeFakeYTMusic()
+        self.searcher.get_ytmusic_thread = lambda: fake
+        self.searcher.get_ytmusic = lambda: fake
+        result = self.searcher.search_tracks(
+            [{'artist': 'Artist', 'title': '朝が来る (from the first take)'}],
+            'playlist',
+            False,
+            max_workers=1,
+        )
+
+        self.assertEqual(result['results'][0]['status'], 'matched')
+        self.assertEqual(result['results'][0]['videoId'], 'first-take')
+
     def test_all_fake_automatic_search_failures_return_search_error_after_bounded_retries(self):
         class FailingFakeYTMusic:
             def __init__(self):
