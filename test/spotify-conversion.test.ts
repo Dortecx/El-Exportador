@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { SpotifyApi, SpotifyPlaylistCreationIndeterminateError } from "../src/spotify/api.js";
+import { SpotifyApi, SpotifyApiError, SpotifyPlaylistCreationIndeterminateError } from "../src/spotify/api.js";
 import { convertSpotifyTracks } from "../src/spotify/converter.js";
 import { buildSpotifySearchQueries, matchSpotifyTrack } from "../src/spotify/matcher.js";
 import type { SpotifyFetch } from "../src/spotify/types.js";
@@ -17,6 +17,10 @@ function fakeFetch(responses: Response[]): SpotifyFetch {
 }
 
 const source = { artist: "The Artist", durationMs: 180_000, title: "A Song" };
+
+function diagnosticCallsFor(messages: string[], calls: unknown[][]): unknown[][] {
+  return calls.filter(([message]) => typeof message === "string" && messages.some((expected) => message.includes(expected)));
+}
 
 const matchingItem = {
   album: { name: "The Album" },
@@ -70,6 +74,52 @@ describe("Spotify conversion core", () => {
       cancelled: true,
       remotePlaylist: { status: "indeterminate" },
     });
+  });
+
+  it("emits safe Spotify API request, rate-limit, circuit, and retry diagnostics", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const sleep = vi.fn(async () => undefined);
+      const fetch = fakeFetch([
+        response({}, 429, { "retry-after": "2" }),
+        response({ tracks: { items: [] } }),
+      ]);
+      const api = new SpotifyApi({ accessToken: "secret-access-token", fetch, maxRetries: 1, now: () => 0, sleep });
+
+      await expect(api.searchTracks("Sensitive Artist Sensitive Song")).resolves.toEqual([]);
+
+      const diagnostics = diagnosticCallsFor([
+        "request attempt",
+        "request response",
+        "rate limited",
+        "search circuit opened",
+        "search circuit probe",
+        "search circuit probe success",
+        "retry",
+      ], [...info.mock.calls, ...warn.mock.calls]);
+      const diagnosticText = JSON.stringify(diagnostics);
+      expect(diagnostics).toHaveLength(9);
+      expect(diagnosticText).toContain("request attempt");
+      expect(diagnosticText).toContain("request response");
+      expect(diagnosticText).toContain("rate limited");
+      expect(diagnosticText).toContain("search circuit opened");
+      expect(diagnosticText).toContain("search circuit probe");
+      expect(diagnosticText).toContain("search circuit probe success");
+      expect(diagnosticText).toContain("retry");
+      expect(diagnosticText).toContain("\"operation\":\"track-search\"");
+      expect(diagnosticText).toContain("\"status\":429");
+      expect(diagnosticText).toContain("\"waitMs\":2000");
+      expect(diagnosticText).toContain("\"elapsedMs\":0");
+      expect(diagnosticText).not.toContain("secret-access-token");
+      expect(diagnosticText).not.toContain("Authorization");
+      expect(diagnosticText).not.toContain("https://api.spotify.com");
+      expect(diagnosticText).not.toContain("Sensitive Artist");
+      expect(diagnosticText).not.toContain("Sensitive Song");
+    } finally {
+      info.mockRestore();
+      warn.mockRestore();
+    }
   });
 
   it("uses injected fetch for profile, private playlist creation, track search, URI batch insertion, and bounded Retry-After", async () => {
@@ -203,6 +253,55 @@ describe("Spotify conversion core", () => {
     expect(cancelled.remotePlaylist).toEqual({ status: "not-created" });
   });
 
+  it("emits safe Spotify conversion search and summary diagnostics without track or query text", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const sensitiveTrack = { artist: "Sensitive Artist", durationMs: 180_000, title: "Sensitive Song" };
+      const api = {
+        addTracks: vi.fn(),
+        createPrivatePlaylist: vi.fn(),
+        getProfile: vi.fn(),
+        searchTracks: vi.fn(async () => [matchingCandidate]),
+      };
+
+      await expect(convertSpotifyTracks(api, [sensitiveTrack], { dryRun: true, playlistName: "Sensitive playlist" })).resolves.toMatchObject({ remotePlaylist: { status: "not-created" } });
+
+      const diagnostics = diagnosticCallsFor([
+        "conversion start",
+        "track search start",
+        "query search start",
+        "query search end",
+        "track search end",
+        "conversion summary",
+      ], [...info.mock.calls, ...warn.mock.calls]);
+      const diagnosticText = JSON.stringify(diagnostics);
+      expect(diagnostics).toHaveLength(8);
+      expect(diagnosticCallsFor(["conversion start"], diagnostics)).toHaveLength(1);
+      expect(diagnosticCallsFor(["track search start"], diagnostics)).toHaveLength(1);
+      expect(diagnosticCallsFor(["query search start"], diagnostics)).toHaveLength(2);
+      expect(diagnosticCallsFor(["query search end"], diagnostics)).toHaveLength(2);
+      expect(diagnosticCallsFor(["track search end"], diagnostics)).toHaveLength(1);
+      expect(diagnosticCallsFor(["conversion summary"], diagnostics)).toHaveLength(1);
+      expect(diagnosticText).toContain("conversion start");
+      expect(diagnosticText).toContain("track search start");
+      expect(diagnosticText).toContain("query search start");
+      expect(diagnosticText).toContain("query search end");
+      expect(diagnosticText).toContain("track search end");
+      expect(diagnosticText).toContain("conversion summary");
+      expect(diagnosticText).toContain("\"trackOrdinal\":1");
+      expect(diagnosticText).toContain("\"queryOrdinal\":1");
+      expect(diagnosticText).toContain("\"candidateCount\":1");
+      expect(diagnosticText).not.toContain("Sensitive Artist");
+      expect(diagnosticText).not.toContain("Sensitive Song");
+      expect(diagnosticText).not.toContain("Sensitive playlist");
+      expect(diagnosticText).not.toContain("spotify:track:track-1");
+    } finally {
+      info.mockRestore();
+      warn.mockRestore();
+    }
+  });
+
   it("reports each Spotify track's search progress with its count, total, and identity", async () => {
     const api = {
       addTracks: vi.fn(),
@@ -321,30 +420,38 @@ describe("Spotify conversion core", () => {
     }
   });
 
-  it("shares a single Retry-After cooldown across concurrent searches", async () => {
-    const cooldown = Promise.withResolvers<void>();
-    const sleep = vi.fn(() => cooldown.promise);
-    const initialResponses = [Promise.withResolvers<Response>(), Promise.withResolvers<Response>()];
-    let initialResponseIndex = 0;
-    const fetch = vi.fn(() => initialResponses[initialResponseIndex++]?.promise ?? Promise.resolve(response({ tracks: { items: [] } })));
-    const now = vi.fn(() => 0);
-    const api = new SpotifyApi({ accessToken: "test-token", fetch, maxRetries: 1, now, sleep });
-    const first = api.searchTracks("first");
-    const second = api.searchTracks("second");
+  it("freezes queued searches behind one shared Retry-After cooldown and admits one probe", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const cooldown = Promise.withResolvers<void>();
+      const sleep = vi.fn(() => cooldown.promise);
+      const initialResponses = [Promise.withResolvers<Response>(), Promise.withResolvers<Response>()];
+      let initialResponseIndex = 0;
+      const fetch = vi.fn(() => initialResponses[initialResponseIndex++]?.promise ?? Promise.resolve(response({ tracks: { items: [] } })));
+      const api = new SpotifyApi({ accessToken: "test-token", fetch, maxRetries: 1, now: () => 0, sleep });
+      const first = api.searchTracks("first");
+      const second = api.searchTracks("second");
 
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-    initialResponses[0]?.resolve(response({}, 429, { "retry-after": "1" }));
-    initialResponses[1]?.resolve(response({}, 429, { "retry-after": "1" }));
-    await vi.waitFor(() => expect(now).toHaveBeenCalledTimes(3));
-    expect(sleep).toHaveBeenCalledOnce();
-    cooldown.resolve();
-    await expect(Promise.all([first, second])).resolves.toEqual([[], []]);
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+      initialResponses[0]?.resolve(response({}, 429, { "retry-after": "1" }));
+      initialResponses[1]?.resolve(response({}, 429, { "retry-after": "1" }));
+      await vi.waitFor(() => expect(diagnosticCallsFor(["rate limited"], warn.mock.calls)).toHaveLength(2));
+      expect(sleep).toHaveBeenCalledWith(1_000);
+      cooldown.resolve();
+      await expect(Promise.all([first, second])).resolves.toEqual([[], []]);
+      expect(fetch).toHaveBeenCalledTimes(4);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("extends a shared concurrent Retry-After cooldown to the longest deadline and settles all retries", async () => {
     let now = 0;
     const release: Array<() => void> = [];
-    const sleep = vi.fn((milliseconds: number) => new Promise<void>((resolve) => release.push(() => { now += milliseconds; resolve(); })));
+    const sleep = vi.fn((milliseconds: number) => {
+      if (milliseconds === 0) return Promise.resolve();
+      return new Promise<void>((resolve) => release.push(() => { now += milliseconds; resolve(); }));
+    });
     const initialResponses = [Promise.withResolvers<Response>(), Promise.withResolvers<Response>()];
     let initialResponseIndex = 0;
     const fetch = vi.fn(() => initialResponses[initialResponseIndex++]?.promise ?? Promise.resolve(response({ tracks: { items: [] } })));
@@ -365,8 +472,11 @@ describe("Spotify conversion core", () => {
     await Promise.resolve();
     expect(sleep).toHaveBeenLastCalledWith(2_000);
     release.shift()!();
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(4));
     await expect(searches).resolves.toEqual([[], []]);
-    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(sleep).toHaveBeenCalledTimes(3);
+    expect(sleep).toHaveBeenLastCalledWith(0);
     expect(release).toHaveLength(0);
   });
 
@@ -440,6 +550,25 @@ describe("Spotify conversion core", () => {
     });
     expect(afterCreation).toMatchObject({ cancelled: true, remotePlaylist: { id: "playlist-1", insertedUris: [], status: "partial" } });
     expect(createdApi.addTracks).not.toHaveBeenCalled();
+  });
+
+  it("reports repeated Spotify search rate limits as retry-needed outcomes without creating a playlist", async () => {
+    const api = {
+      addTracks: vi.fn(),
+      createPrivatePlaylist: vi.fn(),
+      getProfile: vi.fn(async () => ({ id: "user-1" })),
+      searchTracks: vi.fn(async () => { throw new SpotifyApiError(429); }),
+    };
+
+    const result = await convertSpotifyTracks(api, [source], { playlistName: "My playlist" });
+
+    expect(result).toEqual({
+      cancelled: false,
+      outcomes: [{ reason: "rate_limited", source, status: "search_error" }],
+      remotePlaylist: { status: "not-created" },
+    });
+    expect(api.createPrivatePlaylist).not.toHaveBeenCalled();
+    expect(api.addTracks).not.toHaveBeenCalled();
   });
 
   it("keeps confirmed additions separate from a cancelled in-flight add POST through conversion", async () => {

@@ -382,10 +382,38 @@ describe("Spotify web backend", () => {
       matched: 1,
       playlistId: "youtube-playlist",
       playlistUrl: "https://youtube.test/playlist",
+      searchErrorTracks: [],
+      searchErrors: 0,
       total: 1,
       type: "result",
       unmatched: 0,
       unmatchedTracks: [],
+    });
+  });
+
+  it("propagates fake YouTube search errors as retry-needed results without manual review", async () => {
+    ytmusic.convertWithYtMusic.mockResolvedValue({
+      ambiguousTracks: [],
+      manualReviewTracks: [],
+      matched: 0,
+      playlistId: null,
+      playlistUrl: null,
+      results: [{ artist: "Artist", bestMatch: null, reason: "search_error", status: "search_error", title: "Song", videoId: null }],
+      unmatchedTracks: [],
+    });
+    const progress = await progressStream();
+    const reader = progressReader(progress);
+
+    await expect(request("/api/convert", { playlistName: "My playlist", tracks: [{ artist: "Artist", title: "Song" }] })).resolves.toEqual({ body: { success: true }, status: 200 });
+
+    const event = await reader.read();
+    await reader.cancel();
+    const payload = JSON.parse(new TextDecoder().decode(event.value).replace(/^data: /, "").trim());
+    expect(payload).toMatchObject({
+      manualReviewTracks: [],
+      searchErrors: 1,
+      searchErrorTracks: [{ reason: "search_error", status: "search_error" }],
+      type: "result",
     });
   });
 

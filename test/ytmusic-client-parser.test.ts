@@ -1,5 +1,6 @@
 import { PassThrough } from "node:stream";
 import { EventEmitter } from "node:events";
+import { readFile } from "node:fs/promises";
 import { describe, it, expect, vi, afterEach } from "vitest";
 
 const spawnMock = vi.hoisted(() => vi.fn());
@@ -62,6 +63,21 @@ describe("YTMusic stdout JSON parser", () => {
     expect(onProgress).toHaveBeenNthCalledWith(2, 2, 2, "Second", "Song", "matched");
   });
 
+  it("accepts a search_error result as a distinct technical retry state", async () => {
+    mockProcess(['{"status":"search_error","reason":"search_error","artist":"Artist","title":"Song","videoId":null,"bestMatch":null}\n']);
+
+    const { convertWithYtMusic } = await import("../src/ytmusic/client.js");
+
+    await expect(convertWithYtMusic(
+      [{ artist: "Artist", title: "Song", file: "track.mp3" }],
+      "playlist",
+      { dryRun: true },
+    )).resolves.toMatchObject({
+      matched: 0,
+      results: [{ status: "search_error", reason: "search_error", videoId: null }],
+    });
+  });
+
   it("rejects malformed standalone results", async () => {
     mockProcess(['{"status":"matched","artist":"Final","title":"Result","videoId":"video-1"}\n']);
 
@@ -72,6 +88,17 @@ describe("YTMusic stdout JSON parser", () => {
       "playlist",
       { dryRun: true },
     )).rejects.toThrow("YouTube Music returned an invalid conversion result");
+  });
+
+  it("requires pykakasi for the portable frozen backend", async () => {
+    const [requirements, builder] = await Promise.all([
+      readFile("requirements.txt", "utf8"),
+      readFile("scripts/build-portable-win.ps1", "utf8"),
+    ]);
+
+    expect(requirements).toContain("pykakasi==2.3.0");
+    expect(builder).toContain("-m pip install -r");
+    expect(builder).toContain("--collect-data pykakasi");
   });
 
   it("resolves an add-to-playlist success result", async () => {

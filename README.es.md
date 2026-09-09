@@ -2,13 +2,15 @@
 
 [English](README.md)
 
-El Exportador convierte listas de reproducción `.m3u` en listas de YouTube Music o Spotify mediante una aplicación web local.
+El Exportador convierte listas de reproducción `.m3u` en listas de YouTube Music mediante una aplicación web local.
 
 ## Funciones
 
-- Sube una lista `.m3u` y crea la lista correspondiente en YouTube Music o Spotify.
+- Sube una lista `.m3u` y crea la lista correspondiente en YouTube Music.
 - Empieza en Modo de prueba para revisar pistas coincidentes, no encontradas y ambiguas sin crear una lista; desactívalo solo cuando quieras crearla.
 - Revisa manualmente las pistas no encontradas o ambiguas antes de añadir selecciones a una lista creada sin modo de prueba.
+
+> Spotify no está disponible temporalmente en esta versión. El flujo público de la aplicación solo muestra YouTube Music como destino.
 
 ## Requisitos
 
@@ -42,7 +44,7 @@ Se prefiere `npm ci` porque instala las dependencias fijadas en `package-lock.js
 
    <img src="docs/images/manual_revision.png" alt="Pantalla de revisión manual de pistas" width="720">
 
-4. Busca la lista creada en el destino seleccionado.
+4. Busca la lista creada en YouTube Music.
 
    <img src="docs/images/Resume.png" alt="Resumen del resultado de la conversión" width="720">
 
@@ -56,16 +58,7 @@ npm run build:portable:win
 
 Para crear el ZIP portátil se requiere Windows, Node.js 20 o posterior y Python 3.11.8 con PyInstaller. Para ejecutar el ZIP se requiere Node.js 20 o posterior.
 
-### Configuración de Spotify para mantenimiento
-
-Las compilaciones portátiles con Spotify necesitan una única aplicación de Spotify Developer administrada por mantenimiento:
-
-1. Registra una aplicación de Spotify Developer y configúrala con **Authorization Code + PKCE**.
-2. Registra esta URI exacta de devolución de llamada local: `http://127.0.0.1:3000/api/spotify-auth/callback`.
-3. Durante la compilación, proporciona el Client ID público de la aplicación mediante el parámetro de PowerShell `-SpotifyClientId` o la variable de entorno `SPOTIFY_CLIENT_ID`. La compilación se detiene claramente si no se proporciona ninguno.
-4. Nunca uses ni confirmes en el repositorio un client secret, token, código de autorización ni otro valor de autorización de Spotify. El Client ID público es el único valor de Spotify incluido en el iniciador portátil.
-
-Las personas usuarias no configuran credenciales de Spotify: solo hacen clic en **Conectar Spotify** dentro de la aplicación local y autorizan directamente con OAuth de Spotify mediante PKCE. Spotify crea listas privadas. YouTube Music usa el inicio de sesión guiado del navegador y su autenticación específica; la privacidad de sus listas sigue el comportamiento de la cuenta/API de YouTube Music.
+YouTube Music usa el inicio de sesión guiado del navegador y su autenticación específica; la privacidad de sus listas sigue el comportamiento de la cuenta/API de YouTube Music.
 
 ## Compatibilidad de plataforma
 

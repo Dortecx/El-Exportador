@@ -43,6 +43,14 @@ function retryAfterMilliseconds(response: Response): number {
     : 1_000;
 }
 
+function spotifyOperation(path: string, method = "GET"): string {
+  if (path.startsWith("/search?")) return "track-search";
+  if (path === "/me") return "profile";
+  if (path === "/me/playlists" && method === "POST") return "playlist-create";
+  if (path.startsWith("/playlists/") && path.endsWith("/items") && method === "POST") return "playlist-insert";
+  return "request";
+}
+
 function candidate(item: {
   album?: { name?: string };
   artists?: { name?: string }[];
@@ -62,70 +70,180 @@ function candidate(item: {
   };
 }
 
+type SearchAdmission = "normal" | "probe";
+
+class SpotifySearchCircuitBreaker {
+  private admissionLevel = 1;
+  private cooldownDeadline = 0;
+  private cooldownPromise: Promise<number> | undefined;
+  private inRecovery = 0;
+  private probeActive = false;
+  private probeFailures = 0;
+  private recoverySuccesses = 0;
+  private state: "closed" | "open" | "recovering" = "closed";
+
+  constructor(
+    private readonly maxRecoveryAdmission: number,
+    private readonly sleep: (milliseconds: number) => Promise<void>,
+    private readonly now: () => number,
+  ) {}
+
+  async acquire(shouldCancel: SpotifyCancellationCheck | undefined, maxProbeFailures: number): Promise<SearchAdmission> {
+    let observedProbeFailures = this.probeFailures;
+    let sleptOpenDeadline = 0;
+    for (;;) {
+      if (shouldCancel?.()) throw new DOMException("Spotify operation cancelled", "AbortError");
+      if (this.state === "closed") return "normal";
+      if (this.state === "recovering" && this.inRecovery < this.admissionLevel) {
+        this.inRecovery += 1;
+        return "normal";
+      }
+      if (this.state === "open" && (this.now() >= this.cooldownDeadline || this.cooldownDeadline <= sleptOpenDeadline) && !this.probeActive) {
+        this.probeActive = true;
+        console.info("[spotify] search circuit probe", { admissionLevel: 1 });
+        return "probe";
+      }
+      if (this.probeFailures > observedProbeFailures) {
+        observedProbeFailures = this.probeFailures;
+        if (observedProbeFailures > maxProbeFailures) throw new SpotifyApiError(429);
+      }
+      if (this.state === "open") {
+        sleptOpenDeadline = Math.max(sleptOpenDeadline, await this.waitForCooldown());
+      } else {
+        await this.sleep(25);
+      }
+    }
+  }
+
+  private waitForCooldown(): Promise<number> {
+    if (!this.cooldownPromise) {
+      this.cooldownPromise = (async () => {
+        let observedDeadline = this.cooldownDeadline;
+        for (;;) {
+          await this.sleep(Math.max(0, observedDeadline - this.now()));
+          if (this.cooldownDeadline <= observedDeadline) return observedDeadline;
+          observedDeadline = this.cooldownDeadline;
+        }
+      })().finally(() => { this.cooldownPromise = undefined; });
+    }
+    return this.cooldownPromise;
+  }
+
+  release(admission: SearchAdmission, status: number): void {
+    if (admission === "probe") {
+      this.probeActive = false;
+      if (status === 429) return;
+      if (status < 200 || status >= 300) {
+        this.state = "closed";
+        return;
+      }
+      this.state = "recovering";
+      this.admissionLevel = 1;
+      this.recoverySuccesses = 0;
+      this.inRecovery = 0;
+      console.info("[spotify] search circuit probe success", { admissionLevel: this.admissionLevel });
+      return;
+    }
+    if (this.state === "recovering" && this.inRecovery > 0) this.inRecovery -= 1;
+    if (this.state === "recovering" && status !== 429 && status >= 200 && status < 300) {
+      this.recoverySuccesses += 1;
+      if (this.admissionLevel < this.maxRecoveryAdmission && this.recoverySuccesses >= this.admissionLevel) {
+        this.recoverySuccesses = 0;
+        this.admissionLevel = Math.min(this.maxRecoveryAdmission, this.admissionLevel + 1);
+        console.info("[spotify] search circuit admission", { admissionLevel: this.admissionLevel });
+      }
+      if (this.admissionLevel >= this.maxRecoveryAdmission) this.state = "closed";
+    }
+  }
+
+  open(milliseconds: number, fromProbe: boolean): void {
+    this.cooldownDeadline = Math.max(this.cooldownDeadline, this.now() + milliseconds);
+    this.state = "open";
+    this.inRecovery = 0;
+    this.recoverySuccesses = 0;
+    if (fromProbe) {
+      this.probeActive = false;
+      this.probeFailures += 1;
+      console.warn("[spotify] search circuit probe failure", { waitMs: Math.max(0, this.cooldownDeadline - this.now()) });
+    } else {
+      console.warn("[spotify] search circuit opened", { waitMs: Math.max(0, this.cooldownDeadline - this.now()) });
+    }
+  }
+}
+
+const defaultSleep = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+const spotifySearchCircuitBreakers = new WeakMap<(milliseconds: number) => Promise<void>, SpotifySearchCircuitBreaker>();
+
 export class SpotifyApi {
   private readonly maxRetries: number;
+  private readonly searchCircuitBreaker: SpotifySearchCircuitBreaker;
   private readonly sleep: (milliseconds: number) => Promise<void>;
-  private cooldownDeadline = 0;
-  private cooldownPromise: Promise<void> | undefined;
 
   constructor(private readonly options: SpotifyApiOptions) {
     this.maxRetries = options.maxRetries ?? 2;
-    this.sleep = options.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
+    this.sleep = options.sleep ?? defaultSleep;
+    const existingBreaker = spotifySearchCircuitBreakers.get(this.sleep);
+    this.searchCircuitBreaker = existingBreaker ?? new SpotifySearchCircuitBreaker(5, this.sleep, () => this.now());
+    if (!existingBreaker) spotifySearchCircuitBreakers.set(this.sleep, this.searchCircuitBreaker);
   }
 
   private now(): number {
     return this.options.now?.() ?? Date.now();
   }
 
-  private async waitForCooldown(): Promise<void> {
-    await this.cooldownPromise;
-  }
-
-  private extendCooldown(milliseconds: number): Promise<void> {
-    // Concurrent 429s share one monotonic deadline; a shorter later hint cannot
-    // shorten a cooldown already requested by Spotify.
-    this.cooldownDeadline = Math.max(this.cooldownDeadline, this.now() + milliseconds);
-    if (!this.cooldownPromise) {
-      this.cooldownPromise = (async () => {
-        let observedDeadline = this.cooldownDeadline;
-        do {
-          await this.sleep(Math.max(0, observedDeadline - this.now()));
-          // Sleep once per observed deadline. Only a concurrent 429 that extends
-          // the deadline warrants another sleep, even if an injected sleep settles
-          // immediately without advancing the clock.
-          if (this.cooldownDeadline <= observedDeadline) return;
-          observedDeadline = this.cooldownDeadline;
-        } while (true);
-      })().finally(() => { this.cooldownPromise = undefined; });
-    }
-    return this.cooldownPromise;
-  }
-
   private async request(path: string, init: RequestInit = {}, shouldCancel?: SpotifyCancellationCheck, onRequestDispatched?: () => void): Promise<Response> {
+    const operation = spotifyOperation(path, init.method);
+    const usesSearchCircuit = operation === "track-search";
     for (let attempt = 0; ; attempt += 1) {
-      if (shouldCancel?.()) throw new DOMException("Spotify operation cancelled", "AbortError");
-      await this.waitForCooldown();
-      if (shouldCancel?.()) throw new DOMException("Spotify operation cancelled", "AbortError");
+      let admission: SearchAdmission = "normal";
+      if (shouldCancel?.()) {
+        console.warn("[spotify] request cancelled", { attempt: attempt + 1, operation, stage: "before-wait" });
+        throw new DOMException("Spotify operation cancelled", "AbortError");
+      }
+      if (usesSearchCircuit) admission = await this.searchCircuitBreaker.acquire(shouldCancel, this.maxRetries);
+      if (shouldCancel?.()) {
+        console.warn("[spotify] request cancelled", { attempt: attempt + 1, operation, stage: "after-wait" });
+        throw new DOMException("Spotify operation cancelled", "AbortError");
+      }
       const controller = new AbortController();
       const cancellationWatch = shouldCancel ? setInterval(() => {
-        if (shouldCancel()) controller.abort();
+        if (shouldCancel()) {
+          console.warn("[spotify] request cancelled", { attempt: attempt + 1, operation, stage: "in-flight" });
+          controller.abort();
+        }
       }, 20) : undefined;
       let response: Response;
+      const startedAt = this.now();
       try {
         onRequestDispatched?.();
+        console.info("[spotify] request attempt", { attempt: attempt + 1, operation });
         response = await this.options.fetch(`${SPOTIFY_API_URL}${path}`, {
           ...init,
           headers: { Authorization: `Bearer ${this.options.accessToken}`, ...init.headers },
           signal: controller.signal,
         });
+      } catch (error) {
+        if (usesSearchCircuit) this.searchCircuitBreaker.release(admission, 0);
+        throw error;
       } finally {
         if (cancellationWatch) clearInterval(cancellationWatch);
       }
-      if (response.status !== 429 || attempt >= this.maxRetries) {
+      const elapsedMs = Math.max(0, this.now() - startedAt);
+      console.info("[spotify] request response", { attempt: attempt + 1, elapsedMs, operation, status: response.status });
+      if (usesSearchCircuit) this.searchCircuitBreaker.release(admission, response.status);
+      if (response.status !== 429) {
         if (!response.ok) throw new SpotifyApiError(response.status);
         return response;
       }
-      await this.extendCooldown(retryAfterMilliseconds(response));
+      const waitMs = retryAfterMilliseconds(response);
+      console.warn("[spotify] rate limited", { attempt: attempt + 1, operation, status: 429, waitMs });
+      if (usesSearchCircuit) {
+        this.searchCircuitBreaker.open(waitMs, admission === "probe");
+      } else if (attempt < this.maxRetries) {
+        await this.sleep(waitMs);
+      }
+      if (attempt >= this.maxRetries) throw new SpotifyApiError(response.status);
+      console.info("[spotify] retry", { attempt: attempt + 2, operation });
     }
   }
 

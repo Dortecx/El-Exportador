@@ -9,7 +9,6 @@ type ManualSearchState = {
   offset: number;
   candidateCount: number;
   hasMore: boolean;
-  provider?: "spotify" | "youtube";
 };
 
 function loadNextManualSearch(states: Map<string, ManualSearchState>) {
@@ -85,23 +84,18 @@ describe("manual search pagination", () => {
     });
   });
 
-  it("uses Spotify's three fixed pages without threshold progression or a fourth page", () => {
+  it("exhausts YouTube Music manual search after the terminal page at the maximum threshold", () => {
     const states = new Map<string, ManualSearchState>([["track-1", {
       query: "query",
       artist: "artist",
       title: "title",
-      threshold: 0,
-      offset: 0,
+      threshold: 0.60,
+      offset: 10,
       candidateCount: 5,
-      hasMore: true,
-      provider: "spotify",
+      hasMore: false,
     }]]);
     const nextManualSearch = loadNextManualSearch(states);
 
-    expect(nextManualSearch("track-1", "query", "artist", "title")).toEqual({ threshold: 0, offset: 5, exhausted: false });
-    states.set("track-1", { ...states.get("track-1")!, offset: 5, hasMore: true });
-    expect(nextManualSearch("track-1", "query", "artist", "title")).toEqual({ threshold: 0, offset: 10, exhausted: false });
-    states.set("track-1", { ...states.get("track-1")!, offset: 10, hasMore: false });
-    expect(nextManualSearch("track-1", "query", "artist", "title")).toEqual({ threshold: 0, offset: 10, exhausted: true });
+    expect(nextManualSearch("track-1", "query", "artist", "title")).toEqual({ threshold: 0.60, offset: 10, exhausted: true });
   });
 });

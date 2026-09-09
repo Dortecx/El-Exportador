@@ -54,11 +54,9 @@ describe("live YouTube Music auth validation", () => {
     const clearCredentials = vi.fn();
     const showToast = vi.fn();
     const refreshProviderStates = vi.fn();
-    const disconnectSpotify = vi.fn(() => refreshProviderStates());
-    const spotifyDestination = { connected: true };
     const handleAuthenticationRequired = new Function(
-      "setAuthStatus", "t", "window", "showToast", "refreshProviderStates", "spotifyDestination", "disconnectSpotify", "spotifyConversionErrorMessage", `${helper}; return handleAuthenticationRequired;`,
-    )(setAuthStatus, (key: string) => key, { authStore: { getState: () => ({ clearCredentials }) } }, showToast, refreshProviderStates, spotifyDestination, disconnectSpotify, (payload: { code?: string }) => payload.code === "SPOTIFY_AUTHENTICATION_REQUIRED" ? "spotifyAuthenticationRequired" : "spotifyAuthorizationRequired");
+      "setAuthStatus", "t", "window", "showToast", "refreshProviderStates", `${helper}; return handleAuthenticationRequired;`,
+    )(setAuthStatus, (key: string) => key, { authStore: { getState: () => ({ clearCredentials }) } }, showToast, refreshProviderStates);
 
     expect(await handleAuthenticationRequired({ status: 401 }, { code: "AUTHENTICATION_REQUIRED" })).toBe(true);
     expect(setAuthStatus).toHaveBeenCalledWith("authUnauthenticated", "#FF4444", true);
@@ -67,23 +65,10 @@ describe("live YouTube Music auth validation", () => {
     expect(refreshProviderStates).toHaveBeenCalledOnce();
 
     expect(await handleAuthenticationRequired({ status: 500 }, { code: "AUTHENTICATION_REQUIRED" })).toBe(false);
-    expect(await handleAuthenticationRequired({ status: 500 }, { code: "SPOTIFY_AUTHORIZATION_REQUIRED" })).toBe(false);
+    expect(await handleAuthenticationRequired({ status: 401 }, { code: "SPOTIFY_AUTHORIZATION_REQUIRED" })).toBe(false);
+    expect(await handleAuthenticationRequired({ status: 401 }, { code: "SPOTIFY_AUTHENTICATION_REQUIRED" })).toBe(false);
     expect(showToast).toHaveBeenCalledTimes(1);
     expect(refreshProviderStates).toHaveBeenCalledOnce();
-    expect(disconnectSpotify).not.toHaveBeenCalled();
-
-    expect(await handleAuthenticationRequired({ status: 401 }, { code: "SPOTIFY_AUTHENTICATION_REQUIRED" })).toBe(true);
-    expect(spotifyDestination.connected).toBe(false);
-    expect(refreshProviderStates).toHaveBeenCalledTimes(2);
-    expect(showToast).toHaveBeenLastCalledWith("spotifyAuthenticationRequired", "error");
-
-    spotifyDestination.connected = true;
-    expect(await handleAuthenticationRequired({ status: 403 }, { code: "SPOTIFY_AUTHORIZATION_REQUIRED" })).toBe(true);
-    expect(spotifyDestination.connected).toBe(false);
-    expect(disconnectSpotify).toHaveBeenCalledOnce();
-    expect(refreshProviderStates).toHaveBeenCalledTimes(3);
-    expect(showToast).toHaveBeenCalledTimes(3);
-    expect(showToast).toHaveBeenLastCalledWith("spotifyAuthorizationRequired", "error");
 
     const manualSearch = html.match(/async function searchManualTrack[\s\S]*?(?=\n\s*function showManualReview)/)?.[0] || "";
     const addSelected = html.match(/addManualBtn\.addEventListener\('click',[\s\S]*?(?=\n\s*const startConversion)/)?.[0] || "";

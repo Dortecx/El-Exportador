@@ -1,7 +1,6 @@
 [CmdletBinding()]
 param(
-  [string]$OutputDirectory = "portable-win",
-  [string]$SpotifyClientId
+  [string]$OutputDirectory = "portable-win"
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,15 +10,9 @@ if ($env:OS -ne "Windows_NT") {
   throw "This builder must run on Windows so npm selects Windows production dependencies and PyInstaller creates searcher.exe."
 }
 
-$spotifyClientId = $SpotifyClientId
-if ([string]::IsNullOrWhiteSpace($spotifyClientId)) {
-  $spotifyClientId = $env:SPOTIFY_CLIENT_ID
-}
-if ([string]::IsNullOrWhiteSpace($spotifyClientId)) {
-  throw "Spotify-enabled portable build requires a public Spotify Client ID. Supply -SpotifyClientId or set SPOTIFY_CLIENT_ID before building."
-}
-$spotifyClientId = $spotifyClientId.Trim()
-$spotifyClientIdBase64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($spotifyClientId))
+# Spotify is intentionally unavailable in the v1.3.0 public portable release.
+# Keep the launcher placeholder empty so backend routes remain safely disabled without a build-time OAuth client.
+$spotifyClientIdBase64 = ""
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $package = Get-Content (Join-Path $projectRoot "package.json") -Raw | ConvertFrom-Json
@@ -40,7 +33,9 @@ if (-not $python) {
   throw "Python is required to freeze src\ytmusic\searcher.py. Install Python 3 and PyInstaller, then retry."
 }
 try {
-  & $python.Source -m PyInstaller --version | Out-Null
+  & $python.Source -m pip install -r (Join-Path $projectRoot "requirements.txt")
+      if ($LASTEXITCODE -ne 0) { throw "Python requirements installation failed with $LASTEXITCODE" }
+      & $python.Source -m PyInstaller --version | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "PyInstaller exited with $LASTEXITCODE" }
 } catch {
   throw "PyInstaller is required but unavailable. In the project environment run: python -m pip install -r requirements.txt pyinstaller. Then retry. Details: $($_.Exception.Message)"
@@ -74,6 +69,7 @@ $runtimeSources = @(
   "src\spotify\converter.ts",
   "src\spotify\matcher.ts",
   "src\ytmusic\client.ts",
+  "src\ytmusic\searcher.py",
   "src\parser.ts",
   "src\services\session.service.ts"
 )
@@ -92,7 +88,7 @@ if (-not (Test-Path -LiteralPath $publicSource)) { throw "Required public assets
 Copy-Item -LiteralPath $publicSource -Destination (Join-Path $appRoot "public") -Recurse -Force
 
 $pyInstallerDist = Join-Path $stageRoot "pyinstaller-dist"
-& $python.Source -m PyInstaller --noconfirm --clean --onefile --collect-data ytmusicapi --collect-data certifi --name searcher --distpath $pyInstallerDist --workpath (Join-Path $stageRoot "pyinstaller-work") --specpath (Join-Path $stageRoot "pyinstaller-spec") (Join-Path $projectRoot "src\ytmusic\searcher.py")
+& $python.Source -m PyInstaller --noconfirm --clean --onefile --collect-data ytmusicapi --collect-data certifi --collect-data pykakasi --name searcher --distpath $pyInstallerDist --workpath (Join-Path $stageRoot "pyinstaller-work") --specpath (Join-Path $stageRoot "pyinstaller-spec") (Join-Path $projectRoot "src\ytmusic\searcher.py")
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCODE. Install the Python requirements and retry." }
 $searcher = Join-Path $pyInstallerDist "searcher.exe"
 if (-not (Test-Path -LiteralPath $searcher)) { throw "PyInstaller completed but searcher.exe was not produced: $searcher" }

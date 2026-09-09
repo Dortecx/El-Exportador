@@ -5,7 +5,7 @@ import { Track, ParsedM3UResult } from "./types";
 const EXTENDED_M3U_HEADER = "#EXTM3U";
 const EXTINF_PREFIX = "#EXTINF:";
 const PLAYLIST_PREFIX = "#PLAYLIST:";
-const LEADING_NUMBER_REGEX = /^\d+(?:[-\s.]+\s*|\s+)/;
+const LEADING_NUMBER_REGEX = /^(?:(?:CD|Disc)\s*\d+\s*[-\u2013\u2014.]\s*|\d+(?:[-\s.]+\s*|\s+))/i;
 
 export function cleanTitle(title: string): string {
   return title.replace(LEADING_NUMBER_REGEX, "").trim();
@@ -18,6 +18,15 @@ function parseDuration(durationStr: string): number | undefined {
 
 function cleanTrailingBracket(str: string): string {
   return str.replace(/\s*\[\s*$/, "").trim();
+}
+
+function cleanArtistPrefix(artist: string): string {
+  const cleaned = cleanTrailingBracket(artist);
+  const trailingParenthesis = cleaned.match(/\s*\(([^)]*)\)\s*$/);
+  if (trailingParenthesis && SLASH_METADATA_REGEX.test(trailingParenthesis[1])) {
+    return cleaned.slice(0, trailingParenthesis.index).trim();
+  }
+  return cleaned;
 }
 
 function removeDuplicateArtistFromTitle(artist: string, title: string): string {
@@ -63,8 +72,8 @@ const JAP_SLASH_REGEX = /^(.+?)\s*[\uff0f/]\s*(.+)$/;
 // Matches Japanese corner bracket title
 const CORNER_BRACKET_REGEX = /^\u300c([^\u300d]+)\u300d/;
 const JAPANESE_PARENTHESIS_TITLE_REGEX = /\(([\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]+)\)/u;
-const SLASH_METADATA_REGEX = /(?:\b(?:anime|tv|season|series|episode|cour|ost|soundtrack|flac|hi-res|mp3|aac|\d+\s*bit|\d+\s*k(?:hz)?|blu-?ray|op|ed|ep|theme)\b|アニメ|シーズン|画質|品質)/i;
-const LIBRARY_FOLDER_REGEX = /^(?:home|music|audio|downloads?|library|media)$/i;
+const SLASH_METADATA_REGEX = /(?:\b(?:anime|tv|season|series|episode|cour|ost|soundtrack|flac|hi-res|mp3|aac|\d+\s*bit|\d+\s*k(?:hz)?|blu-?ray|op|ed|ep|theme|bonus\s+disc|(?:disc|cd)\s*\d+)\b|アニメ|シーズン|画質|品質)/i;
+const LIBRARY_FOLDER_REGEX = /^(?:home|music|audio|downloads?|library|media|favorites|samsung favorites)$/i;
 const TRACK_NUMBER_FOLDER_REGEX = /^(?:\d+\.?|CD\s*\d+|Disc\s*\d+)$/i;
 
 function isTrackNumberOnlyFolder(folder: string): boolean {
@@ -73,7 +82,9 @@ function isTrackNumberOnlyFolder(folder: string): boolean {
 
 function isCrediblePostSlashArtist(beforeSlash: string, afterSlash: string): boolean {
   if (SLASH_METADATA_REGEX.test(afterSlash)) return false;
-  return DASH_REGEX.test(beforeSlash) || CORNER_BRACKET_REGEX.test(beforeSlash);
+  const beforeDashMatch = beforeSlash.match(DASH_REGEX);
+  if (beforeDashMatch && cleanArtistPrefix(beforeDashMatch[1]) !== cleanTrailingBracket(beforeDashMatch[1])) return false;
+  return Boolean(beforeDashMatch || CORNER_BRACKET_REGEX.test(beforeSlash));
 }
 
 function findAncestorArtist(folders: string[]): string | undefined {
@@ -85,12 +96,12 @@ function findAncestorArtist(folders: string[]): string | undefined {
     if (
       !folder
       || isTrackNumberOnlyFolder(folder)
-      || SLASH_METADATA_REGEX.test(rawFolder)
+      || SLASH_METADATA_REGEX.test(folder)
       || LIBRARY_FOLDER_REGEX.test(folder)
     ) continue;
 
     const dashMatch = folder.match(DASH_REGEX);
-    if (dashMatch) return cleanTrailingBracket(dashMatch[1].trim());
+    if (dashMatch) return cleanArtistPrefix(dashMatch[1].trim());
 
     const slashMatch = folder.match(JAP_SLASH_REGEX);
     if (slashMatch) {
@@ -113,11 +124,13 @@ function extractFromPath(filePath: string): { artist?: string; title: string } {
   const parts = filePath.replace(/\\/g, "/").split("/").filter((p) => p.length > 0);
   const fileName = parts[parts.length - 1].replace(/\.[^.]+$/, "");
   const folderName = parts.length > 1 ? parts[parts.length - 2] : "";
-  const fileTitle = cleanTrailingBracket(fileName.trim().replace(/^\d+[\s\-\.]+\s*/, "").trim());
+  const isTrackNumberedFile = LEADING_NUMBER_REGEX.test(fileName.trim());
+  const fileTitle = cleanTrailingBracket(cleanTitle(fileName.trim()));
   const filenameDashMatch = fileTitle.match(DASH_REGEX);
 
-  // A filename's explicit artist-title pair is more specific than its parent folder.
-  if (filenameDashMatch) {
+  // Track-numbered files carry only a title after the number. In particular, a
+  // later dash can be part of the title rather than an artist-title separator.
+  if (!isTrackNumberedFile && filenameDashMatch) {
     return { artist: filenameDashMatch[1].trim(), title: filenameDashMatch[2].trim() };
   }
 
@@ -147,7 +160,7 @@ function extractFromPath(filePath: string): { artist?: string; title: string } {
     }
 
     return {
-      artist: cleanTrailingBracket(beforeDashMatch?.[1].trim() || beforeSlash),
+      artist: cleanArtistPrefix(beforeDashMatch?.[1].trim() || beforeSlash),
       title: fileTitle || beforeDashMatch?.[2].trim() || bracketMatch?.[1] || beforeSlash,
     };
   }
@@ -157,9 +170,15 @@ function extractFromPath(filePath: string): { artist?: string; title: string } {
   // Pattern: "Artist - FolderTitle" with any dash variant
   const dashMatch = folder.match(DASH_REGEX);
   if (dashMatch) {
-    const artist = cleanTrailingBracket(dashMatch[1].trim());
+    const artist = cleanArtistPrefix(dashMatch[1].trim());
     const cleanedTitle = removeDuplicateArtistFromTitle(artist, fileTitle);
     return { artist, title: japaneseParenthesisTitle || cleanedTitle || fileTitle };
+  }
+
+  // A simple immediate folder is the artist for numbered library tracks, whose
+  // filename must be kept intact as a title after removing the track number.
+  if (isTrackNumberedFile && folder && !SLASH_METADATA_REGEX.test(folderName) && !LIBRARY_FOLDER_REGEX.test(folder)) {
+    return { artist: cleanTrailingBracket(folder), title: fileTitle || fileName };
   }
 
   // Fallback: try extracting from fileTitle itself

@@ -5,6 +5,8 @@ import os
 import re
 import difflib
 import math
+import time
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
@@ -18,6 +20,11 @@ try:
 except ImportError:
     print(json.dumps({'error': 'ytmusicapi not installed. Run: pip install ytmusicapi'}))
     sys.exit(1)
+
+try:
+    from pykakasi import kakasi
+except ImportError:
+    kakasi = None
 
 
 STATE_ROOT = os.environ.get('M3U_YTMUSIC_STATE_DIR') or os.path.expanduser('~')
@@ -124,11 +131,46 @@ def contains_japanese(text):
     return bool(re.search(r'[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff]', text))
 
 
+def contains_kana(text):
+    return bool(re.search(r'[\u3040-\u309f\u30a0-\u30ff]', text))
+
+
+def contains_han(text):
+    return bool(re.search(r'[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]', text))
+
+
+def normalize_match_text(text):
+    normalized = unicodedata.normalize('NFKD', text).casefold()
+    return ''.join(char for char in normalized if char.isalnum())
+
+
+def kana_to_romaji(text):
+    """Return a normalized Hepburn form only when no Kanji reading is needed."""
+    if not kakasi or not contains_kana(text) or contains_han(text):
+        return None
+    try:
+        return normalize_match_text(''.join(part['hepburn'] for part in kakasi().convert(text)))
+    except Exception:
+        return None
+
+
+def kana_romaji_equivalent(left, right):
+    left_romaji = kana_to_romaji(left)
+    right_romaji = kana_to_romaji(right)
+    if left_romaji is not None and right_romaji is None and not contains_japanese(right):
+        return bool(left_romaji) and left_romaji == normalize_match_text(right)
+    if right_romaji is not None and left_romaji is None and not contains_japanese(left):
+        return bool(right_romaji) and right_romaji == normalize_match_text(left)
+    return False
+
+
 def extract_japanese_chars(text):
     return re.findall(r'[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff]', text)
 
 
 def title_similarity(title1, title2):
+    if kana_romaji_equivalent(title1, title2):
+        return 1.0
     t1_lower = title1.lower()
     t2_lower = title2.lower()
     if t1_lower in t2_lower or t2_lower in t1_lower:
@@ -170,6 +212,7 @@ def penalize_excluded(result_title, original_title):
 
 
 ARTIST_ALIASES = {
+    '*NSYNC': ['*NSYNC', 'NSYNC', 'Nync'],
     '梅田サイファー': ['UMEDA CYPHER', '梅田サイファー', 'Umeda Cypher'],
     'うめたせいふぁー': ['UMEDA CYPHER', '梅田サイファー', 'Umeda Cypher'],
     'UMEDA CYPHER': ['UMEDA CYPHER', '梅田サイファー', 'Umeda Cypher'],
@@ -192,6 +235,24 @@ def normalize_artist(artist):
     return artist
 
 
+CONTEXTUAL_SOURCE_SUFFIX_REGEX = re.compile(
+    r'(?:\s+-\s+from\s+[^-]+|\s+\(from\s+[^)]+\))$', re.IGNORECASE
+)
+
+
+def title_variants(title):
+    """Return the source title plus a safe canonical-search variant, if any."""
+    contextual_variant = CONTEXTUAL_SOURCE_SUFFIX_REGEX.sub('', title).strip()
+    if not contextual_variant or contextual_variant == title:
+        return [title]
+    return list(dict.fromkeys([title, contextual_variant]))
+
+
+def transliteration_variants(value):
+    romaji = kana_to_romaji(value)
+    return list(dict.fromkeys([value, romaji] if romaji else [value]))
+
+
 def artist_has_correct_match(result_artists, original_artist, is_japanese):
     if not original_artist or not result_artists:
         return True
@@ -199,7 +260,10 @@ def artist_has_correct_match(result_artists, original_artist, is_japanese):
     original_normalized = normalize_artist(original_artist)
     result_normalized = normalize_artist(result_artists[0]) if result_artists else ''
     
-    if original_normalized.lower() == result_normalized.lower():
+    if normalize_match_text(original_normalized) == normalize_match_text(result_normalized):
+        return True
+
+    if kana_romaji_equivalent(original_artist, result_normalized):
         return True
     
     if is_japanese:
@@ -283,6 +347,25 @@ def artist_allows_videos(artist):
     return False
 
 
+SEARCH_RETRY_ATTEMPTS = 3
+SEARCH_RETRY_BASE_SECONDS = 0.1
+
+
+def search_songs_with_retry(ytmusic, query, limit):
+    """Return whether a search completed plus its results after bounded transient retries."""
+    for attempt in range(SEARCH_RETRY_ATTEMPTS):
+        try:
+            return True, ytmusic.search(query, filter='songs', limit=limit)
+        except Exception as error:
+            if is_authentication_error(error):
+                raise AuthenticationRequiredError() from error
+            if attempt == SEARCH_RETRY_ATTEMPTS - 1:
+                print(f'DEBUG: Search error after retries: {error}', file=sys.stderr)
+                return False, []
+            time.sleep(SEARCH_RETRY_BASE_SECONDS * (2 ** attempt))
+    return False, []
+
+
 def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alternatives=True):
     """
     Search with fallback logic. Returns (result, query, similarity, status).
@@ -290,6 +373,7 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
     If collect_alternatives=True, yields all candidates sorted by similarity.
     """
     primary_title = extract_series_name(title).strip()
+    scoring_titles = title_variants(primary_title)
     is_japanese = contains_japanese(primary_title)
     
     override_result = check_manual_override(ytmusic, artist, primary_title)
@@ -304,17 +388,23 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
             print(f'DEBUG: Found artist {found_artist_name} with channelId: {target_channel_id}', file=sys.stderr)
     
     queries = []
-    if is_japanese:
-        if artist:
-            queries.append(f'{artist} {primary_title}')
-        queries.append(primary_title)
-    else:
-        if artist and primary_title:
-            queries.append(f'{artist} {primary_title}')
-        queries.append(primary_title)
+        # Add kana-to-rōmaji query forms without replacing source text.
+    for query_title in scoring_titles:
+        if artist and query_title:
+            queries.append(f'{artist} {query_title}')
+        queries.append(query_title)
+        for query_title in scoring_titles:
+            for search_title in transliteration_variants(query_title):
+                for search_artist in transliteration_variants(artist):
+                    if search_artist and search_title:
+                        queries.append(f'{search_artist} {search_title}')
+                queries.append(search_title)
+        queries = list(dict.fromkeys(queries))
     
     seen_video_ids = set()
     all_candidates = []  # Collect all candidates for alternatives
+    attempted_searches = 0
+    successful_searches = 0
     
     for query in queries:
         if not query.strip():
@@ -322,7 +412,11 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
         
         try:
             print(f'DEBUG: Searching query: {query} (is_japanese={is_japanese})', file=sys.stderr)
-            search_results = ytmusic.search(query, filter='songs', limit=15)
+            attempted_searches += 1
+            search_succeeded, search_results = search_songs_with_retry(ytmusic, query, 15)
+            if not search_succeeded:
+                continue
+            successful_searches += 1
             print(f'DEBUG: Got {len(search_results)} results', file=sys.stderr)
             
             for result in search_results:
@@ -349,7 +443,7 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
                     print(f'DEBUG: Artist mismatch {result_artist} vs {artist}, skipping', file=sys.stderr)
                     continue
                 
-                similarity = title_similarity(primary_title, result_title)
+                similarity = max(title_similarity(scoring_title, result_title) for scoring_title in scoring_titles)
                 
                 excluded_penalty = penalize_excluded(result_title, primary_title)
                 if excluded_penalty is not None:
@@ -369,7 +463,7 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
                 
                 all_candidates.append((result, query, similarity, status))
         except Exception as e:
-            if is_authentication_error(e):
+            if isinstance(e, AuthenticationRequiredError) or is_authentication_error(e):
                 raise AuthenticationRequiredError() from e
             print(f'DEBUG: Search error: {e}', file=sys.stderr)
             continue
@@ -383,7 +477,12 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
     if artist:
         print(f'DEBUG: Trying artist-only search: {artist}...', file=sys.stderr)
         try:
-            search_results = ytmusic.search(artist, filter='songs', limit=10)
+            attempted_searches += 1
+            search_succeeded, search_results = search_songs_with_retry(ytmusic, artist, 10)
+            if not search_succeeded:
+                search_results = []
+            else:
+                successful_searches += 1
             for result in search_results:
                 video_id = result.get('videoId')
                 if not video_id or video_id in seen_video_ids:
@@ -402,7 +501,7 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
                 if not artist_has_correct_match(result_artists, artist, is_japanese):
                     continue
                 
-                similarity = title_similarity(primary_title, result_title)
+                similarity = max(title_similarity(scoring_title, result_title) for scoring_title in scoring_titles)
                 
                 if similarity >= min_similarity:
                     status = 'matched'
@@ -413,7 +512,7 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
                 
                 all_candidates.append((result, artist, similarity, status))
         except Exception as e:
-            if is_authentication_error(e):
+            if isinstance(e, AuthenticationRequiredError) or is_authentication_error(e):
                 raise AuthenticationRequiredError() from e
             print(f'DEBUG: Artist-only search failed: {e}', file=sys.stderr)
     
@@ -421,6 +520,10 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
     all_candidates.sort(key=lambda x: x[2], reverse=True)
     
     if not all_candidates:
+        if attempted_searches and successful_searches == 0:
+            print(f'DEBUG: All searches failed for {artist} - {title}', file=sys.stderr)
+            yield None, '', 0.0, 'search_error'
+            return
         print(f'DEBUG: No match found for {artist} - {title}, marking as unmatched', file=sys.stderr)
         yield None, '', 0.0, 'unmatched'
         return
@@ -520,19 +623,20 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15, t
         similarity = result['similarity']
         alternatives = result['alternatives']
 
-        if status == 'unmatched' or matched_result is None:
+        if status in ('unmatched', 'search_error') or matched_result is None:
             print(
                 f"DEBUG: No match found for {result['artist']} - {result['title']}",
                 file=sys.stderr,
             )
             results.append({
-                'status': 'unmatched',
+                'status': status,
                 'artist': result['artist'],
                 'title': result['title'],
                 'videoId': None,
                 'bestMatch': None,
                 'alternatives': [],
                 'similarity': 0.0,
+                **({'reason': 'search_error'} if status == 'search_error' else {}),
             })
         else:
             results.append({
@@ -725,6 +829,7 @@ def main():
             results = output.get('results', [])
             unmatched_tracks = [result for result in results if result.get('status') == 'unmatched']
             ambiguous_tracks = [result for result in results if result.get('status') == 'ambiguous']
+            search_error_tracks = [result for result in results if result.get('status') == 'search_error']
             print(json.dumps({
                 'playlistId': output.get('playlistId'),
                 'playlistUrl': output.get('playlistUrl'),
@@ -734,6 +839,7 @@ def main():
                 'ambiguous': len(ambiguous_tracks),
                 'unmatchedTracks': unmatched_tracks,
                 'ambiguousTracks': ambiguous_tracks,
+                'searchErrorTracks': search_error_tracks,
                 'manualReviewTracks': [
                     result for result in results
                     if result.get('status') in ('unmatched', 'ambiguous')

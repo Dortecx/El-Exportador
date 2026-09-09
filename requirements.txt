@@ -2,6 +2,9 @@
 # ytmusicapi requires requests for HTTP access.
 ytmusicapi==1.12.2
 
+# Offline deterministic kana-to-Hepburn transliteration for conservative matching.
+pykakasi==2.3.0
+
 # Locked HTTP dependency closure
 requests==2.34.2
 certifi==2026.7.22

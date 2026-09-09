@@ -4,19 +4,54 @@ import { describe, expect, it } from "vitest";
 const portableBuildScript = readFileSync(new URL("../scripts/build-portable-win.ps1", import.meta.url), "utf8");
 const launcherTemplate = readFileSync(new URL("../scripts/start.cmd.template", import.meta.url), "utf8");
 
-describe("Spotify portable configuration", () => {
-  it("accepts a public client ID from an explicit build parameter or environment and rejects a missing value", () => {
-    expect(portableBuildScript).toMatch(/\[string\]\$SpotifyClientId/);
-    expect(portableBuildScript).toContain("$env:SPOTIFY_CLIENT_ID");
-    expect(portableBuildScript).toContain("Spotify-enabled portable build requires a public Spotify Client ID");
+function runtimeSourceAllowlist(): string[] {
+  const match = portableBuildScript.match(/\$runtimeSources = @\(\n(?<body>[\s\S]*?)\n\s*\)/);
+  if (!match?.groups?.body) throw new Error("Runtime source allowlist not found");
+  return Array.from(match.groups.body.matchAll(/"([^"]+)"/g), ([, source]) => source);
+}
+
+describe("Portable release configuration", () => {
+  it("keeps Spotify unavailable for the public portable build without requiring a build-time OAuth client", () => {
+    expect(portableBuildScript).not.toMatch(/\[string\]\$SpotifyClientId/);
+    expect(portableBuildScript).not.toContain("$env:SPOTIFY_CLIENT_ID");
+    expect(portableBuildScript).not.toContain("Spotify-enabled portable build requires a public Spotify Client ID");
+    expect(portableBuildScript).toContain("Spotify is intentionally unavailable in the v1.3.0 public portable release.");
+    expect(portableBuildScript).toContain('$spotifyClientIdBase64 = ""');
+    expect(portableBuildScript).toContain('Replace("@@SPOTIFY_CLIENT_ID_BASE64@@", $spotifyClientIdBase64)');
+    expect(launcherTemplate).not.toContain('echo %SPOTIFY_CLIENT_ID%');
+    expect(launcherTemplate).not.toContain('echo %SPOTIFY_CLIENT_ID_B64%');
   });
 
-  it("encodes the build-time public ID before inserting it into the launcher and exposes it to Node at runtime", () => {
-    expect(portableBuildScript).toContain("[Convert]::ToBase64String");
-    expect(portableBuildScript).toContain('Replace("@@SPOTIFY_CLIENT_ID_BASE64@@", $spotifyClientIdBase64)');
-    expect(launcherTemplate).toContain('set "SPOTIFY_CLIENT_ID_B64=@@SPOTIFY_CLIENT_ID_BASE64@@"');
-    expect(launcherTemplate).toContain('set "SPOTIFY_CLIENT_ID=%%I"');
-    expect(launcherTemplate).toContain('set "SPOTIFY_CLIENT_ID_B64="');
+  it("stages the portable runtime under a single archive root with app, launcher, and artifacts", () => {
+    expect(portableBuildScript).toContain('$releaseName = "El-Exportador-$($package.version)-windows"');
+    expect(portableBuildScript).toContain('$releaseRoot = Join-Path $stageRoot $releaseName');
+    expect(portableBuildScript).toContain('$appRoot = Join-Path $releaseRoot "app"');
+    expect(portableBuildScript).toContain('New-Item -ItemType Directory -Path (Join-Path $releaseRoot "artifacts") -Force');
+    expect(portableBuildScript).toContain('Join-Path $releaseRoot "artifacts\\searcher.exe"');
+    expect(portableBuildScript).toContain('Join-Path $releaseRoot "start.cmd"');
+    expect(portableBuildScript).toContain('Compress-Archive -Path $releaseRoot -DestinationPath $zipPath');
+    expect(portableBuildScript).toContain('$to = Join-Path $appRoot $source');
+  });
+
+  it("statically packages the Python YouTube searcher beside the TypeScript client without broadening runtime sources", () => {
+    expect(runtimeSourceAllowlist()).toEqual([
+      "src\\web\\server.ts",
+      "src\\web\\guidedBrowserAuth.ts",
+      "src\\config\\env.ts",
+      "src\\spotify\\config.ts",
+      "src\\spotify\\tokenStore.ts",
+      "src\\spotify\\types.ts",
+      "src\\spotify\\oauth.ts",
+      "src\\spotify\\api.ts",
+      "src\\spotify\\converter.ts",
+      "src\\spotify\\matcher.ts",
+      "src\\ytmusic\\client.ts",
+      "src\\ytmusic\\searcher.py",
+      "src\\parser.ts",
+      "src\\services\\session.service.ts",
+    ]);
+    expect(portableBuildScript).toContain('Join-Path $projectRoot "src\\ytmusic\\searcher.py"');
+    expect(portableBuildScript).toContain('$to = Join-Path $appRoot $source');
   });
 
   it("packages every statically imported Spotify runtime module without a client-secret path", () => {
@@ -40,18 +75,24 @@ describe("Spotify portable configuration", () => {
     expect(launcherTemplate).not.toContain('echo %SPOTIFY_CLIENT_ID_B64%');
   });
 
-  it("documents direct Spotify OAuth, private playlists, and dry-run manual review in both public READMEs", () => {
+  it("documents the authorized YouTube-only temporary Spotify-unavailable policy in both public READMEs", () => {
     const english = readFileSync(new URL("../README.md", import.meta.url), "utf8");
     const spanish = readFileSync(new URL("../README.es.md", import.meta.url), "utf8");
-    expect(english).toContain("YouTube Music or Spotify");
-    expect(english).toContain("directly with Spotify OAuth using PKCE");
-    expect(english).toContain("private playlists");
+    expect(english).toContain("converts `.m3u` playlists into YouTube Music playlists");
+    expect(english).toContain("Spotify is temporarily unavailable in this release");
+    expect(english).toContain("only shows YouTube Music as the destination");
     expect(english).toContain("Dry Run Mode");
     expect(english).toContain("manually");
-    expect(spanish).toContain("YouTube Music o Spotify");
-    expect(spanish).toContain("directamente con OAuth de Spotify mediante PKCE");
-    expect(spanish).toContain("listas privadas");
+    expect(english).not.toContain("YouTube Music or Spotify");
+    expect(english).not.toContain("directly with Spotify OAuth using PKCE");
+    expect(english).not.toContain("private playlists");
+    expect(spanish).toContain("convierte listas de reproducción `.m3u` en listas de YouTube Music");
+    expect(spanish).toContain("Spotify no está disponible temporalmente en esta versión");
+    expect(spanish).toContain("solo muestra YouTube Music como destino");
     expect(spanish).toContain("Modo de prueba");
     expect(spanish).toContain("manualmente");
+    expect(spanish).not.toContain("YouTube Music o Spotify");
+    expect(spanish).not.toContain("directamente con OAuth de Spotify mediante PKCE");
+    expect(spanish).not.toContain("listas privadas");
   });
 });

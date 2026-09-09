@@ -24,6 +24,10 @@ describe("Parser", () => {
       expect(cleanTitle("01... Song Title")).toBe("Song Title");
     });
 
+    it.each(["CD 01 - Song Title", "CD1 - Song Title", "Disc 2 - Song Title"])("should remove leading disc prefixes like %s", (fileName) => {
+      expect(cleanTitle(fileName)).toBe("Song Title");
+    });
+
     it("should not modify titles without track numbers", () => {
       expect(cleanTitle("Song Title")).toBe("Song Title");
     });
@@ -216,8 +220,8 @@ describe("Parser", () => {
       expect(tracks[0]).toMatchObject({ artist: "SIX LOUNGE", title: "title" });
     });
 
-    it.each(["01", "02", "1.", "CD1", "Disc 2"])("skips track-number-only ancestor folder %s", (trackFolder) => {
-      const tracks = parseM3U(`Artist Name / ${trackFolder} / metadata / 01 - Track.flac`, false);
+    it.each(["01", "02", "1.", "CD1", "CD 01", "Disc 2"])("skips track-number-only ancestor folder %s", (trackFolder) => {
+      const tracks = parseM3U(`Artist Name - Album Name / ${trackFolder} / metadata / 01 - Track.flac`, false);
 
       expect(tracks[0]).toMatchObject({ artist: "Artist Name", title: "Track" });
     });
@@ -228,8 +232,41 @@ describe("Parser", () => {
       expect(tracks[0]).toMatchObject({ artist: "Artist Name", title: "Track" });
     });
 
+    it("uses the cleaned artist-album ancestor beyond a compilation disc folder", () => {
+      const tracks = parseM3U("Ado - Ado's Best Adobum FLAC (24bit-48kHz)/CD 01/06 - unravel.flac", false);
+
+      expect(tracks[0]).toMatchObject({ artist: "Ado", title: "unravel" });
+    });
+
+    it("uses the folder artist and complete title for Samsung numbered Favorites tracks", () => {
+      const tracks = parseM3U("Samsung Favorites/Nync/01 - Bye Bye Bye - From Deadpool and Wolverine Soundtrack.flac", false);
+
+      expect(tracks[0]).toMatchObject({
+        artist: "Nync",
+        title: "Bye Bye Bye - From Deadpool and Wolverine Soundtrack",
+      });
+    });
+
+    it("never splits a later hyphen in a numbered filename", () => {
+      const tracks = parseM3U("Artist Name/01. Title - With Later Hyphen.flac", false);
+
+      expect(tracks[0]).toMatchObject({ artist: "Artist Name", title: "Title - With Later Hyphen" });
+    });
+
+    it("uses an unnumbered filename artist-title pair when folders provide no artist", () => {
+      const tracks = parseM3U("Library/Artist Name - Song Name.flac", false);
+
+      expect(tracks[0]).toMatchObject({ artist: "Artist Name", title: "Song Name" });
+    });
+
+    it("keeps Wuthering Waves as the approved source-channel folder artist", () => {
+      const tracks = parseM3U("Wuthering Waves/01 - Floating on the Waves.flac", false);
+
+      expect(tracks[0]).toMatchObject({ artist: "Wuthering Waves", title: "Floating on the Waves" });
+    });
+
     it("should prioritize a track-number-cleaned filename artist-title pair over slash folder metadata", () => {
-      const tracks = parseM3U("Sousou no Frieren OP Theme - Haru／Yorushika/01. Artist Name - Song Name.flac", false);
+      const tracks = parseM3U("Sousou no Frieren OP Theme - Haru／Yorushika/Artist Name - Song Name.flac", false);
 
       expect(tracks[0]).toMatchObject({ artist: "Artist Name", title: "Song Name" });
     });
@@ -238,6 +275,12 @@ describe("Parser", () => {
       const tracks = parseM3U("Artist - Title／TV Anime Season 2/track.flac", false);
 
       expect(tracks[0]).toMatchObject({ artist: "Artist", title: "track" });
+    });
+
+    it("uses the authoritative artist prefix before release text after a full-width slash", () => {
+      const tracks = parseM3U("Sonar Pocket (World Trigger OP) - GIRIGIRI／Egao no Riyuu. [FLAC]/01 - GIRIGIRI.flac", false);
+
+      expect(tracks[0]).toMatchObject({ artist: "Sonar Pocket", title: "GIRIGIRI" });
     });
 
     it("should retain the pre-slash artist when artist folders end in series metadata", () => {
@@ -250,6 +293,15 @@ describe("Parser", () => {
       const tracks = parseM3U("milet - Anytime Anywhere／Sousou no Frieren ED EP FLAC (24bit-48kHz)/01 - Anytime Anywhere.flac", false);
 
       expect(tracks[0]).toMatchObject({ artist: "milet", title: "Anytime Anywhere" });
+    });
+
+    it.each([
+      ["Big Time Rush／Bonus Disc/01 - Windows Down.flac", "Windows Down"],
+      ["Big Time Rush／Disc 2/02 - Til I Forget About You (Radio Edit).flac", "Til I Forget About You (Radio Edit)"],
+    ])("treats post-fullwidth-slash disc labels as metadata for %s", (path, title) => {
+      const tracks = parseM3U(path, false);
+
+      expect(tracks[0]).toMatchObject({ artist: "Big Time Rush", title });
     });
 
     it("should never use anime or quality suffixes as slash-path artists", () => {

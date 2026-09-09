@@ -738,6 +738,12 @@ app.post("/api/convert", async (req, res) => {
         const unmatched = result.outcomes.filter((outcome) => outcome.status === "unmatched").length;
         const ambiguous = result.outcomes.filter((outcome) => outcome.status === "ambiguous").length;
         const skipped = result.outcomes.filter((outcome) => outcome.status === "skipped").length;
+        const searchErrorTracks = result.outcomes.filter((outcome) => outcome.status === "search_error").map((outcome) => ({
+          artist: outcome.source.artist,
+          reason: outcome.reason,
+          status: outcome.status,
+          title: outcome.source.title,
+        }));
         const manualReviewTracks = result.outcomes
           .filter((outcome): outcome is SpotifyManualReviewOutcome => outcome.status === "unmatched" || outcome.status === "ambiguous")
           .map((outcome) => ({
@@ -755,6 +761,8 @@ app.post("/api/convert", async (req, res) => {
           unmatched,
           ambiguous,
           skipped,
+          searchErrors: searchErrorTracks.length,
+          searchErrorTracks,
           cancelled: result.cancelled,
           manualReviewTracks,
           remotePlaylist,
@@ -799,6 +807,7 @@ app.post("/api/convert", async (req, res) => {
 
     const unmatchedTracks = result.unmatchedTracks || [];
     const ambiguousTracks = result.ambiguousTracks || [];
+    const searchErrorTracks = result.searchErrorTracks || (result.results || []).filter((track) => track.status === "search_error");
     const manualReviewTracks = result.manualReviewTracks || [...unmatchedTracks, ...ambiguousTracks];
 
     // Enviar resultado al cliente
@@ -808,6 +817,8 @@ app.post("/api/convert", async (req, res) => {
       matched: result.matched,
       unmatched: unmatchedTracks.length,
       ambiguous: ambiguousTracks.length,
+      searchErrors: searchErrorTracks.length,
+      searchErrorTracks,
       playlistId: result.playlistId,
       playlistUrl: result.playlistUrl,
       unmatchedTracks,

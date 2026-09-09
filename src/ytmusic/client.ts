@@ -61,11 +61,12 @@ export interface YTMusicBestMatch {
 }
 
 export interface YTMusicSearchResult {
-  status: 'matched' | 'unmatched' | 'ambiguous';
+  status: 'matched' | 'unmatched' | 'ambiguous' | 'search_error';
   artist: string;
   title: string;
   videoId: string | null;
   bestMatch: YTMusicBestMatch | null;
+  reason?: 'search_error';
 }
 
 export interface YTMusicConversionResult {
@@ -76,6 +77,7 @@ export interface YTMusicConversionResult {
   unmatchedTracks?: YTMusicSearchResult[];
   ambiguousTracks?: YTMusicSearchResult[];
   manualReviewTracks?: YTMusicSearchResult[];
+  searchErrorTracks?: YTMusicSearchResult[];
 }
 
 export type ProgressCallback = (current: number, total: number, artist: string, title: string, status: string) => void;
@@ -134,11 +136,12 @@ function isYTMusicBestMatch(value: unknown): value is YTMusicBestMatch {
 
 function isYTMusicSearchResult(value: unknown): value is YTMusicSearchResult {
   return isScriptResponse(value)
-    && (value.status === "matched" || value.status === "unmatched" || value.status === "ambiguous")
+    && (value.status === "matched" || value.status === "unmatched" || value.status === "ambiguous" || value.status === "search_error")
     && typeof value.artist === "string"
     && typeof value.title === "string"
     && (typeof value.videoId === "string" || value.videoId === null)
-    && (isYTMusicBestMatch(value.bestMatch) || value.bestMatch === null);
+    && (isYTMusicBestMatch(value.bestMatch) || value.bestMatch === null)
+    && (value.reason === undefined || value.reason === "search_error");
 }
 
 function toYTMusicConversionResult(value: unknown): YTMusicConversionResult | null {
@@ -157,7 +160,8 @@ function toYTMusicConversionResult(value: unknown): YTMusicConversionResult | nu
     || !Array.isArray(value.results) || !value.results.every(isYTMusicSearchResult)) return null;
   if ((value.unmatchedTracks !== undefined && (!Array.isArray(value.unmatchedTracks) || !value.unmatchedTracks.every(isYTMusicSearchResult)))
     || (value.ambiguousTracks !== undefined && (!Array.isArray(value.ambiguousTracks) || !value.ambiguousTracks.every(isYTMusicSearchResult)))
-    || (value.manualReviewTracks !== undefined && (!Array.isArray(value.manualReviewTracks) || !value.manualReviewTracks.every(isYTMusicSearchResult)))) return null;
+    || (value.manualReviewTracks !== undefined && (!Array.isArray(value.manualReviewTracks) || !value.manualReviewTracks.every(isYTMusicSearchResult)))
+    || (value.searchErrorTracks !== undefined && (!Array.isArray(value.searchErrorTracks) || !value.searchErrorTracks.every(isYTMusicSearchResult)))) return null;
   return {
     playlistId: value.playlistId,
     playlistUrl: value.playlistUrl,
@@ -166,6 +170,7 @@ function toYTMusicConversionResult(value: unknown): YTMusicConversionResult | nu
     ...(value.unmatchedTracks !== undefined ? { unmatchedTracks: value.unmatchedTracks } : {}),
     ...(value.ambiguousTracks !== undefined ? { ambiguousTracks: value.ambiguousTracks } : {}),
     ...(value.manualReviewTracks !== undefined ? { manualReviewTracks: value.manualReviewTracks } : {}),
+    ...(value.searchErrorTracks !== undefined ? { searchErrorTracks: value.searchErrorTracks } : {}),
   };
 }
 

@@ -76,6 +76,10 @@ export type SpotifyProgressCallback = (current: number, total: number, artist: s
 export type SpotifyConversionOutcome = SpotifyTrackMatch | {
   source: SpotifySourceTrack;
   status: "skipped";
+} | {
+  reason: "rate_limited";
+  source: SpotifySourceTrack;
+  status: "search_error";
 };
 
 export type SpotifyRemotePlaylistState =
