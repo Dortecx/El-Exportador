@@ -191,6 +191,29 @@ function spotifyConnectionError(res: express.Response, connection: { code?: stri
   return res.status(connection.status).json({ error: authorizationRequired ? "Authorization required" : code === "SPOTIFY_AUTHENTICATION_REQUIRED" ? "Authentication required" : "Spotify is unavailable", code });
 }
 
+type ConversionLogDestination = "spotify" | "youtube";
+type ConversionCompletionSummary = {
+  destination: ConversionLogDestination;
+  total: number;
+  matched: number;
+  unmatched: number;
+  ambiguous: number;
+  searchErrors: number;
+  skipped?: number;
+};
+
+function logConversionStart(destination: ConversionLogDestination, total: number, dryRun: unknown): void {
+  console.info("conversion.start", { destination, total, dryRun: dryRun === true });
+}
+
+function logConversionComplete(summary: ConversionCompletionSummary): void {
+  console.info("conversion.complete", summary);
+}
+
+function logConversionFailure(destination: ConversionLogDestination, code: string, phase?: string): void {
+  console.error("conversion.failed", { destination, code, ...(phase ? { phase } : {}) });
+}
+
 type SpotifyErrorPhase = "preflight_profile" | "matching" | "playlist_create" | "playlist_insert";
 type SpotifyManualReviewOutcome = SpotifyTrackMatch;
 type ConversionPreflightCode = "AUTHENTICATION_REQUIRED" | "AUTHORIZATION_REQUIRED" | "RATE_LIMITED" | "PROVIDER_UNAVAILABLE";
@@ -727,8 +750,12 @@ app.post("/api/convert", async (req, res) => {
         if (shouldCancel()) return res.json({ success: true, cancelled: true, sideEffects: { inserted: 0, playlist: "not-created" } });
         if (destination === "spotify") {
       if (!Array.isArray(tracks)) return res.status(400).json({ error: "Tracks and playlistName are required" });
+      logConversionStart("spotify", tracks.length, dryRun);
       const connection = await spotifyConnection();
-      if (!connection.api) return spotifyConnectionError(res, connection);
+      if (!connection.api) {
+        logConversionFailure("spotify", connection.code ?? "SPOTIFY_AUTHENTICATION_REQUIRED");
+        return spotifyConnectionError(res, connection);
+      }
       try {
         const progressCallback = (current: number, total: number, artist: string, title: string, status: string) => {
           sendToRun(runId, { type: "progress", added: current, total, artist, title, status });
@@ -773,14 +800,18 @@ app.post("/api/convert", async (req, res) => {
           ...(remotePlaylist.status === "created" || remotePlaylist.status === "partial" ? { playlistId: remotePlaylist.id, playlistUrl: remotePlaylist.url } : {}),
         };
         sendToRun(runId, { type: "result", ...payload });
+        if (!result.cancelled) logConversionComplete({ destination: "spotify", total: tracks.length, matched, unmatched, ambiguous, skipped, searchErrors: searchErrorTracks.length });
         return res.json({ success: true, ...payload });
       } catch (error) {
         const failure = spotifyConversionError(error);
+        logConversionFailure("spotify", failure.code, failure.phase);
         sendToRun(runId, { type: "error", code: failure.code });
         return res.status(failure.status).json({ error: failure.error, code: failure.code, ...(failure.phase ? { phase: failure.phase } : {}) });
       }
     }
     
+    logConversionStart("youtube", Array.isArray(tracks) ? tracks.length : 0, dryRun);
+
     // Importar la función de conversión
     const { convertWithYtMusic } = await import("../../src/ytmusic/client");
     
@@ -825,6 +856,7 @@ app.post("/api/convert", async (req, res) => {
       ambiguousTracks,
       manualReviewTracks
     });
+    logConversionComplete({ destination: "youtube", total: tracks.length, matched: result.matched, unmatched: unmatchedTracks.length, ambiguous: ambiguousTracks.length, searchErrors: searchErrorTracks.length });
     
     return res.json({ success: true });
   } catch (err) {
@@ -834,9 +866,10 @@ app.post("/api/convert", async (req, res) => {
       return res.json({ success: true, ...payload });
     }
     if ((err as { code?: unknown })?.code === "AUTHENTICATION_REQUIRED") {
+      logConversionFailure("youtube", "AUTHENTICATION_REQUIRED");
       return res.status(401).json({ error: "Authentication required", code: "AUTHENTICATION_REQUIRED" });
     }
-    console.error("Error al convertir la playlist:", err);
+    logConversionFailure("youtube", "CONVERSION_FAILED");
     sendToRun(runId, { type: "error", code: "CONVERSION_FAILED" });
     return res.status(500).json({ error: "Failed to convert playlist" });
   }

@@ -98,6 +98,20 @@ async function noEventWithin(reader: ReadableStreamDefaultReader<Uint8Array>, mi
   }
 }
 
+function captureConversionLogs() {
+  const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+  const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  return {
+    error,
+    info,
+    messages: () => JSON.stringify([...info.mock.calls, ...error.mock.calls]),
+    restore: () => {
+      info.mockRestore();
+      error.mockRestore();
+    },
+  };
+}
+
 afterEach(async () => {
   await closeTestResources();
   resetSpotifyWebDependenciesForTest();
@@ -187,6 +201,110 @@ describe("Spotify web backend", () => {
       status: 200,
     });
     expect(convert).toHaveBeenCalledOnce();
+  });
+
+  it("logs one sanitized Spotify conversion start and completion summary", async () => {
+    const logs = captureConversionLogs();
+    try {
+      setSpotifyWebDependenciesForTest({
+        convert: vi.fn(async () => ({
+          cancelled: false,
+          outcomes: [
+            { candidate: { uri: "spotify:track:secret" }, source: { artist: "Secret Artist", title: "Secret Song" }, status: "matched" as const },
+            { alternatives: [], candidate: null, confidence: 0, source: { artist: "Missing Artist", title: "Missing Song" }, status: "unmatched" as const },
+            { alternatives: [], candidate: null, confidence: 0.4, source: { artist: "Maybe Artist", title: "Maybe Song" }, status: "ambiguous" as const },
+            { reason: "search_error", source: { artist: "Broken Artist", title: "Broken Song" }, status: "search_error" as const },
+            { reason: "duplicate", source: { artist: "Skipped Artist", title: "Skipped Song" }, status: "skipped" as const },
+          ],
+          remotePlaylist: { status: "not-created" as const },
+        })),
+        getClientConfig: () => ({ clientId: "test-client", enabled: true, reason: null, redirectUri: "http://localhost/callback", supported: true }),
+        getTokenState: () => ({ accessToken: "secret-access", expiresAtEpochMs: 1, refreshToken: "secret-refresh", scope: "", tokenType: "Bearer" }),
+      });
+
+      await expect(request("/api/convert", {
+        destination: "spotify",
+        dryRun: true,
+        playlistName: "Secret Playlist",
+        tracks: [{ artist: "Secret Artist", title: "Secret Song" }],
+      })).resolves.toMatchObject({ status: 200 });
+
+      expect(logs.info.mock.calls).toEqual([
+        ["conversion.start", { destination: "spotify", total: 1, dryRun: true }],
+        ["conversion.complete", { destination: "spotify", total: 1, matched: 1, unmatched: 1, ambiguous: 1, skipped: 1, searchErrors: 1 }],
+      ]);
+      expect(logs.error).not.toHaveBeenCalled();
+      expect(logs.messages()).not.toContain("Secret Artist");
+      expect(logs.messages()).not.toContain("Secret Song");
+      expect(logs.messages()).not.toContain("Secret Playlist");
+      expect(logs.messages()).not.toContain("spotify:track:secret");
+      expect(logs.messages()).not.toContain("secret-access");
+      expect(logs.messages()).not.toContain("secret-refresh");
+    } finally {
+      logs.restore();
+    }
+  });
+
+  it("logs one sanitized Spotify terminal failure without raw provider details", async () => {
+    const logs = captureConversionLogs();
+    try {
+      setSpotifyWebDependenciesForTest({
+        convert: vi.fn(async () => { throw Object.assign(new SpotifyApiError(403), { message: "provider-body-secret" }); }),
+        getClientConfig: () => ({ clientId: "test-client", enabled: true, reason: null, redirectUri: "http://localhost/callback", supported: true }),
+        getTokenState: () => ({ accessToken: "secret-access", expiresAtEpochMs: 1, refreshToken: "secret-refresh", scope: "", tokenType: "Bearer" }),
+      });
+
+      await expect(request("/api/convert", {
+        destination: "spotify",
+        playlistName: "Secret Playlist",
+        tracks: [{ artist: "Secret Artist", title: "Secret Song" }],
+      })).resolves.toMatchObject({ body: { code: "SPOTIFY_AUTHORIZATION_REQUIRED" }, status: 403 });
+
+      expect(logs.info.mock.calls).toEqual([["conversion.start", { destination: "spotify", total: 1, dryRun: false }]]);
+      expect(logs.error.mock.calls).toEqual([["conversion.failed", { destination: "spotify", code: "SPOTIFY_AUTHORIZATION_REQUIRED", phase: "matching" }]]);
+      expect(logs.messages()).not.toContain("provider-body-secret");
+      expect(logs.messages()).not.toContain("Secret Artist");
+      expect(logs.messages()).not.toContain("Secret Song");
+      expect(logs.messages()).not.toContain("Secret Playlist");
+      expect(logs.messages()).not.toContain("secret-access");
+      expect(logs.messages()).not.toContain("secret-refresh");
+    } finally {
+      logs.restore();
+    }
+  });
+
+  it("logs sanitized YouTube conversion lifecycle without track details", async () => {
+    const logs = captureConversionLogs();
+    try {
+      ytmusic.convertWithYtMusic.mockResolvedValue({
+        ambiguousTracks: [{ artist: "Maybe Artist", title: "Maybe Song" }],
+        manualReviewTracks: [],
+        matched: 1,
+        playlistId: "youtube-secret-playlist-id",
+        playlistUrl: "https://youtube.test/secret-playlist",
+        results: [{ artist: "Broken Artist", reason: "search_error", status: "search_error", title: "Broken Song" }],
+        unmatchedTracks: [{ artist: "Missing Artist", title: "Missing Song" }],
+      });
+
+      await expect(request("/api/convert", {
+        destination: "youtube",
+        dryRun: false,
+        playlistName: "Secret Playlist",
+        tracks: [{ artist: "Secret Artist", title: "Secret Song" }],
+      })).resolves.toEqual({ body: { success: true }, status: 200 });
+
+      expect(logs.info.mock.calls).toEqual([
+        ["conversion.start", { destination: "youtube", total: 1, dryRun: false }],
+        ["conversion.complete", { destination: "youtube", total: 1, matched: 1, unmatched: 1, ambiguous: 1, searchErrors: 1 }],
+      ]);
+      expect(logs.error).not.toHaveBeenCalled();
+      expect(logs.messages()).not.toContain("Secret Artist");
+      expect(logs.messages()).not.toContain("Secret Song");
+      expect(logs.messages()).not.toContain("Secret Playlist");
+      expect(logs.messages()).not.toContain("youtube-secret-playlist-id");
+    } finally {
+      logs.restore();
+    }
   });
 
   it("returns a bounded indeterminate Spotify creation state without a playlist identifier", async () => {
