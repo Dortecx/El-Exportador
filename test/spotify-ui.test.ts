@@ -83,6 +83,34 @@ describe("YouTube-only destination UI", () => {
     expect(disableIndex).toBeGreaterThan(-1);
     expect(preflightIndex).toBeGreaterThan(disableIndex);
     expect(eventSourceIndex).toBeGreaterThan(preflightIndex);
-    expect(startConversion).toContain("if (!await ensureConversionReady(conversionDestination)) {\n                activeConversionRun = null;\n                updateStartButton();\n                startBtn.textContent = \"[ EXECUTE ]\";\n                return;\n              }");
+    expect(startConversion).toContain("if (!await ensureConversionReady(conversionDestination)) {\n                activeConversionRun = null;\n                playConversionNotification('failure');\n                updateStartButton();\n                startBtn.textContent = \"[ EXECUTE ]\";\n                return;\n              }");
   });
-});
+
+
+  it("primes Web Audio from Execute and emits one terminal notification branch per run", () => {
+    const startConversion = html.slice(html.indexOf("const startConversion = async () =>"), html.indexOf("// Asignar el evento onclick"));
+    expect(html).toContain("window.AudioContext || window.webkitAudioContext");
+    expect(html).toContain("async function primeNotificationAudio()");
+    expect(startConversion).toContain("await primeNotificationAudio();");
+    expect(html).toContain("success: [523.25, 659.25, 783.99]");
+    expect(html).toContain("attention: [659.25, 659.25, 587.33]");
+    expect(html).toContain("failure: [783.99, 659.25, 523.25]");
+    expect(startConversion).toContain("const completedPartially = Number(data.searchErrors) > 0 || playlistCreationFailed || hasPartialInsertion;");
+    expect(startConversion).toContain("playConversionNotification(completedPartially ? 'attention' : 'success');");
+    expect(startConversion).toContain("playConversionNotification('failure');");
+    expect(startConversion).not.toContain("playConversionNotification('cancel");
+  });
+
+  it("renders accessible dynamic manual review navigation with reduced-motion scrolling", () => {
+    expect(html).toContain('class="manual-review-nav" id="manualReviewNav" hidden aria-label="Manual review navigation"');
+    expect(html).toContain('id="manualReviewUp" aria-label="Scroll to the start of manual review"');
+    expect(html).toContain('id="manualReviewDown" aria-label="Scroll to the end of manual review"');
+    expect(html).toContain("function updateManualReviewNav()");
+    expect(html).toContain("manualReviewSection.scrollHeight > viewportHeight + 1");
+    expect(html).toContain("manualReviewUp.hidden = !canScrollUp;");
+    expect(html).toContain("manualReviewDown.hidden = !canScrollDown;");
+    expect(html).toContain("window.addEventListener('scroll', updateManualReviewNav, { passive: true });");
+    expect(html).toContain("window.addEventListener('resize', updateManualReviewNav);");
+    expect(html).toContain("behavior: prefersReducedMotion?.matches ? 'auto' : 'smooth'");
+    expect(html).toContain("requestAnimationFrame(updateManualReviewNav);");
+  });});
