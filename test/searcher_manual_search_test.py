@@ -55,6 +55,21 @@ class SearchSingleThresholdTest(unittest.TestCase):
         self.assertIn('acoustic', [candidate['videoId'] for candidate in result['results']])
         self.assertNotIn('different', [candidate['videoId'] for candidate in result['results']])
 
+    def test_manual_search_requires_acoustic_title_and_matching_artist_for_acoustic_request(self):
+        class AcousticFakeYTMusic:
+            def search(self, *_args, **_kwargs):
+                return [
+                    {'videoId': 'ordinary-rasen', 'title': 'RASEN', 'artists': [{'name': '9Lana'}]},
+                    {'videoId': 'acoustic-cover', 'title': 'RASEN Acoustic Ver.', 'artists': [{'name': 'Other'}]},
+                    {'videoId': 'acoustic-no-artist', 'title': 'RASEN Acoustic Ver.', 'artists': []},
+                    {'videoId': 'acoustic-9lana', 'title': 'RASEN Acoustic Ver.', 'artists': [{'name': '9Lana'}]},
+                ]
+
+        self.searcher.get_ytmusic = lambda: AcousticFakeYTMusic()
+        result = self.searcher.search_single('9Lana RASEN Acoustic Ver.', '9Lana', 'RASEN Acoustic Ver.', 0.0)
+
+        self.assertEqual([candidate['videoId'] for candidate in result['results']], ['acoustic-9lana'])
+
     def test_nync_alias_matches_nsync_results(self):
         self.assertTrue(self.searcher.artist_has_correct_match(
             ['NSYNC'], 'Nync', False
@@ -88,6 +103,31 @@ class SearchSingleThresholdTest(unittest.TestCase):
         self.assertIn('Nync Bye Bye Bye', fake_ytmusic.queries)
         self.assertEqual(result['results'][0]['title'], source_title)
         self.assertEqual(result['results'][0]['bestMatch']['title'], 'Bye Bye Bye')
+
+    def test_automatic_search_requires_acoustic_title_and_matching_artist_for_acoustic_request(self):
+        class AcousticFakeYTMusic:
+            def search(self, *_args, **_kwargs):
+                return [
+                    {'videoId': 'ordinary-rasen', 'title': 'RASEN', 'artists': [{'name': '9Lana'}]},
+                    {'videoId': 'acoustic-cover', 'title': 'RASEN Acoustic Ver.', 'artists': [{'name': 'Other'}]},
+                    {'videoId': 'acoustic-no-artist', 'title': 'RASEN Acoustic Ver.', 'artists': []},
+                    {'videoId': 'acoustic-9lana', 'title': 'RASEN Acoustic Ver.', 'artists': [{'name': '9Lana'}]},
+                ]
+
+        fake = AcousticFakeYTMusic()
+        self.searcher.get_ytmusic_thread = lambda: fake
+        self.searcher.get_ytmusic = lambda: fake
+        result = self.searcher.search_tracks(
+            [{'artist': '9Lana', 'title': 'RASEN Acoustic Ver.'}],
+            'playlist',
+            False,
+            max_workers=1,
+        )
+
+        self.assertEqual(result['results'][0]['status'], 'matched')
+        self.assertEqual(result['results'][0]['videoId'], 'acoustic-9lana')
+        self.assertEqual(result['results'][0]['bestMatch']['title'], 'RASEN Acoustic Ver.')
+        self.assertEqual(result['results'][0]['alternatives'], [])
 
     def test_automatic_search_does_not_emit_debug_stderr(self):
         class CandidateDebugFakeYTMusic:

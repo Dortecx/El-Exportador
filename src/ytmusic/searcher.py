@@ -232,6 +232,13 @@ def has_unrequested_first_take_edition(result_title, requested_title):
     return has_first_take_edition(result_title) and not has_first_take_edition(requested_title)
 
 
+ACOUSTIC_EDITION_REGEX = re.compile(r'\bacoustic\b', re.IGNORECASE)
+
+
+def has_acoustic_edition(title):
+    return bool(ACOUSTIC_EDITION_REGEX.search(title or ''))
+
+
 ARTIST_ALIASES = {
     '*NSYNC': ['*NSYNC', 'NSYNC', 'Nync'],
     '梅田サイファー': ['UMEDA CYPHER', '梅田サイファー', 'Umeda Cypher'],
@@ -301,6 +308,16 @@ def get_all_artists(result):
     if artists and isinstance(artists, list):
         return [a.get('name', '') for a in artists if a.get('name')]
     return []
+
+
+def candidate_matches_required_acoustic_edition(result_title, result_artists, source_title, source_artist, is_japanese):
+    if not has_acoustic_edition(source_title):
+        return True
+    return (
+        has_acoustic_edition(result_title)
+        and bool(result_artists)
+        and artist_has_correct_match(result_artists, source_artist, is_japanese)
+    )
 
 
 def extract_series_name(title):
@@ -451,6 +468,9 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
                 
                 if artist and not artist_has_correct_match(result_artists, artist, is_japanese):
                     continue
+
+                if not candidate_matches_required_acoustic_edition(result_title, result_artists, primary_title, artist, is_japanese):
+                    continue
                 
                 if has_unrequested_first_take_edition(result_title, title):
                     continue
@@ -506,6 +526,9 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
                 result_artist = result_artists[0] if result_artists else ''
                 
                 if not artist_has_correct_match(result_artists, artist, is_japanese):
+                    continue
+
+                if not candidate_matches_required_acoustic_edition(result_title, result_artists, primary_title, artist, is_japanese):
                     continue
                 
                 if has_unrequested_first_take_edition(result_title, title):
@@ -724,6 +747,16 @@ def search_single(query, artist='', title='', threshold=0.0, offset=0):
             seen_video_ids.add(video_id)
 
             result_title = result.get('title', '')
+            result_artists = get_all_artists(result)
+            if not candidate_matches_required_acoustic_edition(
+                result_title,
+                result_artists,
+                expected_title,
+                artist,
+                contains_japanese(expected_title),
+            ):
+                continue
+
             expected_title_similarity = title_similarity(expected_title, result_title)
             if expected_title_similarity < threshold:
                 continue
