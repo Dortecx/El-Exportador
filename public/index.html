@@ -1330,7 +1330,7 @@
                   oscillator.type = kind === 'attention' ? 'square' : 'sine';
                   oscillator.frequency.setValueAtTime(frequency, start + index * 0.13);
                   gain.gain.setValueAtTime(0.0001, start + index * 0.13);
-                  gain.gain.exponentialRampToValueAtTime(0.08, start + index * 0.13 + 0.015);
+                  gain.gain.exponentialRampToValueAtTime(1.0, start + index * 0.13 + 0.015);
                   gain.gain.exponentialRampToValueAtTime(0.0001, start + index * 0.13 + 0.11);
                   oscillator.connect(gain).connect(audioContext.destination);
                   oscillator.start(start + index * 0.13);
