@@ -2158,26 +2158,6 @@
               showToast(t('playlistCreationFailed'), 'error');
             }
 
-            if (hasPartialInsertion) {
-                  const item = document.createElement('div');
-                  item.className = 'summary-item summary-ambiguous';
-                  const label = document.createElement('div');
-                  label.className = 'summary-label';
-                  label.textContent = t('partialInsertion', { inserted: insertedCount, matched: matchedCount });
-                  item.appendChild(label);
-                  summaryGrid.appendChild(item);
-                }
-
-                if (playlistCreationFailed) {
-                  const item = document.createElement('div');
-                  item.className = 'summary-item summary-unmatched';
-                  const label = document.createElement('div');
-                  label.className = 'summary-label';
-                  label.textContent = t('playlistCreationFailed');
-                  item.appendChild(label);
-                  summaryGrid.appendChild(item);
-                }
-
                 if (!playlistCreationFailed && data.playlistUrl) {
               playlistUrl.replaceChildren(`${t('playlistUrl')} `);
               const link = document.createElement('a');

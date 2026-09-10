@@ -65,6 +65,8 @@ describe("YouTube-only destination UI", () => {
     expect(html).toContain("if (!playlistCreationFailed && data.playlistUrl)");
     expect(html).toContain("showToast(t('playlistCreationFailed'), 'error');");
     expect(html).toContain("backendStatus.firstElementChild.className = playlistCreationFailed ? \"backend-dot unavailable\" : \"backend-dot available\";");
+    expect(html).not.toContain("label.textContent = t('partialInsertion', { inserted: insertedCount, matched: matchedCount });");
+    expect(html).not.toContain("label.textContent = t('playlistCreationFailed');");
   });
 
   it("recomputes Execute eligibility after conversion cleanup instead of force-enabling it", () => {
