@@ -59,14 +59,24 @@ describe("YouTube-only destination UI", () => {
     expect(html).not.toContain("/api/spotify-auth/disconnect");
   });
 
-  it("surfaces playlist creation failure without showing a playlist URL", () => {
+  it("surfaces playlist creation failure or unconfirmed creation without showing a playlist URL", () => {
     expect(html).toContain("playlistCreationFailed: 'Playlist creation failed. Matches and manual review are still available below.'");
-    expect(html).toContain("const playlistCreationFailed = Boolean(data.playlistCreationFailure);");
-    expect(html).toContain("if (!playlistCreationFailed && data.playlistUrl)");
-    expect(html).toContain("showToast(t('playlistCreationFailed'), 'error');");
-    expect(html).toContain("backendStatus.firstElementChild.className = playlistCreationFailed ? \"backend-dot unavailable\" : \"backend-dot available\";");
+    expect(html).toContain("playlistCreationUnconfirmed: 'Playlist creation is unconfirmed. Matches and manual review are still available below; no playlist URL can be shown safely.'");
+    expect(html).toContain("const playlistCreationUnconfirmed = data.playlistCreationFailure?.code === 'YTMUSIC_PLAYLIST_CREATION_UNCONFIRMED';");
+    expect(html).toContain("const playlistCreationFailed = Boolean(data.playlistCreationFailure) && !playlistCreationUnconfirmed;");
+    expect(html).toContain("const playlistCreationProblem = playlistCreationFailed || playlistCreationUnconfirmed;");
+    expect(html).toContain("if (!playlistCreationProblem && data.playlistUrl)");
+    expect(html).toContain("showToast(playlistCreationMessage, 'error');");
+    expect(html).toContain("backendStatus.firstElementChild.className = playlistCreationProblem ? \"backend-dot unavailable\" : \"backend-dot available\";");
     expect(html).not.toContain("label.textContent = t('partialInsertion', { inserted: insertedCount, matched: matchedCount });");
     expect(html).not.toContain("label.textContent = t('playlistCreationFailed');");
+  });
+
+  it("keeps conversion summary to three base cards, with manual additions as the only optional fourth", () => {
+    expect(html).toContain("[['matched', data.matched], ['unmatched', data.unmatched], ['ambiguous', data.ambiguous]].forEach");
+    expect(html).toContain("item.id = 'manualAdditionsSummary';");
+    expect(html).not.toContain("summary-playlist-creation");
+    expect(html).not.toContain("playlistCreationUnconfirmedSummary");
   });
 
   it("recomputes Execute eligibility after conversion cleanup instead of force-enabling it", () => {
@@ -97,7 +107,7 @@ describe("YouTube-only destination UI", () => {
     expect(html).toContain("success: [523.25, 659.25, 783.99]");
     expect(html).toContain("attention: [659.25, 659.25, 587.33]");
     expect(html).toContain("failure: [783.99, 659.25, 523.25]");
-    expect(startConversion).toContain("const completedPartially = Number(data.searchErrors) > 0 || playlistCreationFailed || hasPartialInsertion;");
+    expect(startConversion).toContain("const completedPartially = Number(data.searchErrors) > 0 || playlistCreationProblem || hasPartialInsertion;");
     expect(startConversion).toContain("playConversionNotification(completedPartially ? 'attention' : 'success');");
     expect(startConversion).toContain("playConversionNotification('failure');");
     expect(startConversion).not.toContain("playConversionNotification('cancel");

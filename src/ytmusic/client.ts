@@ -70,7 +70,7 @@ export interface YTMusicSearchResult {
 }
 
 export interface YTMusicPlaylistCreationFailure {
-  code: 'YTMUSIC_PLAYLIST_CREATE_FAILED';
+  code: 'YTMUSIC_PLAYLIST_CREATE_FAILED' | 'YTMUSIC_PLAYLIST_CREATION_UNCONFIRMED';
   message: string;
 }
 
@@ -151,12 +151,16 @@ function isYTMusicSearchResult(value: unknown): value is YTMusicSearchResult {
 }
 
 const YTMUSIC_PLAYLIST_CREATE_FAILED_MESSAGE = "YouTube Music could not create the playlist. Matched tracks are available below.";
+const YTMUSIC_PLAYLIST_CREATION_UNCONFIRMED_MESSAGE = "YouTube Music playlist creation is unconfirmed. Matched tracks are available below; no playlist URL can be shown safely.";
 
 function toYTMusicPlaylistCreationFailure(value: unknown): YTMusicPlaylistCreationFailure | null {
-  if (!isScriptResponse(value) || value.code !== "YTMUSIC_PLAYLIST_CREATE_FAILED") return null;
+  if (!isScriptResponse(value)
+    || (value.code !== "YTMUSIC_PLAYLIST_CREATE_FAILED" && value.code !== "YTMUSIC_PLAYLIST_CREATION_UNCONFIRMED")) return null;
   return {
-    code: "YTMUSIC_PLAYLIST_CREATE_FAILED",
-    message: YTMUSIC_PLAYLIST_CREATE_FAILED_MESSAGE,
+    code: value.code,
+    message: value.code === "YTMUSIC_PLAYLIST_CREATION_UNCONFIRMED"
+      ? YTMUSIC_PLAYLIST_CREATION_UNCONFIRMED_MESSAGE
+      : YTMUSIC_PLAYLIST_CREATE_FAILED_MESSAGE,
   };
 }
 

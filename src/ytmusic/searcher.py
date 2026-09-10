@@ -568,6 +568,91 @@ def search_with_fallback(ytmusic, artist, title, min_similarity=0.6, collect_alt
             yield candidate[0], candidate[1], candidate[2], candidate[3]
 
 
+PLAYLIST_RECONCILIATION_ATTEMPTS = 3
+PLAYLIST_RECONCILIATION_DELAY_SECONDS = 0.25
+PLAYLIST_CREATION_FAILED_MESSAGE = 'YouTube Music could not create the playlist. Matched tracks are available below.'
+PLAYLIST_CREATION_UNCONFIRMED_MESSAGE = 'YouTube Music playlist creation is unconfirmed. Matched tracks are available below; no playlist URL can be shown safely.'
+
+
+def build_playlist_creation_failure(code='YTMUSIC_PLAYLIST_CREATE_FAILED'):
+    return {
+        'code': code,
+        'message': PLAYLIST_CREATION_UNCONFIRMED_MESSAGE
+        if code == 'YTMUSIC_PLAYLIST_CREATION_UNCONFIRMED'
+        else PLAYLIST_CREATION_FAILED_MESSAGE,
+    }
+
+
+def playlist_entry_id(entry):
+    if not isinstance(entry, dict):
+        return None
+    for key in ('playlistId', 'playlist_id', 'browseId', 'id'):
+        value = entry.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def playlist_entry_title(entry):
+    if not isinstance(entry, dict):
+        return None
+    value = entry.get('title')
+    return value if isinstance(value, str) else None
+
+
+def playlist_entry_count(entry):
+    if not isinstance(entry, dict):
+        return None
+    for key in ('count', 'trackCount', 'songCount'):
+        value = entry.get(key)
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str) and re.fullmatch(r'\d+', value.strip()):
+            return int(value.strip())
+    return None
+
+
+def library_playlists_with_title(ytmusic, playlist_name):
+    entries = ytmusic.get_library_playlists(limit=100)
+    if not isinstance(entries, list):
+        return []
+    return [entry for entry in entries if playlist_entry_title(entry) == playlist_name and playlist_entry_id(entry)]
+
+
+def snapshot_playlist_ids_for_title(ytmusic, playlist_name):
+    try:
+        return {playlist_entry_id(entry) for entry in library_playlists_with_title(ytmusic, playlist_name)}
+    except Exception as error:
+        if is_authentication_error(error):
+            raise AuthenticationRequiredError() from error
+        return None
+
+
+def reconcile_created_playlist(ytmusic, playlist_name, existing_playlist_ids, expected_count):
+    if existing_playlist_ids is None:
+        return None
+
+    for attempt in range(PLAYLIST_RECONCILIATION_ATTEMPTS):
+        try:
+            entries = library_playlists_with_title(ytmusic, playlist_name)
+        except Exception as error:
+            if is_authentication_error(error):
+                raise AuthenticationRequiredError() from error
+            return None
+
+        new_entries = [
+            entry for entry in entries
+            if playlist_entry_id(entry) not in existing_playlist_ids
+        ]
+        if len(new_entries) == 1 and playlist_entry_count(new_entries[0]) == expected_count:
+            return playlist_entry_id(new_entries[0])
+        if attempt < PLAYLIST_RECONCILIATION_ATTEMPTS - 1:
+            time.sleep(PLAYLIST_RECONCILIATION_DELAY_SECONDS)
+    return None
+
+
 def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15, threshold=0.6):
     if isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or not math.isfinite(threshold) or threshold < 0 or threshold > 1:
         raise ValueError('Conversion threshold must be a number from 0 to 1')
@@ -685,6 +770,7 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15, t
 
     playlist_creation_failure = None
     if create_playlist and video_ids:
+        existing_playlist_ids = snapshot_playlist_ids_for_title(ytmusic, playlist_name)
         try:
             created_playlist_id = ytmusic.create_playlist(
                 playlist_name,
@@ -695,21 +781,27 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15, t
                 playlist_id = created_playlist_id
                 playlist_url = f'https://music.youtube.com/playlist?list={playlist_id}'
             else:
-                playlist_id = None
-                playlist_url = None
-                playlist_creation_failure = {
-                    'code': 'YTMUSIC_PLAYLIST_CREATE_FAILED',
-                    'message': 'YouTube Music could not create the playlist. Matched tracks are available below.',
-                }
+                playlist_id = reconcile_created_playlist(
+                    ytmusic,
+                    playlist_name,
+                    existing_playlist_ids,
+                    len(video_ids),
+                )
+                playlist_url = f'https://music.youtube.com/playlist?list={playlist_id}' if playlist_id else None
+                if playlist_id is None:
+                    playlist_creation_failure = build_playlist_creation_failure('YTMUSIC_PLAYLIST_CREATION_UNCONFIRMED')
         except Exception as error:
             if is_authentication_error(error):
                 raise AuthenticationRequiredError() from error
-            playlist_id = None
-            playlist_url = None
-            playlist_creation_failure = {
-                'code': 'YTMUSIC_PLAYLIST_CREATE_FAILED',
-                'message': 'YouTube Music could not create the playlist. Matched tracks are available below.',
-            }
+            playlist_id = reconcile_created_playlist(
+                ytmusic,
+                playlist_name,
+                existing_playlist_ids,
+                len(video_ids),
+            )
+            playlist_url = f'https://music.youtube.com/playlist?list={playlist_id}' if playlist_id else None
+            if playlist_id is None:
+                playlist_creation_failure = build_playlist_creation_failure('YTMUSIC_PLAYLIST_CREATION_UNCONFIRMED')
     else:
         playlist_id = None
         playlist_url = None

@@ -298,15 +298,65 @@ class SearchSingleThresholdTest(unittest.TestCase):
         self.assertEqual(final['manualReviewTracks'][0]['status'], 'search_error')
         self.assertEqual(final['manualReviewTracks'][0]['reason'], 'search_error')
 
-    def test_playlist_creation_failure_is_sanitized_and_preserves_matches(self):
-        class PlaylistCreateFailingYTMusic:
+    def test_playlist_creation_indeterminate_reconciles_exact_new_complete_playlist(self):
+        class PlaylistCreateIndeterminateYTMusic:
+            def __init__(self):
+                self.library_calls = 0
+                self.create_calls = 0
+
             def search(self, *_args, **_kwargs):
                 return [{'videoId': 'match', 'title': 'Song', 'artists': [{'name': 'Artist'}]}]
 
+            def get_library_playlists(self, *_args, **_kwargs):
+                self.library_calls += 1
+                if self.library_calls == 1:
+                    return [{'playlistId': 'existing', 'title': 'playlist', 'count': 1}]
+                return [
+                    {'playlistId': 'existing', 'title': 'playlist', 'count': 1},
+                    {'playlistId': 'recovered', 'title': 'playlist', 'count': 1},
+                ]
+
             def create_playlist(self, *_args, **_kwargs):
+                self.create_calls += 1
                 raise RuntimeError('raw provider secret must not leak')
 
-        fake = PlaylistCreateFailingYTMusic()
+        fake = PlaylistCreateIndeterminateYTMusic()
+        self.searcher.time.sleep = lambda _: None
+        self.searcher.get_ytmusic_thread = lambda: fake
+        self.searcher.get_ytmusic = lambda: fake
+
+        result = self.searcher.search_tracks([{'artist': 'Artist', 'title': 'Song'}], 'playlist', True, max_workers=1)
+
+        self.assertEqual(result['playlistId'], 'recovered')
+        self.assertEqual(result['playlistUrl'], 'https://music.youtube.com/playlist?list=recovered')
+        self.assertEqual(fake.create_calls, 1)
+        self.assertNotIn('playlistCreationFailure', result)
+        self.assertNotIn('raw provider secret', json.dumps(result))
+
+    def test_playlist_creation_indeterminate_ambiguous_or_wrong_count_is_unconfirmed(self):
+        class PlaylistCreateAmbiguousYTMusic:
+            def __init__(self):
+                self.library_calls = 0
+                self.create_calls = 0
+
+            def search(self, *_args, **_kwargs):
+                return [{'videoId': 'match', 'title': 'Song', 'artists': [{'name': 'Artist'}]}]
+
+            def get_library_playlists(self, *_args, **_kwargs):
+                self.library_calls += 1
+                if self.library_calls == 1:
+                    return []
+                return [
+                    {'playlistId': 'new-one', 'title': 'playlist', 'count': 2},
+                    {'playlistId': 'new-two', 'title': 'playlist', 'count': 1},
+                ]
+
+            def create_playlist(self, *_args, **_kwargs):
+                self.create_calls += 1
+                raise RuntimeError('raw provider secret must not leak')
+
+        fake = PlaylistCreateAmbiguousYTMusic()
+        self.searcher.time.sleep = lambda _: None
         self.searcher.get_ytmusic_thread = lambda: fake
         self.searcher.get_ytmusic = lambda: fake
 
@@ -314,9 +364,36 @@ class SearchSingleThresholdTest(unittest.TestCase):
 
         self.assertIsNone(result['playlistId'])
         self.assertIsNone(result['playlistUrl'])
-        self.assertEqual(result['matched'], 1)
-        self.assertEqual(result['playlistCreationFailure']['code'], 'YTMUSIC_PLAYLIST_CREATE_FAILED')
+        self.assertEqual(fake.create_calls, 1)
+        self.assertEqual(result['playlistCreationFailure']['code'], 'YTMUSIC_PLAYLIST_CREATION_UNCONFIRMED')
         self.assertNotIn('raw provider secret', json.dumps(result))
+
+    def test_playlist_creation_missing_id_is_not_retried_and_stays_unconfirmed(self):
+        class PlaylistCreateMissingIdYTMusic:
+            def __init__(self):
+                self.create_calls = 0
+
+            def search(self, *_args, **_kwargs):
+                return [{'videoId': 'match', 'title': 'Song', 'artists': [{'name': 'Artist'}]}]
+
+            def get_library_playlists(self, *_args, **_kwargs):
+                return []
+
+            def create_playlist(self, *_args, **_kwargs):
+                self.create_calls += 1
+                return None
+
+        fake = PlaylistCreateMissingIdYTMusic()
+        self.searcher.time.sleep = lambda _: None
+        self.searcher.get_ytmusic_thread = lambda: fake
+        self.searcher.get_ytmusic = lambda: fake
+
+        result = self.searcher.search_tracks([{'artist': 'Artist', 'title': 'Song'}], 'playlist', True, max_workers=1)
+
+        self.assertEqual(fake.create_calls, 1)
+        self.assertIsNone(result['playlistId'])
+        self.assertIsNone(result['playlistUrl'])
+        self.assertEqual(result['playlistCreationFailure']['code'], 'YTMUSIC_PLAYLIST_CREATION_UNCONFIRMED')
 
     def test_playlist_creation_success_keeps_playlist_url(self):
         class PlaylistCreateSuccessYTMusic:
