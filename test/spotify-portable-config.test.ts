@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const portableBuildScript = readFileSync(new URL("../scripts/build-portable-win.ps1", import.meta.url), "utf8");
 const launcherTemplate = readFileSync(new URL("../scripts/start.cmd.template", import.meta.url), "utf8");
+const packageVersion = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 
 function runtimeSourceAllowlist(): string[] {
   const match = portableBuildScript.match(/\$runtimeSources = @\(\n(?<body>[\s\S]*?)\n\s*\)/);
@@ -15,7 +16,7 @@ describe("Portable release configuration", () => {
     expect(portableBuildScript).not.toMatch(/\[string\]\$SpotifyClientId/);
     expect(portableBuildScript).not.toContain("$env:SPOTIFY_CLIENT_ID");
     expect(portableBuildScript).not.toContain("Spotify-enabled portable build requires a public Spotify Client ID");
-    expect(portableBuildScript).toContain("Spotify is intentionally unavailable in the v1.3.0 public portable release.");
+    expect(portableBuildScript).toContain(`Spotify is intentionally unavailable in the v${packageVersion} public portable release.`);
     expect(portableBuildScript).toContain('$spotifyClientIdBase64 = ""');
     expect(portableBuildScript).toContain('Replace("@@SPOTIFY_CLIENT_ID_BASE64@@", $spotifyClientIdBase64)');
     expect(launcherTemplate).not.toContain('echo %SPOTIFY_CLIENT_ID%');

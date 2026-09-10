@@ -891,7 +891,6 @@ app.post("/api/convert", async (req, res) => {
     // Enviar resultado al cliente
     sendToRun(runId, payload);
     if (playlistCreationFailure) {
-      if (playlistCreationFailure.code === "AUTHENTICATION_REQUIRED") invalidateYtMusicAuthValidationCache();
       logConversionFailure("youtube", playlistCreationFailure.code, "playlist_create");
       return res.json({ success: false, error: playlistCreationFailure.message, code: playlistCreationFailure.code, ...payload });
     }

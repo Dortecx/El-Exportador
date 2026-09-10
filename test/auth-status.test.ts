@@ -7,7 +7,8 @@ describe("auth status", () => {
   it("checks persisted YouTube Music authentication asynchronously", () => {
     expect(server).toContain("checkYtMusicAvailable");
     expect(server).toContain('app.get("/api/auth-status", async (req, res) => {');
-    expect(server).toContain("const authenticated = await checkYtMusicAvailable();");
+    expect(server).toContain("const validation = await validateYtMusicAuthCached().catch(() => {");
+    expect(server).toContain('const authenticated = validation?.status === "valid";');
     expect(server).toContain("res.json({ authenticated });");
   });
 
