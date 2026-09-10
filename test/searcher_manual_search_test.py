@@ -1,6 +1,7 @@
 import contextlib
 import importlib.util
 import io
+import json
 import pathlib
 import sys
 import types
@@ -226,6 +227,74 @@ class SearchSingleThresholdTest(unittest.TestCase):
 
         self.assertEqual(result['results'][0]['status'], 'matched')
         self.assertEqual(result['results'][0]['videoId'], 'first-take')
+
+    def test_search_errors_are_included_in_manual_review_output(self):
+        class FailingFakeYTMusic:
+            def search(self, *_args, **_kwargs):
+                raise RuntimeError('temporary provider failure')
+
+        fake = FailingFakeYTMusic()
+        self.searcher.time.sleep = lambda _: None
+        self.searcher.get_ytmusic_thread = lambda: fake
+        self.searcher.get_ytmusic = lambda: fake
+        stdin = io.StringIO(json.dumps({
+            'action': 'search',
+            'createPlaylist': False,
+            'playlistName': 'playlist',
+            'tracks': [{'artist': 'Artist', 'title': 'Song'}],
+        }))
+        stdout = io.StringIO()
+
+        original_stdin = sys.stdin
+        try:
+            sys.stdin = stdin
+            with contextlib.redirect_stdout(stdout):
+                self.searcher.main()
+        finally:
+            sys.stdin = original_stdin
+
+        final = json.loads(stdout.getvalue().strip().splitlines()[-1])
+        self.assertEqual(final['manualReviewTracks'], final['searchErrorTracks'])
+        self.assertEqual(final['manualReviewTracks'][0]['status'], 'search_error')
+        self.assertEqual(final['manualReviewTracks'][0]['reason'], 'search_error')
+
+    def test_playlist_creation_failure_is_sanitized_and_preserves_matches(self):
+        class PlaylistCreateFailingYTMusic:
+            def search(self, *_args, **_kwargs):
+                return [{'videoId': 'match', 'title': 'Song', 'artists': [{'name': 'Artist'}]}]
+
+            def create_playlist(self, *_args, **_kwargs):
+                raise RuntimeError('raw provider secret must not leak')
+
+        fake = PlaylistCreateFailingYTMusic()
+        self.searcher.get_ytmusic_thread = lambda: fake
+        self.searcher.get_ytmusic = lambda: fake
+
+        result = self.searcher.search_tracks([{'artist': 'Artist', 'title': 'Song'}], 'playlist', True, max_workers=1)
+
+        self.assertIsNone(result['playlistId'])
+        self.assertIsNone(result['playlistUrl'])
+        self.assertEqual(result['matched'], 1)
+        self.assertEqual(result['playlistCreationFailure']['code'], 'YTMUSIC_PLAYLIST_CREATE_FAILED')
+        self.assertNotIn('raw provider secret', json.dumps(result))
+
+    def test_playlist_creation_success_keeps_playlist_url(self):
+        class PlaylistCreateSuccessYTMusic:
+            def search(self, *_args, **_kwargs):
+                return [{'videoId': 'match', 'title': 'Song', 'artists': [{'name': 'Artist'}]}]
+
+            def create_playlist(self, *_args, **_kwargs):
+                return 'playlist-id'
+
+        fake = PlaylistCreateSuccessYTMusic()
+        self.searcher.get_ytmusic_thread = lambda: fake
+        self.searcher.get_ytmusic = lambda: fake
+
+        result = self.searcher.search_tracks([{'artist': 'Artist', 'title': 'Song'}], 'playlist', True, max_workers=1)
+
+        self.assertEqual(result['playlistId'], 'playlist-id')
+        self.assertEqual(result['playlistUrl'], 'https://music.youtube.com/playlist?list=playlist-id')
+        self.assertNotIn('playlistCreationFailure', result)
 
     def test_all_fake_automatic_search_failures_return_search_error_after_bounded_retries(self):
         class FailingFakeYTMusic:

@@ -78,6 +78,26 @@ describe("YTMusic stdout JSON parser", () => {
     });
   });
 
+  it("accepts a playlist creation failure and sanitizes raw provider details", async () => {
+    mockProcess(['{"playlistId":null,"playlistUrl":null,"matched":1,"results":[{"status":"matched","artist":"Artist","title":"Song","videoId":"video-1","bestMatch":{"title":"Song","artist":"Artist","videoId":"video-1"}}],"manualReviewTracks":[],"playlistCreationFailure":{"code":"YTMUSIC_PLAYLIST_CREATE_FAILED","message":"raw provider secret must not leak"}}\n']);
+
+    const { convertWithYtMusic } = await import("../src/ytmusic/client.js");
+
+    await expect(convertWithYtMusic(
+      [{ artist: "Artist", title: "Song", file: "track.mp3" }],
+      "playlist",
+      { dryRun: false },
+    )).resolves.toMatchObject({
+      matched: 1,
+      playlistCreationFailure: {
+        code: "YTMUSIC_PLAYLIST_CREATE_FAILED",
+        message: "YouTube Music could not create the playlist. Matched tracks are available below.",
+      },
+      playlistId: null,
+      playlistUrl: null,
+    });
+  });
+
   it("rejects malformed standalone results", async () => {
     mockProcess(['{"status":"matched","artist":"Final","title":"Result","videoId":"video-1"}\n']);
 

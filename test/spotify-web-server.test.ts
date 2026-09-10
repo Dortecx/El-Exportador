@@ -509,7 +509,58 @@ describe("Spotify web backend", () => {
     });
   });
 
-  it("propagates fake YouTube search errors as retry-needed results without manual review", async () => {
+  it("reports sanitized YouTube playlist creation failure without completion", async () => {
+    const logs = captureConversionLogs();
+    try {
+      ytmusic.convertWithYtMusic.mockResolvedValue({
+        ambiguousTracks: [],
+        manualReviewTracks: [{ artist: "Artist", bestMatch: null, status: "unmatched", title: "Missing Song", videoId: null }],
+        matched: 1,
+        playlistCreationFailure: { code: "YTMUSIC_PLAYLIST_CREATE_FAILED", message: "YouTube Music could not create the playlist. Matched tracks are available below." },
+        playlistId: null,
+        playlistUrl: null,
+        results: [{ artist: "Artist", bestMatch: { artist: "Artist", title: "Song", videoId: "video-1" }, status: "matched", title: "Song", videoId: "video-1" }],
+        unmatchedTracks: [{ artist: "Artist", bestMatch: null, status: "unmatched", title: "Missing Song", videoId: null }],
+      });
+      const progress = await progressStream();
+      const reader = progressReader(progress);
+
+      await expect(request("/api/convert", { destination: "youtube", dryRun: false, playlistName: "Secret Playlist", tracks: [{ artist: "Secret Artist", title: "Secret Song" }] })).resolves.toMatchObject({
+        body: {
+          code: "YTMUSIC_PLAYLIST_CREATE_FAILED",
+          error: "YouTube Music could not create the playlist. Matched tracks are available below.",
+          manualReviewTracks: [{ status: "unmatched" }],
+          playlistCreationFailure: { code: "YTMUSIC_PLAYLIST_CREATE_FAILED" },
+          playlistId: null,
+          playlistUrl: null,
+          sideEffects: { inserted: 0, playlist: "failed" },
+          success: false,
+        },
+        status: 200,
+      });
+
+      const event = await reader.read();
+      await reader.cancel();
+      const payload = JSON.parse(new TextDecoder().decode(event.value).replace(/^data: /, "").trim());
+      expect(payload).toMatchObject({
+        manualReviewTracks: [{ status: "unmatched" }],
+        playlistCreationFailure: { code: "YTMUSIC_PLAYLIST_CREATE_FAILED" },
+        playlistId: null,
+        playlistUrl: null,
+        sideEffects: { inserted: 0, playlist: "failed" },
+        type: "result",
+      });
+      expect(logs.info.mock.calls).toEqual([["conversion.start", { destination: "youtube", total: 1, dryRun: false }]]);
+      expect(logs.error.mock.calls).toEqual([["conversion.failed", { destination: "youtube", code: "YTMUSIC_PLAYLIST_CREATE_FAILED", phase: "playlist_create" }]]);
+      expect(logs.messages()).not.toContain("Secret Artist");
+      expect(logs.messages()).not.toContain("Secret Song");
+      expect(logs.messages()).not.toContain("Secret Playlist");
+    } finally {
+      logs.restore();
+    }
+  });
+
+  it("propagates fake YouTube search errors as retry-needed manual-review results", async () => {
     ytmusic.convertWithYtMusic.mockResolvedValue({
       ambiguousTracks: [],
       manualReviewTracks: [],
@@ -528,7 +579,7 @@ describe("Spotify web backend", () => {
     await reader.cancel();
     const payload = JSON.parse(new TextDecoder().decode(event.value).replace(/^data: /, "").trim());
     expect(payload).toMatchObject({
-      manualReviewTracks: [],
+      manualReviewTracks: [{ reason: "search_error", status: "search_error", bestMatch: null, videoId: null }],
       searchErrors: 1,
       searchErrorTracks: [{ reason: "search_error", status: "search_error" }],
       type: "result",

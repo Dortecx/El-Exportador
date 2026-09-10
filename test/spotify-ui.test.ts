@@ -59,6 +59,14 @@ describe("YouTube-only destination UI", () => {
     expect(html).not.toContain("/api/spotify-auth/disconnect");
   });
 
+  it("surfaces playlist creation failure without showing a playlist URL", () => {
+    expect(html).toContain("playlistCreationFailed: 'Playlist creation failed. Matches and manual review are still available below.'");
+    expect(html).toContain("const playlistCreationFailed = Boolean(data.playlistCreationFailure);");
+    expect(html).toContain("if (!playlistCreationFailed && data.playlistUrl)");
+    expect(html).toContain("showToast(t('playlistCreationFailed'), 'error');");
+    expect(html).toContain("backendStatus.firstElementChild.className = playlistCreationFailed ? \"backend-dot unavailable\" : \"backend-dot available\";");
+  });
+
   it("recomputes Execute eligibility after conversion cleanup instead of force-enabling it", () => {
     expect(html).not.toContain("startBtn.disabled = false");
     expect(html).toContain("startBtn.disabled = true;");

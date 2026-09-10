@@ -69,6 +69,11 @@ export interface YTMusicSearchResult {
   reason?: 'search_error';
 }
 
+export interface YTMusicPlaylistCreationFailure {
+  code: 'YTMUSIC_PLAYLIST_CREATE_FAILED';
+  message: string;
+}
+
 export interface YTMusicConversionResult {
   playlistId: string | null;
   playlistUrl: string | null;
@@ -78,6 +83,7 @@ export interface YTMusicConversionResult {
   ambiguousTracks?: YTMusicSearchResult[];
   manualReviewTracks?: YTMusicSearchResult[];
   searchErrorTracks?: YTMusicSearchResult[];
+  playlistCreationFailure?: YTMusicPlaylistCreationFailure;
 }
 
 export type ProgressCallback = (current: number, total: number, artist: string, title: string, status: string) => void;
@@ -144,6 +150,16 @@ function isYTMusicSearchResult(value: unknown): value is YTMusicSearchResult {
     && (value.reason === undefined || value.reason === "search_error");
 }
 
+const YTMUSIC_PLAYLIST_CREATE_FAILED_MESSAGE = "YouTube Music could not create the playlist. Matched tracks are available below.";
+
+function toYTMusicPlaylistCreationFailure(value: unknown): YTMusicPlaylistCreationFailure | null {
+  if (!isScriptResponse(value) || value.code !== "YTMUSIC_PLAYLIST_CREATE_FAILED") return null;
+  return {
+    code: "YTMUSIC_PLAYLIST_CREATE_FAILED",
+    message: YTMUSIC_PLAYLIST_CREATE_FAILED_MESSAGE,
+  };
+}
+
 function toYTMusicConversionResult(value: unknown): YTMusicConversionResult | null {
   if (isYTMusicSearchResult(value)) {
     return {
@@ -162,6 +178,10 @@ function toYTMusicConversionResult(value: unknown): YTMusicConversionResult | nu
     || (value.ambiguousTracks !== undefined && (!Array.isArray(value.ambiguousTracks) || !value.ambiguousTracks.every(isYTMusicSearchResult)))
     || (value.manualReviewTracks !== undefined && (!Array.isArray(value.manualReviewTracks) || !value.manualReviewTracks.every(isYTMusicSearchResult)))
     || (value.searchErrorTracks !== undefined && (!Array.isArray(value.searchErrorTracks) || !value.searchErrorTracks.every(isYTMusicSearchResult)))) return null;
+  const playlistCreationFailure = value.playlistCreationFailure === undefined
+    ? null
+    : toYTMusicPlaylistCreationFailure(value.playlistCreationFailure);
+  if (value.playlistCreationFailure !== undefined && !playlistCreationFailure) return null;
   return {
     playlistId: value.playlistId,
     playlistUrl: value.playlistUrl,
@@ -171,6 +191,7 @@ function toYTMusicConversionResult(value: unknown): YTMusicConversionResult | nu
     ...(value.ambiguousTracks !== undefined ? { ambiguousTracks: value.ambiguousTracks } : {}),
     ...(value.manualReviewTracks !== undefined ? { manualReviewTracks: value.manualReviewTracks } : {}),
     ...(value.searchErrorTracks !== undefined ? { searchErrorTracks: value.searchErrorTracks } : {}),
+    ...(playlistCreationFailure ? { playlistCreationFailure } : {}),
   };
 }
 

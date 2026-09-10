@@ -839,10 +839,14 @@ app.post("/api/convert", async (req, res) => {
     const unmatchedTracks = result.unmatchedTracks || [];
     const ambiguousTracks = result.ambiguousTracks || [];
     const searchErrorTracks = result.searchErrorTracks || (result.results || []).filter((track) => track.status === "search_error");
-    const manualReviewTracks = result.manualReviewTracks || [...unmatchedTracks, ...ambiguousTracks];
-
-    // Enviar resultado al cliente
-    sendToRun(runId, {
+    const baseManualReviewTracks = result.manualReviewTracks || [...unmatchedTracks, ...ambiguousTracks];
+    const manualReviewKeys = new Set(baseManualReviewTracks.map((track) => `${track.artist}\u0000${track.title}\u0000${track.status}`));
+    const manualReviewTracks = [
+      ...baseManualReviewTracks,
+      ...searchErrorTracks.filter((track) => !manualReviewKeys.has(`${track.artist}\u0000${track.title}\u0000${track.status}`)),
+    ];
+    const playlistCreationFailure = result.playlistCreationFailure;
+    const payload = {
       type: "result",
       total: tracks.length,
       matched: result.matched,
@@ -850,12 +854,20 @@ app.post("/api/convert", async (req, res) => {
       ambiguous: ambiguousTracks.length,
       searchErrors: searchErrorTracks.length,
       searchErrorTracks,
-      playlistId: result.playlistId,
-      playlistUrl: result.playlistUrl,
+      playlistId: playlistCreationFailure ? null : result.playlistId,
+      playlistUrl: playlistCreationFailure ? null : result.playlistUrl,
       unmatchedTracks,
       ambiguousTracks,
-      manualReviewTracks
-    });
+      manualReviewTracks,
+      ...(playlistCreationFailure ? { playlistCreationFailure, sideEffects: { inserted: 0, playlist: "failed" } } : {}),
+    };
+
+    // Enviar resultado al cliente
+    sendToRun(runId, payload);
+    if (playlistCreationFailure) {
+      logConversionFailure("youtube", playlistCreationFailure.code, "playlist_create");
+      return res.json({ success: false, error: playlistCreationFailure.message, code: playlistCreationFailure.code, ...payload });
+    }
     logConversionComplete({ destination: "youtube", total: tracks.length, matched: result.matched, unmatched: unmatchedTracks.length, ambiguous: ambiguousTracks.length, searchErrors: searchErrorTracks.length });
     
     return res.json({ success: true });

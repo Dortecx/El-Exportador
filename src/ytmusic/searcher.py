@@ -660,19 +660,33 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15, t
         if result['status'] == 'matched' and result.get('videoId')
     ))
 
+    playlist_creation_failure = None
     if create_playlist and video_ids:
         try:
-            playlist_id = ytmusic.create_playlist(
+            created_playlist_id = ytmusic.create_playlist(
                 playlist_name,
                 'Created by m3u-to-ytmusic',
                 video_ids=video_ids,
             )
-            playlist_url = f'https://music.youtube.com/playlist?list={playlist_id}'
+            if isinstance(created_playlist_id, str) and created_playlist_id.strip():
+                playlist_id = created_playlist_id
+                playlist_url = f'https://music.youtube.com/playlist?list={playlist_id}'
+            else:
+                playlist_id = None
+                playlist_url = None
+                playlist_creation_failure = {
+                    'code': 'YTMUSIC_PLAYLIST_CREATE_FAILED',
+                    'message': 'YouTube Music could not create the playlist. Matched tracks are available below.',
+                }
         except Exception as error:
             if is_authentication_error(error):
                 raise AuthenticationRequiredError() from error
             playlist_id = None
             playlist_url = None
+            playlist_creation_failure = {
+                'code': 'YTMUSIC_PLAYLIST_CREATE_FAILED',
+                'message': 'YouTube Music could not create the playlist. Matched tracks are available below.',
+            }
     else:
         playlist_id = None
         playlist_url = None
@@ -682,6 +696,7 @@ def search_tracks(tracks, playlist_name, create_playlist=True, max_workers=15, t
         'playlistUrl': playlist_url,
         'matched': sum(1 for result in results if result['status'] == 'matched'),
         'results': results,
+        **({'playlistCreationFailure': playlist_creation_failure} if playlist_creation_failure else {}),
     }
 
 
@@ -820,8 +835,9 @@ def main():
                 'searchErrorTracks': search_error_tracks,
                 'manualReviewTracks': [
                     result for result in results
-                    if result.get('status') in ('unmatched', 'ambiguous')
-                    ],
+                    if result.get('status') in ('unmatched', 'ambiguous', 'search_error')
+                ],
+                **({'playlistCreationFailure': output.get('playlistCreationFailure')} if output.get('playlistCreationFailure') else {}),
             }))
         elif action == 'search-single':
             output = search_single(
