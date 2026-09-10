@@ -125,6 +125,23 @@ const defaultSpotifyWebDependencies: SpotifyWebDependencies = {
   validateYtMusicAuth,
 };
 let spotifyWebDependencies = defaultSpotifyWebDependencies;
+const YTMUSIC_AUTH_CACHE_TTL_MS = 15_000;
+let ytMusicAuthValidationCache: { expiresAtEpochMs: number } | null = null;
+
+function invalidateYtMusicAuthValidationCache(): void {
+  ytMusicAuthValidationCache = null;
+}
+
+async function validateYtMusicAuthCached(): ReturnType<typeof validateYtMusicAuth> {
+  const now = spotifyWebDependencies.now();
+  if (ytMusicAuthValidationCache && ytMusicAuthValidationCache.expiresAtEpochMs > now) return { status: "valid" };
+  ytMusicAuthValidationCache = null;
+  const validation = await spotifyWebDependencies.validateYtMusicAuth();
+  if (validation.status === "valid") {
+    ytMusicAuthValidationCache = { expiresAtEpochMs: now + YTMUSIC_AUTH_CACHE_TTL_MS };
+  }
+  return validation;
+}
 
 /** Test-only HTTP seams; production keeps using the local token store and Spotify API client. */
 export function setSpotifyWebDependenciesForTest(overrides: Partial<SpotifyWebDependencies>): void {
@@ -133,6 +150,7 @@ export function setSpotifyWebDependenciesForTest(overrides: Partial<SpotifyWebDe
 
 export function resetSpotifyWebDependenciesForTest(): void {
   spotifyWebDependencies = defaultSpotifyWebDependencies;
+  invalidateYtMusicAuthValidationCache();
   localUiCapabilities.clear();
   conversionRuns.clear();
 }
@@ -287,10 +305,11 @@ async function spotifyConversionPreflight(): Promise<ConversionPreflightResult> 
 
 async function youTubeMusicConversionPreflight(): Promise<ConversionPreflightResult> {
   try {
-    const validation = await spotifyWebDependencies.validateYtMusicAuth();
+    const validation = await validateYtMusicAuthCached();
     if (validation.status === "valid") return { status: "ready" };
     return conversionPreflightFailure(validation.status === "unexpected_failure" ? "PROVIDER_UNAVAILABLE" : "AUTHENTICATION_REQUIRED");
   } catch {
+    invalidateYtMusicAuthValidationCache();
     return conversionPreflightFailure("PROVIDER_UNAVAILABLE");
   }
 }
@@ -477,6 +496,7 @@ app.post("/api/ytmusic-auth/browser/cancel", async (_req, res) => {
 });
 
 app.post("/api/ytmusic-auth/browser/disconnect", async (_req, res) => {
+  invalidateYtMusicAuthValidationCache();
   await guidedBrowserAuth.disconnect();
   SessionService.logout(res);
   res.json({ status: "idle" });
@@ -511,7 +531,11 @@ app.post("/api/spotify-auth/disconnect", (_req, res) => {
 });
 
 app.get("/api/auth-status", async (req, res) => {
-  const authenticated = await checkYtMusicAvailable();
+  const validation = await validateYtMusicAuthCached().catch(() => {
+    invalidateYtMusicAuthValidationCache();
+    return null;
+  });
+  const authenticated = validation?.status === "valid";
   if (authenticated && req.cookies?.ytmusic_session !== "authenticated") {
     SessionService.setAuthenticated(res);
   } else if (!authenticated && req.cookies?.ytmusic_session === "authenticated") {
@@ -627,6 +651,7 @@ app.post("/api/add-to-playlist", async (req, res) => {
     return res.json({ success: true, count: addedCount });
   } catch (err) {
     if ((err as { code?: unknown })?.code === "AUTHENTICATION_REQUIRED") {
+      invalidateYtMusicAuthValidationCache();
       return res.status(401).json({ error: "Authentication required", code: "AUTHENTICATION_REQUIRED" });
     }
     return res.status(502).json({ error: "Could not add selected tracks" });
@@ -683,6 +708,7 @@ app.post("/api/search-single", async (req, res) => {
     if (abandoned) return;
     responseComplete = true;
     if ((err as { code?: unknown })?.code === "AUTHENTICATION_REQUIRED") {
+      invalidateYtMusicAuthValidationCache();
       return res.status(401).json({ error: "Authentication required", code: "AUTHENTICATION_REQUIRED" });
     }
     return res.status(502).json({ error: "YouTube Music search failed" });
@@ -865,6 +891,7 @@ app.post("/api/convert", async (req, res) => {
     // Enviar resultado al cliente
     sendToRun(runId, payload);
     if (playlistCreationFailure) {
+      if (playlistCreationFailure.code === "AUTHENTICATION_REQUIRED") invalidateYtMusicAuthValidationCache();
       logConversionFailure("youtube", playlistCreationFailure.code, "playlist_create");
       return res.json({ success: false, error: playlistCreationFailure.message, code: playlistCreationFailure.code, ...payload });
     }
@@ -878,6 +905,7 @@ app.post("/api/convert", async (req, res) => {
       return res.json({ success: true, ...payload });
     }
     if ((err as { code?: unknown })?.code === "AUTHENTICATION_REQUIRED") {
+      invalidateYtMusicAuthValidationCache();
       logConversionFailure("youtube", "AUTHENTICATION_REQUIRED");
       return res.status(401).json({ error: "Authentication required", code: "AUTHENTICATION_REQUIRED" });
     }

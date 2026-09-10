@@ -1892,9 +1892,18 @@
             conversionRun.eventSource?.close();
             if (eventSource === conversionRun.eventSource) eventSource = null;
           };
-              if (!await ensureConversionReady(conversionDestination)) return;
 
-      // Deshabilitar el botón durante la conversión
+      // Disable Execute immediately while the auth preflight is checked.
+      startBtn.disabled = true;
+      startBtn.textContent = t('starting');
+              if (!await ensureConversionReady(conversionDestination)) {
+                activeConversionRun = null;
+                updateStartButton();
+                startBtn.textContent = "[ EXECUTE ]";
+                return;
+              }
+
+      // Keep the button disabled during conversion.
       startBtn.disabled = true;
       startBtn.textContent = t('processing');
 

@@ -11,9 +11,11 @@ vi.mock("../src/ytmusic/client", () => ({
   convertWithYtMusic: ytmusic.convertWithYtMusic,
   searchSingleOnYtMusic: vi.fn(),
   validateYtMusicAuth: vi.fn(),
+  YTMusicAuthFile: "test-auth.json",
 }));
 
 import { SpotifyApiError } from "../src/spotify/api.js";
+import { addToPlaylistOnYtMusic, searchSingleOnYtMusic } from "../src/ytmusic/client.js";
 import { app, conversionRunCountForTest, resetSpotifyWebDependenciesForTest, setSpotifyWebDependenciesForTest } from "../src/web/server.js";
 
 let server: Server | undefined;
@@ -116,6 +118,8 @@ afterEach(async () => {
   await closeTestResources();
   resetSpotifyWebDependenciesForTest();
   ytmusic.convertWithYtMusic.mockReset();
+  vi.mocked(addToPlaylistOnYtMusic).mockReset();
+  vi.mocked(searchSingleOnYtMusic).mockReset();
   localUiCapability = undefined;
 });
 
@@ -751,10 +755,12 @@ describe("Spotify web backend", () => {
 
   it("returns only normalized conversion-preflight readiness for both providers", async () => {
         const getProfile = vi.fn(async () => ({ accessToken: "must-not-leak", id: "profile-must-not-leak" }));
+        let currentTime = 1_000;
         setSpotifyWebDependenciesForTest({
           createApi: () => ({ addTracks: vi.fn(), createPrivatePlaylist: vi.fn(), getProfile, searchTracks: vi.fn() }),
           getClientConfig: () => ({ clientId: "test-client", enabled: true, reason: null, redirectUri: "http://localhost/callback", supported: true }),
           getTokenState: () => ({ accessToken: "test-access", expiresAtEpochMs: 1, refreshToken: "test-refresh", scope: "", tokenType: "Bearer" }),
+          now: () => currentTime,
           validateYtMusicAuth: async () => ({ status: "valid" }),
         });
 
@@ -762,9 +768,60 @@ describe("Spotify web backend", () => {
         await expect(request("/api/conversion-preflight", { destination: "youtube" })).resolves.toEqual({ body: { status: "ready" }, status: 200 });
         expect(getProfile).toHaveBeenCalledOnce();
 
+        currentTime += 15_001;
         setSpotifyWebDependenciesForTest({ getTokenState: () => null, validateYtMusicAuth: async () => ({ status: "invalid", reason: "authentication_required" }) });
         await expect(request("/api/conversion-preflight", { destination: "spotify" })).resolves.toEqual({ body: { code: "AUTHENTICATION_REQUIRED", status: "not_ready" }, status: 200 });
         await expect(request("/api/conversion-preflight", { destination: "youtube" })).resolves.toEqual({ body: { code: "AUTHENTICATION_REQUIRED", status: "not_ready" }, status: 200 });
+      });
+
+      it("reuses successful YouTube Music auth validation for auth status and preflight until the TTL expires", async () => {
+        let currentTime = 1_000;
+        const validateYtMusicAuth = vi.fn(async () => ({ status: "valid" as const }));
+        setSpotifyWebDependenciesForTest({ now: () => currentTime, validateYtMusicAuth });
+
+        await expect(request("/api/auth-status")).resolves.toEqual({ body: { authenticated: true }, status: 200 });
+        await expect(request("/api/conversion-preflight", { destination: "youtube" })).resolves.toEqual({ body: { status: "ready" }, status: 200 });
+        currentTime += 14_999;
+        await expect(request("/api/conversion-preflight", { destination: "youtube" })).resolves.toEqual({ body: { status: "ready" }, status: 200 });
+        expect(validateYtMusicAuth).toHaveBeenCalledOnce();
+
+        currentTime += 2;
+        await expect(request("/api/conversion-preflight", { destination: "youtube" })).resolves.toEqual({ body: { status: "ready" }, status: 200 });
+        expect(validateYtMusicAuth).toHaveBeenCalledTimes(2);
+      });
+
+      it("does not cache failed YouTube Music auth validation", async () => {
+        const validateYtMusicAuth = vi.fn(async () => ({ status: "invalid" as const, reason: "authentication_required" as const }));
+        setSpotifyWebDependenciesForTest({ validateYtMusicAuth });
+
+        await expect(request("/api/auth-status")).resolves.toEqual({ body: { authenticated: false }, status: 200 });
+        await expect(request("/api/conversion-preflight", { destination: "youtube" })).resolves.toEqual({ body: { code: "AUTHENTICATION_REQUIRED", status: "not_ready" }, status: 200 });
+        expect(validateYtMusicAuth).toHaveBeenCalledTimes(2);
+      });
+
+      it("invalidates cached YouTube Music auth on disconnect and auth-loss paths", async () => {
+        const validateYtMusicAuth = vi.fn(async () => ({ status: "valid" as const }));
+        setSpotifyWebDependenciesForTest({ validateYtMusicAuth });
+
+        await expect(request("/api/auth-status")).resolves.toEqual({ body: { authenticated: true }, status: 200 });
+        await expect(request("/api/ytmusic-auth/browser/disconnect", {})).resolves.toMatchObject({ status: 200 });
+        await expect(request("/api/conversion-preflight", { destination: "youtube" })).resolves.toEqual({ body: { status: "ready" }, status: 200 });
+        expect(validateYtMusicAuth).toHaveBeenCalledTimes(2);
+
+        vi.mocked(addToPlaylistOnYtMusic).mockRejectedValueOnce(Object.assign(new Error("auth lost"), { code: "AUTHENTICATION_REQUIRED" }));
+        await expect(request("/api/add-to-playlist", { playlistId: "playlist-1", tracks: [{ videoId: "video-1" }] })).resolves.toMatchObject({ body: { code: "AUTHENTICATION_REQUIRED" }, status: 401 });
+        await expect(request("/api/conversion-preflight", { destination: "youtube" })).resolves.toEqual({ body: { status: "ready" }, status: 200 });
+        expect(validateYtMusicAuth).toHaveBeenCalledTimes(3);
+
+        vi.mocked(searchSingleOnYtMusic).mockRejectedValueOnce(Object.assign(new Error("auth lost"), { code: "AUTHENTICATION_REQUIRED" }));
+        await expect(request("/api/search-single", { artist: "Artist", offset: 0, query: "Artist Song", threshold: 0.6, title: "Song" })).resolves.toMatchObject({ body: { code: "AUTHENTICATION_REQUIRED" }, status: 401 });
+        await expect(request("/api/conversion-preflight", { destination: "youtube" })).resolves.toEqual({ body: { status: "ready" }, status: 200 });
+        expect(validateYtMusicAuth).toHaveBeenCalledTimes(4);
+
+        ytmusic.convertWithYtMusic.mockRejectedValueOnce(Object.assign(new Error("auth lost"), { code: "AUTHENTICATION_REQUIRED" }));
+        await expect(request("/api/convert", { destination: "youtube", playlistName: "My playlist", runId: "h".repeat(32), tracks: [{ artist: "Artist", title: "Song" }] })).resolves.toMatchObject({ body: { code: "AUTHENTICATION_REQUIRED" }, status: 401 });
+        await expect(request("/api/conversion-preflight", { destination: "youtube" })).resolves.toEqual({ body: { status: "ready" }, status: 200 });
+        expect(validateYtMusicAuth).toHaveBeenCalledTimes(5);
       });
 
       it("maps fake Spotify profile authorization failures to the bounded preflight result", async () => {

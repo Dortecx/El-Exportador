@@ -70,7 +70,19 @@ describe("YouTube-only destination UI", () => {
   it("recomputes Execute eligibility after conversion cleanup instead of force-enabling it", () => {
     expect(html).not.toContain("startBtn.disabled = false");
     expect(html).toContain("startBtn.disabled = true;");
+    expect(html).toContain("updateStartButton();\n                startBtn.textContent = \"[ EXECUTE ]\";");
     expect(html).toContain("updateStartButton();\n            startBtn.textContent = \"[ EXECUTE ]\";");
     expect(html).toContain("updateStartButton();\n          startBtn.textContent = \"[ EXECUTE ]\";");
+  });
+
+  it("disables Execute before preflight and restores it when preflight rejects", () => {
+    const startConversion = html.slice(html.indexOf("const startConversion = async () =>"), html.indexOf("// Asignar el evento onclick"));
+    const disableIndex = startConversion.indexOf("startBtn.disabled = true;\n      startBtn.textContent = t('starting');");
+    const preflightIndex = startConversion.indexOf("await ensureConversionReady(conversionDestination)");
+    const eventSourceIndex = startConversion.indexOf("new EventSource(");
+    expect(disableIndex).toBeGreaterThan(-1);
+    expect(preflightIndex).toBeGreaterThan(disableIndex);
+    expect(eventSourceIndex).toBeGreaterThan(preflightIndex);
+    expect(startConversion).toContain("if (!await ensureConversionReady(conversionDestination)) {\n                activeConversionRun = null;\n                updateStartButton();\n                startBtn.textContent = \"[ EXECUTE ]\";\n                return;\n              }");
   });
 });
