@@ -10,7 +10,7 @@ if ($env:OS -ne "Windows_NT") {
   throw "This builder must run on Windows so npm selects Windows production dependencies and PyInstaller creates searcher.exe."
 }
 
-# Spotify is intentionally unavailable in the v1.3.0 public portable release.
+# Spotify is intentionally unavailable in the v1.3.1 public portable release.
 # Keep the launcher placeholder empty so backend routes remain safely disabled without a build-time OAuth client.
 $spotifyClientIdBase64 = ""
 
