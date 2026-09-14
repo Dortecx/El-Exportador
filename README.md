@@ -62,7 +62,7 @@ YouTube Music uses guided browser sign-in and destination-specific authenticatio
 
 ## Platform support
 
-El Exportador is supported on Windows only.
+El Exportador is supported on Windows. Native WSL/Linux use is experimental and requires Python 3 plus an installed Chromium-compatible Linux browser (`google-chrome`, `chromium`, Brave, or Microsoft Edge) available on the Linux PATH for guided YouTube Music sign-in. WSL-to-Windows browser `.exe` interop is not supported in this stage.
 
 ## License
 

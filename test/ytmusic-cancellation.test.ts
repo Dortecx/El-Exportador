@@ -67,14 +67,20 @@ describe("YouTube Music conversion cancellation", () => {
   });
 
   it("still reports non-cancellation subprocess failures as backend execution errors", async () => {
-    const proc = fakeProcess();
-    spawnMock.mockReturnValueOnce(proc);
+    const expectedCandidates = process.platform === "win32" ? ["python"] : ["python3", "python"];
+    const procs = expectedCandidates.map(fakeProcess);
+    for (const proc of procs) spawnMock.mockReturnValueOnce(proc);
     const { convertWithYtMusic } = await import("../src/ytmusic/client.js");
     const conversion = convertWithYtMusic(
       [{ artist: "Artist", title: "Song", file: "track.mp3" }], "playlist", { dryRun: false },
     );
 
-    proc.emit("error", new Error("fake subprocess failure"));
-    await expect(conversion).rejects.toThrow("Could not execute ytmusic backend. Attempts: python: fake subprocess failure");
+    for (let index = 0; index < expectedCandidates.length; index += 1) {
+      while (spawnMock.mock.calls.length <= index) await Promise.resolve();
+      procs[index].emit("error", new Error(`fake ${expectedCandidates[index]} failure`));
+      await Promise.resolve();
+    }
+    const attempts = expectedCandidates.map((candidate) => `${candidate}: fake ${candidate} failure`).join(" | ");
+    await expect(conversion).rejects.toThrow(`Could not execute ytmusic backend. Attempts: ${attempts}`);
   });
 });

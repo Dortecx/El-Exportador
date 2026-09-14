@@ -18,8 +18,13 @@ if (!PACKAGED_SEARCHER && !fs.existsSync(SEARCHER_SCRIPT)) {
   process.exit(1);
 }
 
-// Use the Python interpreter available in the PowerShell PATH.
-const PYTHON_CANDIDATES = ["python"];
+export function pythonCandidates(platform = process.platform, configured = process.env.M3U_YTMUSIC_PYTHON): string[] {
+  const override = configured?.trim();
+  const platformDefaults = platform === "win32" ? ["python"] : ["python3", "python"];
+  return override ? [override, ...platformDefaults] : platformDefaults;
+}
+
+const PYTHON_CANDIDATES = pythonCandidates();
 
 const STATE_ROOT = process.env.M3U_YTMUSIC_STATE_DIR?.trim() || os.homedir();
 export const YTMusicAuthFile = path.join(STATE_ROOT, '.config', 'm3u-to-ytmusic', 'ytmusic_auth.json');

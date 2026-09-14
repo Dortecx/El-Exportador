@@ -62,7 +62,7 @@ YouTube Music usa el inicio de sesión guiado del navegador y su autenticación 
 
 ## Compatibilidad de plataforma
 
-El Exportador solo es compatible con Windows.
+El Exportador es compatible con Windows. El uso nativo en WSL/Linux es experimental y requiere Python 3 más un navegador Linux compatible con Chromium (`google-chrome`, `chromium`, Brave o Microsoft Edge) disponible en el PATH de Linux para el inicio guiado en YouTube Music. La interoperabilidad desde WSL con navegadores `.exe` de Windows no está soportada en esta etapa.
 
 ## Licencia
 

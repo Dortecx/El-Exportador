@@ -34,9 +34,9 @@ const ALLOWED_HEADERS = new Set([
   "referer", "user-agent", "content-type", "x-youtube-client-name", "x-youtube-client-version",
 ]);
 
-type BrowserId = "edge" | "helium" | "chrome" | "brave" | "opera";
+export type BrowserId = "edge" | "helium" | "chrome" | "brave" | "opera";
 type AuthStatus = "idle" | "launching" | "waiting_for_sign_in" | "validating" | "connected" | "cancelled" | "timed_out" | "error";
-type Browser = { id: BrowserId; executable: string };
+export type Browser = { id: BrowserId; executable: string };
 type Validator = (headers: string) => Promise<{ status: string; error?: string }>;
 type RequestWillBeSentEvent = { requestId: string; request: { url: string } };
 type RequestWillBeSentExtraInfoEvent = { requestId: string; headers: Record<string, string> };
@@ -51,6 +51,16 @@ const browserPaths: Record<BrowserId, string[]> = {
   brave: ["BraveSoftware/Brave-Browser/Application/brave.exe"],
   opera: ["Programs/Opera/launcher.exe", "Opera/launcher.exe", "Programs/Opera GX/opera.exe"],
 };
+
+const linuxBrowserCommands: Browser[] = [
+  { id: "chrome", executable: "google-chrome" },
+  { id: "chrome", executable: "google-chrome-stable" },
+  { id: "chrome", executable: "chromium" },
+  { id: "chrome", executable: "chromium-browser" },
+  { id: "brave", executable: "brave-browser" },
+  { id: "edge", executable: "microsoft-edge" },
+  { id: "edge", executable: "microsoft-edge-stable" },
+];
 
 function executableFor(id: BrowserId): string | undefined {
   const roots = [process.env.LOCALAPPDATA, process.env.PROGRAMFILES, process.env["PROGRAMFILES(X86)"]].filter(Boolean) as string[];
@@ -90,7 +100,7 @@ function commandExecutable(command: string | undefined): string | undefined {
   return executable && fs.existsSync(executable) ? executable : undefined;
 }
 
-async function preferredBrowser(): Promise<Browser | undefined> {
+async function windowsPreferredBrowser(): Promise<Browser | undefined> {
   const preferred = ["helium", "chrome", "brave", "opera"] as BrowserId[];
   const progId = await readRegistry("HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\https\\UserChoice", "ProgId");
   const executable = commandExecutable(await readRegistry(`HKCR\\${progId}\\shell\\open\\command`, "(Default)"));
@@ -100,6 +110,33 @@ async function preferredBrowser(): Promise<Browser | undefined> {
     const installed = executableFor(fallback);
     if (installed) return { id: fallback, executable: installed };
   }
+  return undefined;
+}
+
+function commandCanStart(command: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (found: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(found);
+    };
+    const child = spawn(command, ["--version"], { stdio: "ignore", windowsHide: true });
+    child.once("error", () => finish(false));
+    child.once("close", () => finish(true));
+  });
+}
+
+async function linuxPreferredBrowser(): Promise<Browser | undefined> {
+  for (const candidate of linuxBrowserCommands) {
+    if (await commandCanStart(candidate.executable)) return candidate;
+  }
+  return undefined;
+}
+
+export async function preferredBrowser(platform = process.platform): Promise<Browser | undefined> {
+  if (platform === "win32") return windowsPreferredBrowser();
+  if (platform === "linux") return linuxPreferredBrowser();
   return undefined;
 }
 
@@ -129,7 +166,6 @@ export class GuidedBrowserAuth {
   }
 
   async start(): Promise<{ status: AuthStatus; error?: string }> {
-    if (process.platform !== "win32") return { status: "error", error: "Guided browser authentication is available on Windows only" };
     await this.waitForDisconnectCleanup();
     if (["launching", "waiting_for_sign_in", "validating"].includes(this.statusValue)) return this.status();
     if (this.statusValue === "connected") return this.status();
@@ -139,7 +175,10 @@ export class GuidedBrowserAuth {
     if (["launching", "waiting_for_sign_in", "validating", "connected"].includes(this.statusValue)) return this.status();
     if (!browser) {
       this.statusValue = "error";
-      return { status: this.statusValue, error: "No supported Chromium-compatible browser was found" };
+      const supported = process.platform === "linux"
+        ? linuxBrowserCommands.map(({ executable }) => executable).join(", ")
+        : "Microsoft Edge, Helium, Google Chrome, Brave, or Opera";
+      return { status: this.statusValue, error: `No supported Chromium-compatible browser was found for ${process.platform}. Supported candidates: ${supported}` };
     }
 
     console.info("[guided-auth] browser selected");
