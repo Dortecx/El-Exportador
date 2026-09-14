@@ -23,12 +23,14 @@ El Exportador convierte listas de reproducción `.m3u` en listas de YouTube Musi
 ```bash
 git clone https://github.com/Dortecx/El-Exportador.git
 cd el-exportador
+python3 -m venv .venv
+. .venv/bin/activate
 pip install -r requirements.txt
 npm ci
 npm run web
 ```
 
-Se prefiere `npm ci` porque instala las dependencias fijadas en `package-lock.json`. Abre `http://localhost:3000` cuando se inicie el servidor.
+Se prefiere `npm ci` porque instala las dependencias fijadas en `package-lock.json`. Después de crear `.venv` e instalar los requisitos, `npm run web` usa automáticamente el entorno virtual del proyecto. Definí `M3U_YTMUSIC_PYTHON` solo si necesitás una ruta de intérprete personalizada. Abre `http://localhost:3000` cuando se inicie el servidor.
 
 ## Uso
 

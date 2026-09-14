@@ -23,12 +23,14 @@ El Exportador converts `.m3u` playlists into YouTube Music playlists through a l
 ```bash
 git clone https://github.com/Dortecx/El-Exportador.git
 cd el-exportador
+python3 -m venv .venv
+. .venv/bin/activate
 pip install -r requirements.txt
 npm ci
 npm run web
 ```
 
-`npm ci` is preferred because it installs the dependencies locked in `package-lock.json`. Open `http://localhost:3000` after the server starts.
+`npm ci` is preferred because it installs the dependencies locked in `package-lock.json`. After `.venv` is created and requirements are installed, `npm run web` automatically uses the project virtualenv. Set `M3U_YTMUSIC_PYTHON` only when you need a custom interpreter path. Open `http://localhost:3000` after the server starts.
 
 ## Usage
 

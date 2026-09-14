@@ -18,10 +18,46 @@ if (!PACKAGED_SEARCHER && !fs.existsSync(SEARCHER_SCRIPT)) {
   process.exit(1);
 }
 
-export function pythonCandidates(platform = process.platform, configured = process.env.M3U_YTMUSIC_PYTHON): string[] {
+export interface PythonCandidatesOptions {
+  platform?: NodeJS.Platform | string;
+  configured?: string;
+  cwd?: string;
+  isUsableFile?: (candidate: string, platform: NodeJS.Platform | string) => boolean;
+}
+
+function isUsablePythonFile(candidate: string, platform: NodeJS.Platform | string): boolean {
+  try {
+    const stats = fs.statSync(candidate);
+    if (!stats.isFile()) return false;
+    if (platform === "win32") return true;
+    fs.accessSync(candidate, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function appendUnique(candidates: string[], candidate: string): void {
+  if (!candidates.includes(candidate)) candidates.push(candidate);
+}
+
+export function pythonCandidates(options: PythonCandidatesOptions = {}): string[] {
+  const platform = options.platform ?? process.platform;
+  const configured = options.configured ?? process.env.M3U_YTMUSIC_PYTHON;
+  const cwd = options.cwd ?? process.cwd();
+  const isUsableFile = options.isUsableFile ?? isUsablePythonFile;
   const override = configured?.trim();
+  const venvCandidate = platform === "win32"
+    ? path.join(cwd, ".venv", "Scripts", "python.exe")
+    : path.join(cwd, ".venv", "bin", "python");
   const platformDefaults = platform === "win32" ? ["python"] : ["python3", "python"];
-  return override ? [override, ...platformDefaults] : platformDefaults;
+  const candidates: string[] = [];
+
+  if (override) appendUnique(candidates, override);
+  if (isUsableFile(venvCandidate, platform)) appendUnique(candidates, venvCandidate);
+  for (const candidate of platformDefaults) appendUnique(candidates, candidate);
+
+  return candidates;
 }
 
 const PYTHON_CANDIDATES = pythonCandidates();

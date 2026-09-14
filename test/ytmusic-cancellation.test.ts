@@ -67,10 +67,10 @@ describe("YouTube Music conversion cancellation", () => {
   });
 
   it("still reports non-cancellation subprocess failures as backend execution errors", async () => {
-    const expectedCandidates = process.platform === "win32" ? ["python"] : ["python3", "python"];
+    const { convertWithYtMusic, pythonCandidates } = await import("../src/ytmusic/client.js");
+    const expectedCandidates = pythonCandidates();
     const procs = expectedCandidates.map(fakeProcess);
     for (const proc of procs) spawnMock.mockReturnValueOnce(proc);
-    const { convertWithYtMusic } = await import("../src/ytmusic/client.js");
     const conversion = convertWithYtMusic(
       [{ artist: "Artist", title: "Song", file: "track.mp3" }], "playlist", { dryRun: false },
     );
