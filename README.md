@@ -32,6 +32,30 @@ npm run web
 
 `npm ci` is preferred because it installs the dependencies locked in `package-lock.json`. After `.venv` is created and requirements are installed, `npm run web` automatically uses the project virtualenv. Set `M3U_YTMUSIC_PYTHON` only when you need a custom interpreter path. Open `http://localhost:3000` after the server starts.
 
+## How it works
+
+El Exportador runs as a local web app that guides the conversion from file upload to playlist creation.
+
+```text
+M3U file → local web UI → browser sign-in → ytmusicapi search → review results → playlist creation
+```
+
+1. The local `.m3u` input is parsed into artist/title candidates.
+2. The local web UI coordinates upload, progress, Dry Run, manual review, and final creation.
+3. Guided native browser authentication obtains the YouTube Music session metadata needed by the backend.
+4. The Python `ytmusicapi` backend searches YouTube Music and evaluates matching confidence for each candidate.
+5. Each track is classified so you can decide what happens next.
+
+| Result | Meaning | User action |
+|--------|---------|-------------|
+| Matched | A confident YouTube Music match was found. | Keep it selected, or deselect it before creating the playlist. |
+| Unmatched | No usable match was found automatically. | Search or select a replacement manually, or leave it out. |
+| Ambiguous | Multiple or uncertain matches need confirmation. | Review the choices and pick the correct track. |
+
+Dry Run performs lookup and classification without creating a playlist. When Dry Run is off, El Exportador creates the YouTube Music playlist from the matched selections, while manual review handles unresolved tracks.
+
+Privacy/locality: El Exportador parses the M3U file locally and uses YouTube Music authentication/API communication only to search and create playlists in your account.
+
 ## Usage
 
 1. Upload an `.m3u` file in the local application.

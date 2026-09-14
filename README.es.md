@@ -32,6 +32,30 @@ npm run web
 
 Se prefiere `npm ci` porque instala las dependencias fijadas en `package-lock.json`. Después de crear `.venv` e instalar los requisitos, `npm run web` usa automáticamente el entorno virtual del proyecto. Definí `M3U_YTMUSIC_PYTHON` solo si necesitás una ruta de intérprete personalizada. Abre `http://localhost:3000` cuando se inicie el servidor.
 
+## Cómo funciona
+
+El Exportador corre como una aplicación web local que te guía desde la carga del archivo hasta la creación de la lista.
+
+```text
+Archivo M3U → UI web local → inicio de sesión en navegador → búsqueda con ytmusicapi → revisión de resultados → creación de lista
+```
+
+1. La entrada `.m3u` local se analiza para obtener candidatos de artista y título.
+2. La UI web local coordina la carga, el progreso, el Modo de prueba, la revisión manual y la creación final.
+3. El inicio guiado en tu navegador nativo obtiene los metadatos de sesión de YouTube Music que necesita el backend.
+4. El backend Python con `ytmusicapi` busca en YouTube Music y evalúa la confianza de coincidencia para cada candidato.
+5. Cada pista se clasifica para que puedas decidir qué hacer después.
+
+| Resultado | Qué significa | Acción del usuario |
+|-----------|---------------|--------------------|
+| Coincidente | Se encontró una coincidencia confiable en YouTube Music. | Mantenela seleccionada, o deseleccionala antes de crear la lista. |
+| No encontrada | No se encontró automáticamente una coincidencia utilizable. | Buscá o elegí un reemplazo manualmente, o dejala afuera. |
+| Ambigua | Hay varias coincidencias posibles, o la confianza no alcanza para elegir una sola. | Revisá las opciones y elegí la pista correcta. |
+
+El Modo de prueba hace la búsqueda y clasificación sin crear una lista. Cuando lo desactivás, El Exportador crea la lista de YouTube Music con las selecciones coincidentes, mientras la revisión manual resuelve las pistas pendientes.
+
+Privacidad/localidad: El Exportador analiza el archivo M3U localmente y usa la autenticación/comunicación con la API de YouTube Music solo para buscar y crear listas en tu cuenta.
+
 ## Uso
 
 1. Sube un archivo `.m3u` en la aplicación local.
