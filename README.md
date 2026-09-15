@@ -14,37 +14,81 @@ El Exportador converts `.m3u` playlists into YouTube Music playlists through a l
 
 ## Requirements
 
-- Node.js 20 or later.
-- Python 3.11.8 is recommended.
-- npm (included with Node.js).
+- Node.js 20 or later and npm (included with Node.js) for source checkouts and the generated Windows portable app.
+- Python 3.11.8 is recommended for source checkouts and required when building the Windows portable ZIP.
 
-## Local quick start
+## Choose your setup
 
-```bash
+Pick the path that matches the outcome you want; the repository verifies building a Windows portable ZIP, but this README does not assume a downloadable release archive exists.
+
+### Windows portable build/run
+
+Use this when you want a Windows ZIP that starts from `start.cmd` and uses a packaged YouTube Music search backend.
+
+```powershell
 git clone https://github.com/Dortecx/El-Exportador.git
-cd el-exportador
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
+cd El-Exportador
+npm run build:portable:win
+```
+
+Build this ZIP on Windows with Node.js 20 or later, Python 3 with the locked Python requirements, and PyInstaller available to the selected `python`. The generated `portable-win\El-Exportador-<version>-windows.zip` includes `artifacts\searcher.exe`; when you unzip it and run `start.cmd`, the app uses that packaged backend through `M3U_YTMUSIC_SEARCHER` instead of a source `.venv`. Running the ZIP still requires Node.js 20 or later and a supported Windows Chromium-compatible browser for YouTube Music sign-in.
+
+### Windows source checkout
+
+Use this when you want to run the app directly from the repository on Windows.
+
+```powershell
+git clone https://github.com/Dortecx/El-Exportador.git
+cd El-Exportador
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 npm ci
 npm run web
 ```
 
-`npm ci` is preferred because it installs the dependencies locked in `package-lock.json`. After `.venv` is created and requirements are installed, `npm run web` automatically uses the project virtualenv. Set `M3U_YTMUSIC_PYTHON` only when you need a custom interpreter path. Open `http://localhost:3000` after the server starts.
+If the Python launcher is unavailable, use `python -m venv .venv` instead of `py -3 -m venv .venv`.
+
+### WSL/Linux source checkout
+
+Use this when you want to run the app from a WSL or Linux source checkout.
+
+```bash
+git clone https://github.com/Dortecx/El-Exportador.git
+cd El-Exportador
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements.txt
+npm ci
+npm run web
+```
+
+WSL/Linux needs a native Chromium-compatible browser on the Linux PATH only for guided YouTube Music browser sign-in. In WSL, WSLg or another graphical Linux session is also required to display that browser window.
+
+Source checkout paths create `.venv` so Python dependencies such as `ytmusicapi` stay isolated from the system interpreter. After requirements are installed, `npm run web` automatically uses the project `.venv`; set `M3U_YTMUSIC_PYTHON` only as an advanced override when you need a custom interpreter path. Open `http://localhost:3000` after the server starts.
 
 ## How it works
 
 El Exportador runs as a local web app that guides the conversion from file upload to playlist creation.
 
-```text
-M3U file → local web UI → browser sign-in → ytmusicapi search → review results → playlist creation
+```mermaid
+flowchart TD
+    A[M3U file] --> B[Parse artist/title candidates]
+    B --> C[Local web UI]
+    C --> D[Browser sign-in]
+    D --> E[ytmusicapi search]
+    E --> F[Result classification]
+    F --> G{Dry Run?}
+    G -- Yes --> H[Review-only outcome<br/>No playlist is created]
+    G -- No --> I{Manual review needed?}
+    I -- Yes --> J[Manual review]
+    J --> K[Create YouTube Music playlist]
+    I -- No --> K
 ```
 
-1. The local `.m3u` input is parsed into artist/title candidates.
-2. The local web UI coordinates upload, progress, Dry Run, manual review, and final creation.
-3. Guided native browser authentication obtains the YouTube Music session metadata needed by the backend.
-4. The Python `ytmusicapi` backend searches YouTube Music and evaluates matching confidence for each candidate.
-5. Each track is classified so you can decide what happens next.
+**Browser sign-in.** Guided auth opens YouTube Music in an isolated browser profile and observes the session through a local Chrome DevTools Protocol binding. It captures only an allowlisted subset of session metadata needed by the Python backend, then asks the backend to validate that metadata before accepting the connection.
+
+**YouTube Music search.** The Python backend receives artist/title candidates from the parsed M3U file, queries YouTube Music through `ytmusicapi`, and compares returned song candidates against the requested title and artist. Match confidence and the configured threshold classify tracks as matched, unmatched, or ambiguous, which is why manual review exists.
 
 | Result | Meaning | User action |
 |--------|---------|-------------|
@@ -73,16 +117,6 @@ Privacy/locality: El Exportador parses the M3U file locally and uses YouTube Mus
 4. Find the created playlist in YouTube Music.
 
    <img src="docs/images/Resume.png" alt="Conversion result summary" width="720">
-
-## Windows portable application
-
-Build the Windows portable ZIP on Windows:
-
-```powershell
-npm run build:portable:win
-```
-
-Building the portable ZIP requires Node.js 20 or later, Python 3.11.8 with PyInstaller, and Windows. Running the ZIP requires Node.js 20 or later.
 
 YouTube Music uses guided browser sign-in and destination-specific authentication; playlist privacy follows the YouTube Music account/API behavior.
 

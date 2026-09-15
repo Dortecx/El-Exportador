@@ -6,45 +6,89 @@ El Exportador convierte listas de reproducción `.m3u` en listas de YouTube Musi
 
 ## Funciones
 
-- Sube una lista `.m3u` y crea la lista correspondiente en YouTube Music.
-- Empieza en Modo de prueba para revisar pistas coincidentes, no encontradas y ambiguas sin crear una lista; desactívalo solo cuando quieras crearla.
-- Revisa manualmente las pistas no encontradas o ambiguas antes de añadir selecciones a una lista creada sin modo de prueba.
+- Subí una lista `.m3u` y creá la lista correspondiente en YouTube Music.
+- Empezá en Modo de prueba para revisar pistas coincidentes, no encontradas y ambiguas sin crear una lista; desactivalo solo cuando quieras crearla.
+- Revisá manualmente las pistas no encontradas o ambiguas antes de agregar selecciones a una lista creada sin modo de prueba.
 
 > Spotify no está disponible temporalmente en esta versión. El flujo público de la aplicación solo muestra YouTube Music como destino.
 
 ## Requisitos
 
-- Node.js 20 o posterior.
-- Se recomienda Python 3.11.8.
-- npm (incluido con Node.js).
+- Node.js 20 o posterior y npm (incluido con Node.js) para ejecutar desde código fuente y para la app portátil de Windows generada.
+- Se recomienda Python 3.11.8 para ejecutar desde código fuente, y es necesario para crear el ZIP portátil de Windows.
 
-## Inicio rápido local
+## Elegí tu instalación
 
-```bash
+Elegí el camino según el resultado que buscás; el repositorio verifica la creación de un ZIP portátil para Windows, pero este README no asume que exista un archivo de release descargable.
+
+### Crear y ejecutar el portátil de Windows
+
+Usá este camino si querés un ZIP de Windows que arranque desde `start.cmd` y use un backend de búsqueda de YouTube Music empaquetado.
+
+```powershell
 git clone https://github.com/Dortecx/El-Exportador.git
-cd el-exportador
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
+cd El-Exportador
+npm run build:portable:win
+```
+
+Creá este ZIP en Windows con Node.js 20 o posterior, Python 3 con los requisitos Python fijados, y PyInstaller disponible para el `python` seleccionado. El ZIP generado en `portable-win\El-Exportador-<version>-windows.zip` incluye `artifacts\searcher.exe`; cuando lo descomprimís y ejecutás `start.cmd`, la app usa ese backend empaquetado mediante `M3U_YTMUSIC_SEARCHER` en vez de un `.venv` de código fuente. Para ejecutar el ZIP también necesitás Node.js 20 o posterior y un navegador de Windows compatible con Chromium para iniciar sesión en YouTube Music.
+
+### Código fuente en Windows
+
+Usá este camino si querés ejecutar la app directamente desde el repositorio en Windows.
+
+```powershell
+git clone https://github.com/Dortecx/El-Exportador.git
+cd El-Exportador
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 npm ci
 npm run web
 ```
 
-Se prefiere `npm ci` porque instala las dependencias fijadas en `package-lock.json`. Después de crear `.venv` e instalar los requisitos, `npm run web` usa automáticamente el entorno virtual del proyecto. Definí `M3U_YTMUSIC_PYTHON` solo si necesitás una ruta de intérprete personalizada. Abre `http://localhost:3000` cuando se inicie el servidor.
+Si no tenés disponible el lanzador de Python, usá `python -m venv .venv` en lugar de `py -3 -m venv .venv`.
+
+### Código fuente en WSL/Linux
+
+Usá este camino si querés ejecutar la app desde un checkout de código fuente en WSL o Linux.
+
+```bash
+git clone https://github.com/Dortecx/El-Exportador.git
+cd El-Exportador
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements.txt
+npm ci
+npm run web
+```
+
+WSL/Linux necesita un navegador nativo compatible con Chromium en el PATH de Linux solo para el inicio guiado de sesión en YouTube Music. En WSL, además necesitás WSLg u otra sesión gráfica Linux para mostrar esa ventana del navegador.
+
+Los caminos de código fuente crean `.venv` para aislar dependencias Python como `ytmusicapi` del intérprete del sistema. Después de instalar los requisitos, `npm run web` usa automáticamente el `.venv` del proyecto; definí `M3U_YTMUSIC_PYTHON` solo como override avanzado si necesitás una ruta de intérprete personalizada. Abrí `http://localhost:3000` cuando se inicie el servidor.
 
 ## Cómo funciona
 
 El Exportador corre como una aplicación web local que te guía desde la carga del archivo hasta la creación de la lista.
 
-```text
-Archivo M3U → UI web local → inicio de sesión en navegador → búsqueda con ytmusicapi → revisión de resultados → creación de lista
+```mermaid
+flowchart TD
+    A[Archivo M3U] --> B[Analizar candidatos de artista/título]
+    B --> C[UI web local]
+    C --> D[Inicio de sesión en navegador]
+    D --> E[Búsqueda con ytmusicapi]
+    E --> F[Clasificación de resultados]
+    F --> G{¿Modo de prueba?}
+    G -- Sí --> H[Resultado solo para revisar<br/>No se crea ninguna lista]
+    G -- No --> I{¿Hace falta revisión manual?}
+    I -- Sí --> J[Revisión manual]
+    J --> K[Crear lista en YouTube Music]
+    I -- No --> K
 ```
 
-1. La entrada `.m3u` local se analiza para obtener candidatos de artista y título.
-2. La UI web local coordina la carga, el progreso, el Modo de prueba, la revisión manual y la creación final.
-3. El inicio guiado en tu navegador nativo obtiene los metadatos de sesión de YouTube Music que necesita el backend.
-4. El backend Python con `ytmusicapi` busca en YouTube Music y evalúa la confianza de coincidencia para cada candidato.
-5. Cada pista se clasifica para que puedas decidir qué hacer después.
+**Inicio de sesión en navegador.** El inicio guiado abre YouTube Music en un perfil de navegador aislado y observa la sesión mediante una conexión local de Chrome DevTools Protocol. Captura solo un subconjunto permitido de metadatos de sesión que necesita el backend Python, y después le pide al backend que valide esos metadatos antes de aceptar la conexión.
+
+**Búsqueda en YouTube Music.** El backend Python recibe candidatos de artista/título desde el M3U analizado, consulta YouTube Music mediante `ytmusicapi` y compara las canciones devueltas con el título y artista pedidos. La confianza de coincidencia y el umbral configurado clasifican las pistas como coincidentes, no encontradas o ambiguas; por eso existe la revisión manual.
 
 | Resultado | Qué significa | Acción del usuario |
 |-----------|---------------|--------------------|
@@ -58,11 +102,11 @@ Privacidad/localidad: El Exportador analiza el archivo M3U localmente y usa la a
 
 ## Uso
 
-1. Sube un archivo `.m3u` en la aplicación local.
+1. Subí un archivo `.m3u` en la aplicación local.
 
    <img src="docs/images/homepage.png" alt="Pantalla de carga de lista" width="720">
 
-2. Inicia la conversión y consulta su progreso.
+2. Iniciá la conversión y consultá su progreso.
 
    <img src="docs/images/converting_process.png" alt="Pantalla de progreso de conversión" width="720">
 
@@ -70,19 +114,9 @@ Privacidad/localidad: El Exportador analiza el archivo M3U localmente y usa la a
 
    <img src="docs/images/manual_revision.png" alt="Pantalla de revisión manual de pistas" width="720">
 
-4. Busca la lista creada en YouTube Music.
+4. Buscá la lista creada en YouTube Music.
 
    <img src="docs/images/Resume.png" alt="Resumen del resultado de la conversión" width="720">
-
-## Aplicación portátil para Windows
-
-Crea el ZIP portátil para Windows desde Windows:
-
-```powershell
-npm run build:portable:win
-```
-
-Para crear el ZIP portátil se requiere Windows, Node.js 20 o posterior y Python 3.11.8 con PyInstaller. Para ejecutar el ZIP se requiere Node.js 20 o posterior.
 
 YouTube Music usa el inicio de sesión guiado del navegador y su autenticación específica; la privacidad de sus listas sigue el comportamiento de la cuenta/API de YouTube Music.
 
