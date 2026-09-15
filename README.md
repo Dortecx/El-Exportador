@@ -31,11 +31,13 @@ cd El-Exportador
 npm run build:portable:win
 ```
 
-Build this ZIP on Windows with Node.js 20 or later, Python 3 with the locked Python requirements, and PyInstaller available to the selected `python`. The generated `portable-win\El-Exportador-<version>-windows.zip` includes `artifacts\searcher.exe`; when you unzip it and run `start.cmd`, the app uses that packaged backend through `M3U_YTMUSIC_SEARCHER` instead of a source `.venv`. Running the ZIP still requires Node.js 20 or later and a supported Windows Chromium-compatible browser for YouTube Music sign-in.
+Build this ZIP on Windows with Node.js 20 or later, Python 3 with the locked Python requirements, and PyInstaller available to the selected `python`. The generated `portable-win\El-Exportador-<version>-windows.zip` includes `artifacts\searcher.exe`; when you unzip it and run `start.cmd`, the portable app does not use or require `.venv`. `start.cmd` points the app at the packaged backend through `M3U_YTMUSIC_SEARCHER`, so it runs `artifacts\searcher.exe` instead of a source-checkout Python environment. Running the ZIP still requires Node.js 20 or later and a supported Windows Chromium-compatible browser for YouTube Music sign-in.
 
 ### Windows source checkout
 
-Use this when you want to run the app directly from the repository on Windows.
+Use this when you want to run the app directly from the repository on Windows. A `.venv` is recommended, not mandatory: it keeps Python dependencies such as `ytmusicapi` isolated from your system interpreter.
+
+Recommended isolated Python setup:
 
 ```powershell
 git clone https://github.com/Dortecx/El-Exportador.git
@@ -47,7 +49,7 @@ npm ci
 npm run web
 ```
 
-If the Python launcher is unavailable, use `python -m venv .venv` instead of `py -3 -m venv .venv`.
+If the Python launcher is unavailable, use `python -m venv .venv` instead of `py -3 -m venv .venv`. If you do not want a `.venv`, install the requirements into the selected Python with `py -3 -m pip install -r requirements.txt` (or `python -m pip install -r requirements.txt`), then run the same `npm ci` and `npm run web` commands.
 
 ### WSL/Linux source checkout
 
@@ -65,7 +67,7 @@ npm run web
 
 WSL/Linux needs a native Chromium-compatible browser on the Linux PATH only for guided YouTube Music browser sign-in. In WSL, WSLg or another graphical Linux session is also required to display that browser window.
 
-Source checkout paths create `.venv` so Python dependencies such as `ytmusicapi` stay isolated from the system interpreter. After requirements are installed, `npm run web` automatically uses the project `.venv`; set `M3U_YTMUSIC_PYTHON` only as an advanced override when you need a custom interpreter path. Open `http://localhost:3000` after the server starts.
+The source checkout examples use `.venv` so Python dependencies such as `ytmusicapi` stay isolated from the system interpreter. After requirements are installed, `npm run web` automatically uses the project `.venv` only when that directory exists; otherwise it falls back to normal Python resolution. Set `M3U_YTMUSIC_PYTHON` only as an advanced override when you need a custom interpreter path. Open `http://localhost:3000` after the server starts.
 
 ## How it works
 
@@ -84,6 +86,20 @@ flowchart TD
     I -- Yes --> J[Manual review]
     J --> K[Create YouTube Music playlist]
     I -- No --> K
+
+    classDef inputUi fill:#dbeafe,stroke:#2563eb,color:#111827,stroke-width:1px
+    classDef auth fill:#ede9fe,stroke:#7c3aed,color:#111827,stroke-width:1px
+    classDef search fill:#ccfbf1,stroke:#0f766e,color:#111827,stroke-width:1px
+    classDef decisionReview fill:#fef3c7,stroke:#d97706,color:#111827,stroke-width:1px
+    classDef success fill:#dcfce7,stroke:#16a34a,color:#111827,stroke-width:1px
+    classDef dryRun fill:#e5e7eb,stroke:#6b7280,color:#111827,stroke-width:1px
+
+    class A,B,C inputUi
+    class D auth
+    class E,F search
+    class G,I,J decisionReview
+    class K success
+    class H dryRun
 ```
 
 **Browser sign-in.** Guided auth opens YouTube Music in an isolated browser profile and observes the session through a local Chrome DevTools Protocol binding. It captures only an allowlisted subset of session metadata needed by the Python backend, then asks the backend to validate that metadata before accepting the connection.

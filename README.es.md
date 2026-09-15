@@ -31,11 +31,13 @@ cd El-Exportador
 npm run build:portable:win
 ```
 
-Creá este ZIP en Windows con Node.js 20 o posterior, Python 3 con los requisitos Python fijados, y PyInstaller disponible para el `python` seleccionado. El ZIP generado en `portable-win\El-Exportador-<version>-windows.zip` incluye `artifacts\searcher.exe`; cuando lo descomprimís y ejecutás `start.cmd`, la app usa ese backend empaquetado mediante `M3U_YTMUSIC_SEARCHER` en vez de un `.venv` de código fuente. Para ejecutar el ZIP también necesitás Node.js 20 o posterior y un navegador de Windows compatible con Chromium para iniciar sesión en YouTube Music.
+Creá este ZIP en Windows con Node.js 20 o posterior, Python 3 con los requisitos Python fijados, y PyInstaller disponible para el `python` seleccionado. El ZIP generado en `portable-win\El-Exportador-<version>-windows.zip` incluye `artifacts\searcher.exe`; cuando lo descomprimís y ejecutás `start.cmd`, la app portátil no usa ni requiere `.venv`. `start.cmd` apunta la app al backend empaquetado mediante `M3U_YTMUSIC_SEARCHER`, así que ejecuta `artifacts\searcher.exe` en vez de un entorno Python de código fuente. Para ejecutar el ZIP también necesitás Node.js 20 o posterior y un navegador de Windows compatible con Chromium para iniciar sesión en YouTube Music.
 
 ### Código fuente en Windows
 
-Usá este camino si querés ejecutar la app directamente desde el repositorio en Windows.
+Usá este camino si querés ejecutar la app directamente desde el repositorio en Windows. Se recomienda `.venv`, pero no es obligatorio: mantiene dependencias Python como `ytmusicapi` aisladas del intérprete del sistema.
+
+Configuración aislada recomendada:
 
 ```powershell
 git clone https://github.com/Dortecx/El-Exportador.git
@@ -47,7 +49,7 @@ npm ci
 npm run web
 ```
 
-Si no tenés disponible el lanzador de Python, usá `python -m venv .venv` en lugar de `py -3 -m venv .venv`.
+Si no tenés disponible el lanzador de Python, usá `python -m venv .venv` en lugar de `py -3 -m venv .venv`. Si no querés usar `.venv`, instalá los requisitos en el Python seleccionado con `py -3 -m pip install -r requirements.txt` (o `python -m pip install -r requirements.txt`), y después ejecutá los mismos comandos `npm ci` y `npm run web`.
 
 ### Código fuente en WSL/Linux
 
@@ -65,7 +67,7 @@ npm run web
 
 WSL/Linux necesita un navegador nativo compatible con Chromium en el PATH de Linux solo para el inicio guiado de sesión en YouTube Music. En WSL, además necesitás WSLg u otra sesión gráfica Linux para mostrar esa ventana del navegador.
 
-Los caminos de código fuente crean `.venv` para aislar dependencias Python como `ytmusicapi` del intérprete del sistema. Después de instalar los requisitos, `npm run web` usa automáticamente el `.venv` del proyecto; definí `M3U_YTMUSIC_PYTHON` solo como override avanzado si necesitás una ruta de intérprete personalizada. Abrí `http://localhost:3000` cuando se inicie el servidor.
+Los ejemplos de código fuente usan `.venv` para aislar dependencias Python como `ytmusicapi` del intérprete del sistema. Después de instalar los requisitos, `npm run web` usa automáticamente el `.venv` del proyecto solo si ese directorio existe; si no, usa la resolución normal de Python. Definí `M3U_YTMUSIC_PYTHON` solo como override avanzado si necesitás una ruta de intérprete personalizada. Abrí `http://localhost:3000` cuando se inicie el servidor.
 
 ## Cómo funciona
 
@@ -84,6 +86,20 @@ flowchart TD
     I -- Sí --> J[Revisión manual]
     J --> K[Crear lista en YouTube Music]
     I -- No --> K
+
+    classDef inputUi fill:#dbeafe,stroke:#2563eb,color:#111827,stroke-width:1px
+    classDef auth fill:#ede9fe,stroke:#7c3aed,color:#111827,stroke-width:1px
+    classDef search fill:#ccfbf1,stroke:#0f766e,color:#111827,stroke-width:1px
+    classDef decisionReview fill:#fef3c7,stroke:#d97706,color:#111827,stroke-width:1px
+    classDef success fill:#dcfce7,stroke:#16a34a,color:#111827,stroke-width:1px
+    classDef dryRun fill:#e5e7eb,stroke:#6b7280,color:#111827,stroke-width:1px
+
+    class A,B,C inputUi
+    class D auth
+    class E,F search
+    class G,I,J decisionReview
+    class K success
+    class H dryRun
 ```
 
 **Inicio de sesión en navegador.** El inicio guiado abre YouTube Music en un perfil de navegador aislado y observa la sesión mediante una conexión local de Chrome DevTools Protocol. Captura solo un subconjunto permitido de metadatos de sesión que necesita el backend Python, y después le pide al backend que valide esos metadatos antes de aceptar la conexión.
