@@ -87,12 +87,12 @@ flowchart TD
     J --> K[Crear lista en YouTube Music]
     I -- No --> K
 
-    classDef inputUi fill:#dbeafe,stroke:#2563eb,color:#111827,stroke-width:1px
-    classDef auth fill:#ede9fe,stroke:#7c3aed,color:#111827,stroke-width:1px
-    classDef search fill:#ccfbf1,stroke:#0f766e,color:#111827,stroke-width:1px
-    classDef decisionReview fill:#fef3c7,stroke:#d97706,color:#111827,stroke-width:1px
-    classDef success fill:#dcfce7,stroke:#16a34a,color:#111827,stroke-width:1px
-    classDef dryRun fill:#e5e7eb,stroke:#6b7280,color:#111827,stroke-width:1px
+    classDef inputUi fill:#1d4ed8,stroke:#93c5fd,color:#f8fafc,stroke-width:1px
+    classDef auth fill:#6d28d9,stroke:#c4b5fd,color:#f8fafc,stroke-width:1px
+    classDef search fill:#0f766e,stroke:#5eead4,color:#f8fafc,stroke-width:1px
+    classDef decisionReview fill:#b45309,stroke:#fdba74,color:#f8fafc,stroke-width:1px
+    classDef success fill:#15803d,stroke:#86efac,color:#f8fafc,stroke-width:1px
+    classDef dryRun fill:#334155,stroke:#cbd5e1,color:#f8fafc,stroke-width:1px
 
     class A,B,C inputUi
     class D auth
